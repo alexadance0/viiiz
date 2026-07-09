@@ -1,0 +1,43 @@
+{
+  "name": "data-visualizer",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@heroui/react": "^3.2.2",
+    "echarts": "^6.1.0",
+    "framer-motion": "^12.42.2",
+    "hyparquet": "^1.26.1",
+    "hyparquet-compressors": "^1.1.1",
+    "lucide-react": "^1.23.0",
+    "papaparse": "^5.5.4",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^7.18.0",
+    "read-excel-file": "^9.2.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^24.13.2",
+    "@types/papaparse": "^5.5.2",
+    "@playwright/test": "^1.57.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "fflate": "^0.8.3",
+    "hyparquet-writer": "^0.16.1",
+    "oxlint": "^1.69.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.0",
+    "vitest": "^4.1.9"
+  }
+}

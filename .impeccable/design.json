@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-09T12:50:00+05:00",
+  "title": "Design System: DataCanvas",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink Black",
+        "canonical": "#202027",
+        "tonalRamp": ["#111116", "#202027", "#373640", "#56545f", "#777580", "#aaa7b0", "#d6d3dc", "#f5f4f8"]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Graphite",
+        "canonical": "#777580",
+        "tonalRamp": ["#27252d", "#4e4b56", "#66636e", "#777580", "#92909a", "#aaa7b0", "#d6d3dc", "#faf9fc"]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Rule Gray",
+        "canonical": "#e5e3eb",
+        "tonalRamp": ["#302d38", "#5a5664", "#898590", "#aaa7b0", "#c4c0ce", "#d6d3dc", "#e5e3eb", "#faf9fc"]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper White",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#202027", "#55525d", "#777580", "#aaa7b0", "#d6d3dc", "#f2f1f5", "#faf9fc", "#ffffff"]
+      },
+      "app-bg": {
+        "role": "neutral",
+        "displayName": "App Lavender Gray",
+        "canonical": "#f5f4f8",
+        "tonalRamp": ["#202027", "#55525d", "#777580", "#aaa7b0", "#d6d3dc", "#e5e3eb", "#f5f4f8", "#ffffff"]
+      },
+      "primary-accent": {
+        "role": "primary",
+        "displayName": "Editorial Violet",
+        "canonical": "#6956e8",
+        "tonalRamp": ["#17104a", "#2b1d85", "#4630c0", "#6956e8", "#8b7cf0", "#aaa0f5", "#d2caff", "#f4f1ff"]
+      },
+      "success": {
+        "role": "secondary",
+        "displayName": "Success Green",
+        "canonical": "#36a476",
+        "tonalRamp": ["#123426", "#1d5b40", "#27805b", "#36a476", "#63bf96", "#9bd8bc", "#dff3ea", "#f4fbf7"]
+      },
+      "warning": {
+        "role": "secondary",
+        "displayName": "Warning Amber",
+        "canonical": "#e4a52c",
+        "tonalRamp": ["#3d2707", "#714b0d", "#a9771d", "#e4a52c", "#efc368", "#f7dda2", "#fff1d7", "#fffbf2"]
+      },
+      "danger": {
+        "role": "secondary",
+        "displayName": "Danger Red",
+        "canonical": "#db5a5a",
+        "tonalRamp": ["#421212", "#7b2424", "#b63d3d", "#db5a5a", "#e98888", "#f3b6b6", "#fee4e4", "#fff8f8"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Workflow Display",
+        "purpose": "Major workflow headings and high-level page titles."
+      },
+      "headline": {
+        "displayName": "Workspace Headline",
+        "purpose": "Data review and editor section headings."
+      },
+      "title": {
+        "displayName": "Panel Title",
+        "purpose": "Panel, dialog, and grouped control titles."
+      },
+      "body": {
+        "displayName": "Product Body",
+        "purpose": "Explanatory text and compact product prose."
+      },
+      "label": {
+        "displayName": "Control Label",
+        "purpose": "Dense settings, table metadata, toolbar labels, and control captions."
+      }
+    },
+    "shadows": [
+      {
+        "name": "review-lift",
+        "value": "0 8px 30px #2d284508",
+        "purpose": "Subtle lift for large review containers."
+      },
+      {
+        "name": "canvas-paper-lift",
+        "value": "0 12px 35px #312c4712",
+        "purpose": "Separates the exported chart paper from the workbench."
+      },
+      {
+        "name": "logical-canvas-lift",
+        "value": "0 12px 35px #312c4720",
+        "purpose": "Stronger lift for scaled canvas shells."
+      },
+      {
+        "name": "dialog-lift",
+        "value": "0 30px 90px #110d2738",
+        "purpose": "Modal separation over a darkened backdrop."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "150ms ease",
+        "purpose": "Default hover and selected-state transitions."
+      },
+      {
+        "name": "state-standard",
+        "value": "180ms ease",
+        "purpose": "Disclosure arrows and settings section transitions."
+      },
+      {
+        "name": "hover-lift",
+        "value": "200ms ease",
+        "purpose": "Small translateY feedback on hoverable project cards."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "mobile",
+        "value": "600px"
+      },
+      {
+        "name": "tablet",
+        "value": "760px"
+      },
+      {
+        "name": "wide-panel-collapse",
+        "value": "1050px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Forward progress or creation action.",
+      "html": "<button class=\"ds-btn-primary\">Export PNG</button>",
+      "css": ".ds-btn-primary{border:1px solid #6956e8;background:#6956e8;color:#fff;border-radius:9px;padding:9px 14px;font:600 13px/1.2 'DM Sans',sans-serif;cursor:pointer;transition:background .15s,border-color .15s,transform .15s}.ds-btn-primary:hover{background:#5b48dc;border-color:#5b48dc;transform:translateY(-1px)}.ds-btn-primary:focus-visible{outline:0;box-shadow:0 0 0 3px #6956e84d}.ds-btn-primary:disabled{opacity:.45;cursor:not-allowed;transform:none}"
+    },
+    {
+      "name": "Default Button",
+      "kind": "button",
+      "refersTo": "button-default",
+      "description": "Neutral command button for repeated editor actions.",
+      "html": "<button class=\"ds-btn-default\">Reset section</button>",
+      "css": ".ds-btn-default{border:1px solid #e5e3eb;background:#fff;color:#202027;border-radius:9px;padding:9px 14px;font:600 13px/1.2 'DM Sans',sans-serif;cursor:pointer;transition:border-color .15s,background .15s,color .15s}.ds-btn-default:hover{border-color:#bbb7cb;background:#faf9fc}.ds-btn-default:focus-visible{outline:0;border-color:#6956e8;box-shadow:0 0 0 3px #6956e817}.ds-btn-default:disabled{opacity:.45;cursor:not-allowed}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "Compact white field for settings, search, and masks.",
+      "html": "<label class=\"ds-field\"><span>Chart title</span><input value=\"Revenue by month\" /></label>",
+      "css": ".ds-field{display:grid;gap:6px;color:#66646e;font:600 10px/1.2 'DM Sans',sans-serif}.ds-field input{width:100%;height:34px;border:1px solid #e5e3eb;border-radius:8px;background:#fff;padding:0 10px;color:#202027;font:400 13px/1.2 'DM Sans',sans-serif;outline:0}.ds-field input:hover{border-color:#d6d3dc}.ds-field input:focus{border-color:#6956e8;box-shadow:0 0 0 3px #6956e817}.ds-field input:disabled{opacity:.55;cursor:not-allowed}"
+    },
+    {
+      "name": "Settings Panel Group",
+      "kind": "card",
+      "refersTo": "panel-surface",
+      "description": "Flat editor grouping with borders and compact internal spacing.",
+      "html": "<section class=\"ds-panel-group\"><header>Axes</header><p>Scale, ticks, grid, and label behavior.</p></section>",
+      "css": ".ds-panel-group{border-bottom:1px solid #e5e3eb;background:#fff;color:#202027;padding:16px 18px;font-family:'DM Sans',sans-serif}.ds-panel-group header{margin:0 0 6px;font:700 10px/1.2 'DM Sans',sans-serif;color:#202027}.ds-panel-group p{margin:0;color:#777580;font-size:10px;line-height:1.5}.ds-panel-group:focus-within{box-shadow:inset 2px 0 0 #6956e8}"
+    },
+    {
+      "name": "Chart Choice",
+      "kind": "button",
+      "refersTo": "button-default",
+      "description": "Small selectable chart type tile.",
+      "html": "<button class=\"ds-chart-choice\"><span></span><b>Bars</b></button>",
+      "css": ".ds-chart-choice{height:66px;border:1px solid #e5e3eb;border-radius:8px;background:#fff;color:#65636d;display:grid;place-items:center;gap:4px;font-family:'DM Sans',sans-serif;cursor:pointer}.ds-chart-choice span{width:27px;height:23px;background:linear-gradient(to right,transparent 0 8%,currentColor 8% 28%,transparent 28% 39%,currentColor 39% 65%,transparent 65% 76%,currentColor 76% 96%);clip-path:polygon(0 65%,28% 65%,28% 30%,65% 30%,65% 0,100% 0,100% 100%,0 100%)}.ds-chart-choice b{font-size:9px}.ds-chart-choice:hover{border-color:#bbb7cb;background:#faf9fc}.ds-chart-choice:focus-visible{outline:0;border-color:#6956e8;box-shadow:0 0 0 3px #6956e817}.ds-chart-choice[aria-pressed='true']{border-color:#6956e8;color:#6956e8;background:#f7f5ff;box-shadow:0 0 0 1px #6956e8}"
+    },
+    {
+      "name": "Data Quality Pill",
+      "kind": "chip",
+      "refersTo": "panel-surface",
+      "description": "Compact status marker for data-review quality.",
+      "html": "<span class=\"ds-quality-pill ds-quality-pill--warning\"><i></i>Missing values</span>",
+      "css": ".ds-quality-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid #e5e3eb;border-radius:6px;background:#fff;padding:4px 7px;color:#615e69;font:700 8px/1.2 'DM Sans',sans-serif}.ds-quality-pill i{width:7px;height:7px;border-radius:50%;background:#36a476}.ds-quality-pill--warning{background:#fff8e8;border-color:#f0dfb8;color:#8c671f}.ds-quality-pill--warning i{background:#e4a52c}.ds-quality-pill--danger{background:#fff0f0;border-color:#f0c8c8;color:#842626}.ds-quality-pill--danger i{background:#db5a5a}"
+    },
+    {
+      "name": "Chart Paper",
+      "kind": "custom",
+      "refersTo": "panel-surface",
+      "description": "The produced chart surface inside the workbench.",
+      "html": "<div class=\"ds-stage\"><div class=\"ds-paper\"><span>Chart canvas</span></div></div>",
+      "css": ".ds-stage{display:grid;place-items:center;min-height:220px;background:#f2f1f5;padding:18px 28px}.ds-paper{display:grid;place-items:center;width:min(100%,360px);aspect-ratio:16/9;border-radius:3px;background:#fff;color:#777580;box-shadow:0 12px 35px #312c4712;font:600 10px/1.2 'DM Sans',sans-serif}.ds-paper:focus-within{box-shadow:0 12px 35px #312c4712,0 0 0 3px #6956e817}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Editorial Chart Desk",
+    "overview": "A precise editorial workstation for making charts: white surfaces, disciplined typography, visible structure, and quiet controls that help the user move from raw data to a polished export. The system keeps the chart and data as the main subject while using a sparse violet accent for state, focus, and emphasis.",
+    "keyCharacteristics": [
+      "White-first editorial product UI with pale neutral work surfaces.",
+      "Chart-first composition with quiet surrounding tools.",
+      "Compact, legible controls for repeated analytical work.",
+      "Sparse accent color for selection, focus, primary action, and highlights.",
+      "Flat-by-default surfaces with shadows reserved for true depth."
+    ],
+    "rules": [
+      {
+        "name": "The Sparse Accent Rule",
+        "body": "Violet should mark selection, focus, primary action, or a deliberate highlight. Its rarity is what makes it useful.",
+        "section": "colors"
+      },
+      {
+        "name": "The White Desk Rule",
+        "body": "Main editing surfaces default to white. Use pale gray-lavender only to separate tool regions from the chart.",
+        "section": "colors"
+      },
+      {
+        "name": "The Flat-At-Rest Rule",
+        "body": "Buttons, inputs, cards, and panels should not carry decorative shadow at rest.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep the chart canvas visually dominant and calmer than the surrounding tools.",
+      "Do use #6956e8 for selected states, focus, primary actions, and rare highlight backgrounds.",
+      "Do use white panels, #e5e3eb borders, and compact spacing to create structure before adding shadows.",
+      "Do preserve strong text contrast, especially for 8-11px labels and table metadata.",
+      "Do use typography, whitespace, alignment, and rhythm as the main expressive layer."
+    ],
+    "donts": [
+      "Don't make the product look like a bright startup SaaS template, a playful toy BI tool, a cluttered Excel clone, or an over-decorated dashboard.",
+      "Don't use gradient-heavy marketing, decorative illustration, excessive cards, or visual noise.",
+      "Don't turn violet into generic body text; use it as a sparse accent or background highlight.",
+      "Don't add decorative shadows to routine buttons, inputs, or cards.",
+      "Don't hide important meaning behind color alone."
+    ]
+  }
+}

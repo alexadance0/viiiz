@@ -1,0 +1,13 @@
+.series-order-hint{margin:0 0 8px;color:#918e98;font-size:8px;line-height:1.45}
+.ordered-series-list>div{grid-template-columns:18px minmax(0,1fr) 25px 30px;transition:border-color .15s,box-shadow .15s,transform .15s}
+.ordered-series-list>div[draggable=true]{cursor:grab}
+.ordered-series-list>div[draggable=true]:active{cursor:grabbing}
+.series-drag{display:grid;place-items:center;color:#aaa6b0;font-size:14px;user-select:none}
+.ordered-series-list .series-name-button{height:42px;padding:0 4px}
+.ordered-series-list .series-name-button span{min-width:0}
+.ordered-series-list .series-name-button small{margin-left:auto;color:#aaa6b0;font-size:6px;white-space:nowrap}
+.series-order-buttons{display:flex;flex-direction:column;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+.series-order-buttons button{width:24px;height:21px;border:0;background:#fff;color:#77737e;font-size:9px;cursor:pointer}
+.series-order-buttons button:first-child{border-bottom:1px solid var(--line)}
+.series-order-buttons button:hover:not(:disabled){background:#f0edff;color:var(--purple)}
+.series-order-buttons button:disabled{color:#d2cfd6;cursor:default}
