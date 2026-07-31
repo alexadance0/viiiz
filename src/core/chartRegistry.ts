@@ -13,11 +13,28 @@ import { smoothingChartDefinitions } from '../features/chart-types/smoothing'
 import { heatmapChartDefinitions } from '../features/chart-types/heatmap'
 import { treemapChartDefinitions } from '../features/chart-types/treemap'
 import { distributionChartDefinitions } from '../features/chart-types/distribution'
+import { compileLegacyScene } from '../features/chart-renderer/legacyCompiler'
 import { repeatedChartCategories } from './chartData'
 import { absorbedBarLabelPlacement, barSeriesGeometry, denseValueLabelStride, isInsideValueLabel, showDenseValueLabel, valueLabelPosition } from './chartLabels'
 import { hyphenateSync as hyphenateRussian } from 'hyphen/ru'
 
 export { niceNumericScale, prepareVisibleChartData } from './chartScale'
+
+type LegacyChartPlugin = Omit<ChartPlugin, 'compile' | 'capabilities'>
+
+function semanticCapabilities(plugin: LegacyChartPlugin): ChartPlugin['capabilities'] {
+  const hierarchy = plugin.id === 'treemap', matrix = plugin.id === 'heatmap'
+  const scatterLike = plugin.id === 'scatter' || plugin.id === 'bubble'
+  return {
+    coordinateSystem: hierarchy ? 'hierarchy' : matrix ? 'matrix' : 'cartesian',
+    axes: hierarchy ? false : { category: { placements: plugin.id === 'butterfly' ? ['side', 'internal'] : ['side'] }, value: { scaleTypes: ['linear', 'log', 'date'] } },
+    guides: matrix ? ['color-scale'] : plugin.id === 'bubble' ? ['legend', 'direct-series', 'size-scale'] : plugin.id === 'slope' ? ['direct-series'] : ['legend', 'direct-series'],
+    valueLabels: true,
+    markers: scatterLike || plugin.category === 'trend' || plugin.category === 'smoothing',
+    orientation: plugin.category === 'comparison' || plugin.category === 'bar-horizontal' || plugin.category === 'distribution' ? ['vertical', 'horizontal'] : undefined,
+    stacking: plugin.id.includes('stacked') ? ['stacked', 'normalized'] : undefined,
+  }
+}
 
 const inferMapping = (table: DataTable): Pick<ChartConfig, 'xField' | 'yField' | 'yFields'> => {
   const numeric = table.columns.filter((column) => table.rows.some((row) => typeof row[column] === 'number' && Number.isFinite(row[column])))
@@ -386,7 +403,7 @@ const commonOption = (table: DataTable, config: ChartConfig, prepared = prepareV
   }
 }
 
-const cartesian = (id: Exclude<ChartConfig['kind'], 'scatter' | 'bubble' | 'dumbbell' | 'range-line' | 'step-range-line' | 'confidence-line'>, label: string, category: ChartPlugin['category']): ChartPlugin => ({
+const cartesian = (id: Exclude<ChartConfig['kind'], 'scatter' | 'bubble' | 'dumbbell' | 'range-line' | 'step-range-line' | 'confidence-line'>, label: string, category: ChartPlugin['category']): LegacyChartPlugin => ({
   ...pluginModel(id),
   id,
   label,
@@ -750,7 +767,7 @@ const cartesian = (id: Exclude<ChartConfig['kind'], 'scatter' | 'bubble' | 'dumb
   },
 })
 
-const intervalLine = (id: 'range-line' | 'step-range-line' | 'confidence-line', label: string): ChartPlugin => {
+const intervalLine = (id: 'range-line' | 'step-range-line' | 'confidence-line', label: string): LegacyChartPlugin => {
   const base = cartesian(id === 'step-range-line' ? 'step-line' : 'line', label, 'trend')
   const autoGroups = (config: ChartConfig) => config.yFields.slice(0, Math.floor(config.yFields.length / 3) * 3).reduce<Array<{ main: string; lower: string; upper: string; showBounds?: boolean }>>((groups, field, index, fields) => {
     if (index % 3 === 0 && fields[index + 1] && fields[index + 2]) groups.push({ main: field, lower: fields[index + 1], upper: fields[index + 2] })
@@ -870,7 +887,7 @@ const intervalLine = (id: 'range-line' | 'step-range-line' | 'confidence-line', 
 }
 
 const dumbbellBase = cartesian('bar', 'Гантельная', 'comparison')
-const dumbbell: ChartPlugin = {
+const dumbbell: LegacyChartPlugin = {
   ...dumbbellBase, ...pluginModel('dumbbell'),
   id: 'dumbbell',
   label: 'Гантельная',
@@ -1042,7 +1059,7 @@ export const waterfallLabelPlacement = (
   return { y: endY + direction * gap, verticalAlign: direction < 0 ? 'bottom' as const : 'top' as const, inside: false }
 }
 
-const waterfall: ChartPlugin = (() => {
+const waterfall: LegacyChartPlugin = (() => {
   const base = cartesian('bar', 'Waterfall', 'comparison')
   return {
     ...base,
@@ -1174,7 +1191,7 @@ const waterfall: ChartPlugin = (() => {
   }
 })()
 
-const lollipop = (id: 'lollipop' | 'horizontal-lollipop', label: string): ChartPlugin => {
+const lollipop = (id: 'lollipop' | 'horizontal-lollipop', label: string): LegacyChartPlugin => {
   const horizontal = id === 'horizontal-lollipop'
   const base = cartesian(horizontal ? 'horizontal-bar' : 'bar', label, horizontal ? 'bar-horizontal' : 'comparison')
   return {
@@ -1224,7 +1241,7 @@ const lollipop = (id: 'lollipop' | 'horizontal-lollipop', label: string): ChartP
   }
 }
 
-const slope: ChartPlugin = (() => {
+const slope: LegacyChartPlugin = (() => {
   const base = cartesian('line', 'Наклонный график', 'trend')
   return {
     ...base, ...pluginModel('slope'), id: 'slope', label: 'Наклонный график',
@@ -1283,7 +1300,7 @@ const slope: ChartPlugin = (() => {
   }
 })()
 
-const indexedLine: ChartPlugin = (() => {
+const indexedLine: LegacyChartPlugin = (() => {
   const base = cartesian('indexed-line', 'Индекс к дате', 'trend')
   return {
     ...base, ...pluginModel('indexed-line'), id: 'indexed-line', label: 'Индекс к дате',
@@ -1298,7 +1315,7 @@ const indexedLine: ChartPlugin = (() => {
   }
 })()
 
-const seasonalLine: ChartPlugin = (() => {
+const seasonalLine: LegacyChartPlugin = (() => {
   const base = cartesian('seasonal-line', 'Сравнение по годам', 'trend')
   return {
     ...base, ...pluginModel('seasonal-line'), id: 'seasonal-line', label: 'Сравнение по годам',
@@ -1313,7 +1330,7 @@ const seasonalLine: ChartPlugin = (() => {
   }
 })()
 
-const heatmap: ChartPlugin = {
+const heatmap: LegacyChartPlugin = {
   ...pluginModel('heatmap'),
   id: 'heatmap',
   label: heatmapChartDefinitions[0][1],
@@ -1457,7 +1474,7 @@ type TreemapNode = {
   displayLabel?: string
 }
 
-const treemap: ChartPlugin = {
+const treemap: LegacyChartPlugin = {
   ...pluginModel('treemap'),
   id: 'treemap',
   label: treemapChartDefinitions[0][1],
@@ -1677,7 +1694,7 @@ const treemap: ChartPlugin = {
   },
 }
 
-const scatter: ChartPlugin = {
+const scatter: LegacyChartPlugin = {
   ...pluginModel('scatter'),
   id: 'scatter',
   label: 'Точечный',
@@ -1884,7 +1901,7 @@ const scatter: ChartPlugin = {
   },
 }
 
-const bubble: ChartPlugin = { ...scatter, ...pluginModel('bubble'), id: 'bubble', label: relationshipChartDefinitions[1][1] }
+const bubble: LegacyChartPlugin = { ...scatter, ...pluginModel('bubble'), id: 'bubble', label: relationshipChartDefinitions[1][1] }
 
 const quantile = (values: number[], position: number) => {
   if (!values.length) return 0
@@ -1930,7 +1947,7 @@ const distributionRandom = (index: number, group: number) => {
   return ((value >>> 0) / 0xffffffff) * 2 - 1
 }
 
-const distribution: ChartPlugin = {
+const distribution: LegacyChartPlugin = {
   ...pluginModel('boxplot'), id: 'boxplot', label: distributionChartDefinitions[0][1], category: 'distribution',
   settings: { sections: ['series', 'annotations', 'grid', 'text', 'headings', 'axes', 'legend-values', 'credits'], series: ['color', 'markers'], features: { directLabels: false, barLayout: false, dataPreparation: false, normalizedStack: false, areaLayout: false, scatterLayout: false, distributionLayout: true, lineVariant: false } },
   validate(table, config) {
@@ -2363,7 +2380,7 @@ const distribution: ChartPlugin = {
   },
 }
 
-export const chartRegistry = [
+const legacyChartRegistry = [
   ...barChartDefinitions.flatMap(([id, label, category]) => id === 'waterfall' || id === 'lollipop' || id === 'horizontal-lollipop' ? [] : [cartesian(id, label, category)]),
   waterfall,
   lollipop('lollipop', 'Леденцовая'),
@@ -2382,6 +2399,12 @@ export const chartRegistry = [
   heatmap,
   treemap,
 ]
+
+export const chartRegistry: ChartPlugin[] = legacyChartRegistry.map((plugin) => ({
+  ...plugin,
+  capabilities: semanticCapabilities(plugin),
+  compile: (table, config) => compileLegacyScene(table, config, plugin.buildOption),
+}))
 
 export function getChartPlugin(id: ChartConfig['kind']) {
   return chartRegistry.find((plugin) => plugin.id === id) ?? chartRegistry[0]

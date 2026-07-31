@@ -1,6 +1,6 @@
 # Виииз
 
-Локальный MVP редактора визуализаций: импорт CSV/XLSX/Parquet/публичных Google Sheets, настройка bar/line/scatter и экспорт PNG/SVG.
+Браузерный редактор визуализаций: импорт CSV/XLSX/Parquet/публичных Google Sheets, настройка сравнительных, трендовых, иерархических, матричных и распределительных графиков, экспорт PNG/SVG.
 
 ## Запуск
 
@@ -13,8 +13,12 @@ npm run dev
 ## Архитектура
 
 - `src/core/importers.ts` — адаптеры источников данных.
-- `src/core/chartRegistry.ts` — реестр подключаемых типов графиков.
-- `src/core/types.ts` — стабильные контракты между данными, редактором и визуализациями.
-- `src/components/ChartCanvas.tsx` — рендер SVG и экспорт.
+- `src/entities/chart/model` — `ChartDocument`, семейные chart specs, semantic scene elements, стабильные IDs и legacy-config adapters.
+- `src/features/chart-layout` — геометрия, semantic spacing, reservations, frame/axis/text/guide contracts.
+- `src/features/chart-types` — каталог и постепенно выделяемые компиляторы семейств графиков.
+- `src/features/chart-renderer/echarts` — адаптер semantic scene в ECharts с динамической загрузкой модулей.
+- `src/components/ChartCanvas.tsx` — orchestration рендера, feedback lifecycle и editor overlays.
+- `src/features/chart-export` — PNG/SVG serialization и embedding шрифтов.
+- `src/core/chartRegistry.ts` — переходный реестр/dispatch; старый `buildOption` сохранён как deprecated compatibility boundary до завершения миграции семейств.
 
-Новый график добавляется реализацией `ChartPlugin` и регистрацией в `chartRegistry`; UI выбора строится из реестра автоматически.
+Поток рендера: editor config → `ChartDocument` → `ChartPlugin.compile` → `ChartScene` → layout/renderer. Новый график добавляется семантическим plugin compiler и регистрацией в `chartRegistry`; UI выбора строится из реестра и semantic capabilities.

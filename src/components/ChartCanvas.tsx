@@ -26,6 +26,9 @@ import { planCategoryDateLabels } from '../core/chartDateAxis'
 import { decorationGraphics, type PlotBounds } from './chartDecorations'
 import { isAreaChart, isBarChart, isDistributionChart, isStackedBarChart, isStackedChart, usesHorizontalAxes } from '../core/chartKinds'
 import type { ChartExportOptions, ExportTextBlock } from '../features/chart-export/chartExport'
+import { DEFAULT_COMPOSITION_SPACING } from '../entities/chart/model/defaults'
+import { renderScene } from '../features/chart-renderer/echarts/renderScene'
+import { layoutText, plainTextDocument } from '../features/chart-layout/textLayout'
 
 const AnnotationOverlay = lazy(() => import('./AnnotationOverlay').then(({ AnnotationOverlay: Component }) => ({ default: Component })))
 const CanvasTextOverlay = lazy(() => import('./CanvasTextOverlay').then(({ CanvasTextOverlay: Component }) => ({ default: Component })))
@@ -50,7 +53,7 @@ export interface ChartCanvasHandle {
 
 export type ChartSettingsSection = 'title' | 'subtitle' | 'x-axis-title' | 'y-axis-title' | 'x-axis-labels' | 'y-axis-labels' | 'grid' | 'legend' | 'values' | 'note' | 'source' | 'series' | 'element'
 
-const RHYTHM = { edge: 24, titleSubtitle: 12, headerLegend: 20, headerPlot: 28, legendPlot: 24, plotFooter: 24, noteSource: 10 } as const
+const RHYTHM = { edge: DEFAULT_COMPOSITION_SPACING.canvasInsets.top, titleSubtitle: DEFAULT_COMPOSITION_SPACING.titleSubtitle, headerLegend: DEFAULT_COMPOSITION_SPACING.headerLegend, headerPlot: DEFAULT_COMPOSITION_SPACING.headerPlot, legendPlot: DEFAULT_COMPOSITION_SPACING.legendPlot, plotFooter: DEFAULT_COMPOSITION_SPACING.plotFooter, noteSource: DEFAULT_COMPOSITION_SPACING.noteSource } as const
 export const heatmapScaleSideOffset = (config: ChartConfig) => config.kind === 'heatmap' && (config.heatmapShowScale ?? true) && (config.heatmapScalePosition ?? 'right') === config.yAxisPosition ? 80 : 0
 interface HeatmapScaleAxisReserve { x: number; y: number }
 export function positionHeatmapScaleGraphics(graphics: unknown[], config: ChartConfig, grid: { top?: number; right?: number; bottom?: number; left?: number }, canvasWidth: number, canvasHeight: number, axisReserve: HeatmapScaleAxisReserve = { x: 0, y: 0 }) {
@@ -97,6 +100,7 @@ interface Props {
   onDecorationSelect?(id: string): void
   onDecorationChange?(decoration: ChartDecoration): void
   onRichTextChange?(field: 'title' | 'subtitle' | 'note' | 'source', html: string, text: string): void
+  onCategoryLabelChange?(axis: 'x' | 'y', category: string, text: string): void
   onTextStyleChange?(field: 'title' | 'subtitle' | 'note' | 'source', style: Partial<ChartConfig['titleText']>): void
   viewZoom?: number
 }
@@ -1002,7 +1006,7 @@ export function applySeriesVisualState(option: Record<string, unknown>, table: D
   })
 }
 export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
-  ({ table, config, onSelect, onTreemapMove, onSeriesSelect, onSettingsFocus, onClearSettingsFocus, selectedSettingsSection, selectedSeriesName, selectedElementKey, selectedElementTarget, selectedCategoryLabel: requestedCategoryLabel, onAnnotationSelect, onAnnotationChange, onAnnotationDuplicate, onAnnotationDelete, selectedAnnotationId, selectedDecorationId, onDecorationSelect, onDecorationChange, onRichTextChange, onTextStyleChange, viewZoom = 1 }, ref) => {
+  ({ table, config, onSelect, onTreemapMove, onSeriesSelect, onSettingsFocus, onClearSettingsFocus, selectedSettingsSection, selectedSeriesName, selectedElementKey, selectedElementTarget, selectedCategoryLabel: requestedCategoryLabel, onAnnotationSelect, onAnnotationChange, onAnnotationDuplicate, onAnnotationDelete, selectedAnnotationId, selectedDecorationId, onDecorationSelect, onDecorationChange, onRichTextChange, onCategoryLabelChange, onTextStyleChange, viewZoom = 1 }, ref) => {
     const container = useRef<HTMLDivElement>(null)
     const viewport = useRef<HTMLDivElement>(null)
     const [canvasScale, setCanvasScale] = useState(1)
@@ -1117,7 +1121,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const plugin = getChartPlugin(config.kind)
       const validation = plugin.validate(table, renderConfig)
       if (!validation.ok) throw new Error(validation.errors.map((error) => error.message).join(' '))
-      const option = plugin.buildOption(table, renderConfig) as Record<string, unknown> & { graphic?: unknown[] }
+      const option = renderScene(plugin.compile(table, renderConfig)) as Record<string, unknown> & { graphic?: unknown[] }
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       const firstTreemapLayout = config.kind === 'treemap' && (treemapLayout.current?.table !== table || treemapLayout.current.config !== config)
       option.animation = !reducedMotion && !firstTreemapLayout
@@ -1478,8 +1482,17 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         const baseStyle = categoryOnYAxis || activeCategoryLabel.axis === 'x' ? config.xAxisLabelText ?? config.axisLabelText : config.yAxisLabelText ?? config.axisLabelText
         const bounds = chartPlotBounds(instance, table, config)
         const text = (config.categoryLabelOverrides?.[activeCategoryLabel.axis]?.[activeCategoryLabel.category] ?? activeCategoryLabel.category).replace(/^\d+:/, '')
-        const lineHeight = Math.round(baseStyle.size * baseStyle.lineHeight / 100)
-        const width = Math.max(20, measureTextWidth(text, baseStyle.size, baseStyle.fontFamily, baseStyle.weight))
+        const rotation = Number(axis?.axisLabel?.rotate ?? 0)
+        const neighbourPixels = axis?.data?.flatMap((_value, current) => {
+          if (current === index) return []
+          const candidate = Number(instance.convertToPixel(activeCategoryLabel.axis === 'x' ? { xAxisIndex: 0 } : { yAxisIndex: 0 }, current))
+          return Number.isFinite(candidate) ? [Math.abs(candidate - pixel)] : []
+        }) ?? []
+        const categoryWidth = Math.max(24, (neighbourPixels.length ? Math.min(...neighbourPixels) : 120) - 6)
+        const naturalWidth = Math.max(20, measureTextWidth(text, baseStyle.size, baseStyle.fontFamily, baseStyle.weight))
+        const sideWidth = bounds ? axis?.position === 'right' ? Math.max(20, canvasWidth - bounds.right - (config.xAxisLabelGap ?? 8)) : Math.max(20, bounds.left - (config.xAxisLabelGap ?? 8)) : naturalWidth
+        const width = config.xAxisLabelOverflow === 'wrap' ? activeCategoryLabel.axis === 'x' ? categoryWidth : sideWidth : naturalWidth
+        const textLayout = layoutText({ document: plainTextDocument(text, baseStyle), maxWidth: width, wrap: config.xAxisLabelOverflow === 'wrap', rotation })
         const align = activeCategoryLabel.axis === 'x' ? 'center' : axis?.position === 'right' ? 'left' : 'right'
         const butterflyGap = config.kind === 'butterfly' ? butterflyCategoryLayout(table, config).gap : 0
         const butterflyCenter = config.kind === 'butterfly' && (config.butterflyCategoryPosition ?? 'center') === 'center'
@@ -1487,10 +1500,10 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           : 0
         if (axis?.axisLabel?.show === false && config.kind !== 'butterfly') setCategoryLabelLayout(null)
         else if (Number.isFinite(pixel) && bounds) setCategoryLabelLayout(activeCategoryLabel.axis === 'x'
-          ? { axis: 'x', category: activeCategoryLabel.category, style: { ...baseStyle, align }, rotation: Number(axis?.axisLabel?.rotate ?? 0), size: baseStyle.size, width, left: pixel - width / 2, top: axis?.position === 'top' ? bounds.top - (config.showXTicks ? config.tickLength : 0) - (config.xAxisLabelGap ?? 8) - lineHeight : bounds.bottom + (config.showXTicks ? config.tickLength : 0) + (config.xAxisLabelGap ?? 8) }
+          ? { axis: 'x', category: activeCategoryLabel.category, style: { ...baseStyle, align }, rotation, size: baseStyle.size, width, left: pixel - width / 2, top: axis?.position === 'top' ? bounds.top - (config.showXTicks ? config.tickLength : 0) - (config.xAxisLabelGap ?? 8) - textLayout.rotatedSize.height : bounds.bottom + (config.showXTicks ? config.tickLength : 0) + (config.xAxisLabelGap ?? 8) }
           : config.kind === 'butterfly' && (config.butterflyCategoryPosition ?? 'center') === 'center'
-            ? { axis: 'y', category: activeCategoryLabel.category, style: { ...baseStyle, align: 'center' }, rotation: 0, size: baseStyle.size, width: butterflyGap - 16, left: butterflyCenter - (butterflyGap - 16) / 2, top: pixel - lineHeight / 2 }
-            : { axis: 'y', category: activeCategoryLabel.category, style: { ...baseStyle, align }, rotation: 0, size: baseStyle.size, width: axis?.position === 'right' ? Math.max(20, canvasWidth - bounds.right - (config.xAxisLabelGap ?? 8)) : Math.max(20, bounds.left - (config.xAxisLabelGap ?? 8)), left: axis?.position === 'right' ? bounds.right + (config.xAxisLabelGap ?? 8) : 0, top: pixel - lineHeight / 2 })
+            ? { axis: 'y', category: activeCategoryLabel.category, style: { ...baseStyle, align: 'center' }, rotation: 0, size: baseStyle.size, width: butterflyGap - 16, left: butterflyCenter - (butterflyGap - 16) / 2, top: pixel - textLayout.size.height / 2 }
+            : { axis: 'y', category: activeCategoryLabel.category, style: { ...baseStyle, align }, rotation: 0, size: baseStyle.size, width: axis?.position === 'right' ? Math.max(20, canvasWidth - bounds.right - (config.xAxisLabelGap ?? 8)) : Math.max(20, bounds.left - (config.xAxisLabelGap ?? 8)), left: axis?.position === 'right' ? bounds.right + (config.xAxisLabelGap ?? 8) : 0, top: pixel - textLayout.size.height / 2 })
         else setCategoryLabelLayout(null)
       } else setCategoryLabelLayout(null)
       const exactBounds = chartPlotBounds(instance, table, config)
@@ -1822,8 +1835,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         treemapDrag.current = { source: item.selection, click, start: item.point, moved: false }
       }
       const sendTreemapMove = (source: ChartElementSelection, target: ChartElementSelection, placement: 'before' | 'after') => {
-        if (onTreemapMove) onTreemapMove(source, target, placement)
-        else window.dispatchEvent(new CustomEvent('viiiz:treemap-move', { detail: { source, target, placement } }))
+        onTreemapMove?.(source, target, placement)
       }
       const dragLayer = () => container.current?.parentElement
       const showTreemapPreview = (x: number, y: number, label: string) => {
@@ -2045,7 +2057,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           {selectedDecoration && onDecorationChange && <DecorationOverlay decoration={selectedDecoration} canvasWidth={canvasWidth} canvasHeight={canvasHeight} plotTop={plotBounds?.top} plotBottom={plotBounds?.bottom} plotLeft={plotBounds?.left} plotRight={plotBounds?.right} onChange={onDecorationChange}/>}
           {config.annotations.filter((annotation) => annotation.id !== selectedAnnotationId).map((annotation) => <AnnotationDisplay key={annotation.id} annotation={annotation} canvasBackground={config.canvasBackground} onSelect={() => onAnnotationSelect?.(annotation.id)}/>)}
           <Suspense fallback={null}>
-            {categoryLabelLayout && selectedCategoryLabel && <CanvasTextOverlay id={`category-${categoryLabelLayout.axis}-${categoryLabelLayout.category}`} text={config.categoryLabelOverrides?.[categoryLabelLayout.axis]?.[categoryLabelLayout.category] ?? categoryLabelLayout.category} style={categoryLabelLayout.style} left={categoryLabelLayout.left} top={categoryLabelLayout.top} width={categoryLabelLayout.width} rotation={categoryLabelLayout.rotation} singleLine customFonts={config.customFonts} canvasBackground={config.canvasBackground} onChange={(_html, text) => window.dispatchEvent(new CustomEvent('viiiz:category-label-change', { detail: { axis: categoryLabelLayout.axis, category: categoryLabelLayout.category, text } }))}/>}
+            {categoryLabelLayout && selectedCategoryLabel && <CanvasTextOverlay id={`category-${categoryLabelLayout.axis}-${categoryLabelLayout.category}`} text={config.categoryLabelOverrides?.[categoryLabelLayout.axis]?.[categoryLabelLayout.category] ?? categoryLabelLayout.category} style={categoryLabelLayout.style} left={categoryLabelLayout.left} top={categoryLabelLayout.top} width={categoryLabelLayout.width} rotation={categoryLabelLayout.rotation} policy={{ richText: false, multiline: true, explicitNewlines: true, styleToolbar: false }} customFonts={config.customFonts} canvasBackground={config.canvasBackground} onChange={(_html, text) => onCategoryLabelChange?.(categoryLabelLayout.axis, categoryLabelLayout.category, text)}/>}
             {richField && richLayout && richStyle && <CanvasTextOverlay id={richField} text={richText} html={richHtml} style={{ ...richStyle, size: richLayout.baseSize }} left={richLayout.left} top={richLayout.top} width={richLayout.width} customFonts={config.customFonts} canvasBackground={config.canvasBackground} onChange={(html, text) => onRichTextChange?.(richField, html, text)} onStyleChange={(style) => { const key = `${richField}Text` as 'titleText' | 'subtitleText' | 'noteText' | 'sourceText'; (config as unknown as Record<typeof key, ChartConfig['titleText']>)[key] = { ...config[key], ...style }; onTextStyleChange?.(richField, style) }}/>}
             {selected && <AnnotationOverlay annotation={selected} customFonts={config.customFonts} canvasBackground={config.canvasBackground} onChange={(annotation) => onAnnotationChange?.(annotation)} onDuplicate={() => onAnnotationDuplicate?.(selected)} onDelete={() => onAnnotationDelete?.(selected.id)} onClose={() => onAnnotationSelect?.('')}/>}
           </Suspense>

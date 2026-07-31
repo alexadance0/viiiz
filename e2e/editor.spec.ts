@@ -768,7 +768,7 @@ test('selected heading fragment keeps its own font, size, emphasis and color', a
   expect(styles.regular.color).not.toBe('rgb(105, 86, 232)')
 })
 
-test('category label editor keeps a single line and adapts to horizontal bars', async ({ page }) => {
+test('category label editor preserves explicit lines and adapts to horizontal bars', async ({ page }) => {
   await loadDemo(page)
   await page.getByRole('button', { name: 'Линейчатая', exact: true }).click()
   const label = page.locator('.canvas-paper svg text').filter({ hasText: /^01\.01\.2025$/ }).first()
@@ -776,11 +776,9 @@ test('category label editor keeps a single line and adapts to horizontal bars', 
   await label.click()
   const editor = page.locator('.canvas-rich-text-content')
   await expect(editor).toBeVisible()
-  await expect(editor).toHaveCSS('white-space', 'pre')
-  const initialWidth = (await editor.boundingBox())?.width ?? 0
-  await editor.fill('Центр мира — это я и моя подруга')
-  await expect(editor).toHaveText('Центр мира — это я и моя подруга')
-  await expect.poll(async () => (await editor.boundingBox())?.width ?? 0).toBeGreaterThan(initialWidth * 2)
+  await expect(editor).toHaveCSS('white-space', 'pre-wrap')
+  await editor.fill('Центр мира\nэто я и моя подруга')
+  await expect.poll(() => editor.evaluate((element) => (element as HTMLElement).innerText)).toBe('Центр мира\nэто я и моя подруга')
 })
 
 test('category label editor follows the vertical axis label position', async ({ page }) => {
@@ -791,9 +789,9 @@ test('category label editor follows the vertical axis label position', async ({ 
   await label.click()
   const editor = page.locator('.canvas-rich-text-content')
   await expect(editor).toBeVisible()
-  await expect(editor).toHaveCSS('white-space', 'pre')
-  await editor.fill('Подпись категории без автоматического переноса')
-  await expect(editor).toHaveText('Подпись категории без автоматического переноса')
+  await expect(editor).toHaveCSS('white-space', 'pre-wrap')
+  await editor.fill('Подпись категории\nна второй строке')
+  await expect.poll(() => editor.evaluate((element) => (element as HTMLElement).innerText)).toBe('Подпись категории\nна второй строке')
 })
 
 test('formatted title exports as native SVG text with its selected font', async ({ page }) => {

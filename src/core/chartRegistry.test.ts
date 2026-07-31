@@ -953,6 +953,15 @@ describe('individual chart element styles', () => {
     expect(option.grid.left).toBeGreaterThan(180)
   })
 
+  it('preserves explicit category newlines without writing automatic wrapping into overrides', () => {
+    const config = base('bar')
+    config.xAxisLabelOverflow = 'wrap'
+    config.categoryLabelOverrides = { x: { '0:Янв': 'Первая строка\nВторая строка' } }
+    const option = getChartPlugin('bar').buildOption(table, config) as { xAxis: { axisLabel: { formatter(value: string, index: number): string } } }
+    expect(option.xAxis.axisLabel.formatter('', 0)).toBe('Первая строка\nВторая строка')
+    expect(config.categoryLabelOverrides.x?.['0:Янв']).toBe('Первая строка\nВторая строка')
+  })
+
   it('keeps the horizontal category title in its own rail beside row labels', () => {
     const withoutTitle = base('horizontal-bar'); withoutTitle.showXAxisTitle = false
     const withTitle = base('horizontal-bar'); withTitle.xAxisTitleText = style(24); withTitle.xAxisTitleGap = 12

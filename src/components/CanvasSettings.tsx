@@ -4,6 +4,7 @@ import { NumberInput } from './NumberInput'
 import { ColorControl } from './PickerControls'
 import { SettingsCheckbox } from './SettingsCheckbox'
 import './CanvasSettings.css'
+import { DEFAULT_COMPOSITION_SPACING } from '../entities/chart/model/defaults'
 
 interface Props { config: ChartConfig; onChange(config: ChartConfig): void }
 const formats = [
@@ -18,7 +19,22 @@ const typeScales = {
   presentation: { label: 'Для слайдов', sizes: [42, 25, 20, 18, 19, 17, 17, 15] },
 } as const
 const textKeys = ['titleText', 'subtitleText', 'axisTitleText', 'axisLabelText', 'legendText', 'valueText', 'noteText', 'sourceText'] as const
-const spacingDefaults = { canvasMarginTop: 24, canvasMarginRight: 24, canvasMarginBottom: 24, canvasMarginLeft: 32, titleSubtitleGap: 12, headerPlotGap: 28, headerLegendGap: 20, legendPlotGap: 24, plotFooterGap: 24, noteSourceGap: 10, xAxisTitleGap: 14, yAxisTitleGap: 14, xAxisLabelGap: 8, yAxisLabelGap: 8 } satisfies Partial<ChartConfig>
+const spacingDefaults = {
+  canvasMarginTop: DEFAULT_COMPOSITION_SPACING.canvasInsets.top,
+  canvasMarginRight: DEFAULT_COMPOSITION_SPACING.canvasInsets.right,
+  canvasMarginBottom: DEFAULT_COMPOSITION_SPACING.canvasInsets.bottom,
+  canvasMarginLeft: DEFAULT_COMPOSITION_SPACING.canvasInsets.left,
+  titleSubtitleGap: DEFAULT_COMPOSITION_SPACING.titleSubtitle,
+  headerPlotGap: DEFAULT_COMPOSITION_SPACING.headerPlot,
+  headerLegendGap: DEFAULT_COMPOSITION_SPACING.headerLegend,
+  legendPlotGap: DEFAULT_COMPOSITION_SPACING.legendPlot,
+  plotFooterGap: DEFAULT_COMPOSITION_SPACING.plotFooter,
+  noteSourceGap: DEFAULT_COMPOSITION_SPACING.noteSource,
+  xAxisTitleGap: DEFAULT_COMPOSITION_SPACING.xAxisLabelTitle,
+  yAxisTitleGap: DEFAULT_COMPOSITION_SPACING.yAxisLabelTitle,
+  xAxisLabelGap: DEFAULT_COMPOSITION_SPACING.axisTickLabel,
+  yAxisLabelGap: DEFAULT_COMPOSITION_SPACING.axisTickLabel,
+} satisfies Partial<ChartConfig>
 type SpacingKey = keyof typeof spacingDefaults
 type FlowItem = { type: 'block'; id: string; label: string; tone?: 'plot' | 'axis' | 'meta' } | { type: 'gap'; key: SpacingKey; label: string; value: number }
 
@@ -49,13 +65,13 @@ export function CanvasSettings({ config, onChange }: Props) {
   const applyFormat = (format: typeof formats[number]) => {
     const typography = format.id === 'presentation-wide' || format.id === 'presentation-standard' ? 'presentation' : 'social'
     const fontFactor = format.id === 'portrait' ? .9 : format.id === 'presentation-wide' ? .9 : 1
-    patch({ canvasPreset: format.id, canvasWidth: format.width, canvasHeight: format.height, xAxisTitleGap: 14, yAxisTitleGap: 14, tickLength: 6, directLabelGap: 16, ...scaledObjects(format.width, format.height), ...typographyPatch(typography, fontFactor) })
+    patch({ canvasPreset: format.id, canvasWidth: format.width, canvasHeight: format.height, xAxisTitleGap: DEFAULT_COMPOSITION_SPACING.xAxisLabelTitle, yAxisTitleGap: DEFAULT_COMPOSITION_SPACING.yAxisLabelTitle, tickLength: DEFAULT_COMPOSITION_SPACING.tickLength, directLabelGap: DEFAULT_COMPOSITION_SPACING.directLabelPlot, ...scaledObjects(format.width, format.height), ...typographyPatch(typography, fontFactor) })
   }
   const applyCustomSize = (width: number, height: number) => {
     const portrait = height > width * 1.15
     const preset = portrait ? 'social' : 'presentation'
     const factor = Math.max(.65, Math.min(1, Math.min(width / 800, height / 560)))
-    patch({ canvasPreset: 'custom', canvasWidth: width, canvasHeight: height, xAxisTitleGap: Math.max(8, Math.round(14 * factor)), yAxisTitleGap: Math.max(8, Math.round(14 * factor)), tickLength: Math.max(3, Math.round(6 * factor)), directLabelGap: Math.max(8, Math.round(16 * factor)), ...scaledObjects(width, height), ...typographyPatch(preset, factor) })
+    patch({ canvasPreset: 'custom', canvasWidth: width, canvasHeight: height, xAxisTitleGap: Math.max(8, Math.round(DEFAULT_COMPOSITION_SPACING.xAxisLabelTitle * factor)), yAxisTitleGap: Math.max(8, Math.round(DEFAULT_COMPOSITION_SPACING.yAxisLabelTitle * factor)), tickLength: Math.max(3, Math.round(DEFAULT_COMPOSITION_SPACING.tickLength * factor)), directLabelGap: Math.max(8, Math.round(DEFAULT_COMPOSITION_SPACING.directLabelPlot * factor)), ...scaledObjects(width, height), ...typographyPatch(preset, factor) })
   }
   const showTitle = (config.showTitle ?? true) && Boolean(config.title)
   const showSubtitle = (config.showSubtitle ?? true) && Boolean(config.subtitle)

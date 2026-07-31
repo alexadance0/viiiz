@@ -447,11 +447,24 @@ export interface ChartPlugin {
   id: ChartKind
   label: string
   category: 'comparison' | 'bar-horizontal' | 'trend' | 'smoothing' | 'area' | 'relationship' | 'distribution' | 'heatmap' | 'hierarchy'
+  capabilities: ChartCapabilities
   settings: ChartSettingsCapabilities
   defaultConfig: Partial<ChartConfig>
   inferMapping(table: DataTable): Pick<ChartConfig, 'xField' | 'yField' | 'yFields'>
   validate(table: DataTable, config: ChartConfig): ChartValidationResult
+  compile(table: DataTable, config: ChartConfig): import('../entities/chart/model/ChartScene').ChartScene
+  /** @deprecated Compatibility boundary for consumers not migrated to ChartScene yet. */
   buildOption(table: DataTable, config: ChartConfig): Record<string, unknown>
+}
+
+export interface ChartCapabilities {
+  coordinateSystem: 'cartesian' | 'hierarchy' | 'matrix' | 'custom'
+  axes: false | { category?: { placements: Array<'side' | 'internal'> }; value?: { scaleTypes: Array<'linear' | 'log' | 'date'> } }
+  guides: Array<'legend' | 'direct-series' | 'color-scale' | 'size-scale'>
+  valueLabels?: boolean
+  markers?: boolean
+  orientation?: Array<'vertical' | 'horizontal'>
+  stacking?: Array<'none' | 'stacked' | 'normalized'>
 }
 
 export interface ChartValidationResult {

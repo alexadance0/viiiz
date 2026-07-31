@@ -14,9 +14,17 @@ interface Props {
   customFonts?: ChartConfig['customFonts']
   canvasBackground?: string
   singleLine?: boolean
+  policy?: TextEditingPolicy
   rotation?: number
   onChange(html: string, text: string): void
   onStyleChange?(style: Partial<ChartTextStyle>): void
+}
+
+export interface TextEditingPolicy {
+  richText: boolean
+  multiline: boolean
+  explicitNewlines: boolean
+  styleToolbar: boolean
 }
 
 interface DisplayProps extends Omit<Props, 'id' | 'text' | 'customFonts' | 'onChange'> {
@@ -45,7 +53,8 @@ export function CanvasTextDisplay({ html, style, left, top, width, onSelect }: D
   return <div className="canvas-rich-text-display" style={blockStyle(style, left, top, width)} onClick={(event) => { event.stopPropagation(); onSelect() }} dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(html) }}/>
 }
 
-export function CanvasTextOverlay({ id, text, html, style, left, top, width, customFonts, canvasBackground = '#ffffff', singleLine = false, rotation = 0, onChange, onStyleChange }: Props) {
+export function CanvasTextOverlay({ id, text, html, style, left, top, width, customFonts, canvasBackground = '#ffffff', singleLine = false, policy, rotation = 0, onChange, onStyleChange }: Props) {
+  const editing = policy ?? { richText: true, multiline: !singleLine, explicitNewlines: !singleLine, styleToolbar: !id.startsWith('category-') }
   const inputText = id.startsWith('category-') ? text.replace(/^\d+:/, '') : text
   const editor = useRef<HTMLDivElement>(null), range = useRef<Range | null>(null), lastHtml = useRef(''), lastText = useRef('')
   const [toolbarStyle, setToolbarStyle] = useState(style)
@@ -137,9 +146,9 @@ export function CanvasTextOverlay({ id, text, html, style, left, top, width, cus
     onChange(sanitizeRichTextHtml(editor.current?.innerHTML ?? html ?? annotationTextHtml(text)), editor.current?.innerText.replace(/\n+$/, '') ?? text)
   }
   return <div className="canvas-rich-text" style={blockStyle({ ...style, align: blockAlign }, left, top, width, rotation)}>
-    {!id.startsWith('category-') && (
+    {editing.styleToolbar && (
       <TextFragmentToolbar style={toolbarStyle} customFonts={customFonts} strokeColor={canvasBackground} below={top < 70} onBeforeAction={remember} onApply={apply} alignment={blockAlign} onAlignmentChange={setAlignment} onCommand={command}/>
     )}
-    <div ref={editor} className="canvas-rich-text-content" style={singleLine ? { whiteSpace: 'pre', overflowWrap: 'normal' } : undefined} contentEditable suppressContentEditableWarning onInput={save} onMouseUp={remember} onKeyUp={remember} onPaste={(event) => { event.preventDefault(); document.execCommand('insertText', false, event.clipboardData.getData('text/plain')); save() }}/>
+    <div ref={editor} className="canvas-rich-text-content" style={editing.multiline ? { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } : { whiteSpace: 'pre', overflowWrap: 'normal' }} contentEditable suppressContentEditableWarning onInput={save} onMouseUp={remember} onKeyUp={remember} onKeyDown={(event) => { if (event.key === 'Enter' && !editing.explicitNewlines) event.preventDefault() }} onPaste={(event) => { event.preventDefault(); document.execCommand('insertText', false, event.clipboardData.getData('text/plain')); save() }}/>
   </div>
 }
