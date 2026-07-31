@@ -3,6 +3,11 @@
 .scatter-settings legend { padding: 0 7px; color: #504c5a; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
 .scatter-settings .settings-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: end; }
 .scatter-settings .settings-pair--toggle { align-items: center; }
+.scatter-category-colors { display: grid; gap: 6px; }
+.scatter-category-colors > span { color: #66616e; font-size: 8px; font-weight: 700; }
+.scatter-category-color { display: grid; grid-template-columns: minmax(0, 1fr) 32px; align-items: center; min-height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-subtle); }
+.scatter-category-color strong { display: flex; min-width: 0; align-items: center; gap: 7px; overflow: hidden; color: var(--ink); font-size: 9px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.scatter-category-color strong i { width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; }
 .quadrant-colors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
 .quadrant-colors label { gap: 4px; text-align: center; color: #77727f; }
 .quadrant-colors input { width: 100%; }

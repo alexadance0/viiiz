@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as echarts from 'echarts'
-import { applySeriesVisualState, axisAffixGraphics, barVerticalGridGraphics, customFontCss, directLegendGraphics, suppressBuiltInDirectLabels, xAxisEdgeGraphics } from './ChartCanvas'
+import { applySeriesVisualState, barVerticalGridGraphics, butterflyCategoryLayout, directLegendGraphics, fitTreemapLabelBoxes, heatmapPlotBounds, heatmapScaleSideOffset, materializeTreemapHyphens, outlineSelectedTreemapGroup, positionHeatmapScaleGraphics, suppressBuiltInDirectLabels, wrapTreemapLabelText } from './ChartCanvas'
+import { customFontCss } from '../features/chart-export/chartExport'
 import { decorationGraphics } from './chartDecorations'
 import { getChartPlugin } from '../core/chartRegistry'
 import type { ChartConfig, ChartTextStyle, DataTable } from '../core/types'
@@ -13,6 +14,48 @@ const config: ChartConfig = {
   elementStyles: {}, seriesStyles: { a: { legendNote: '10%' }, b: { legendNote: '9%' }, c: { legendNote: '8%' } }, annotations: [], color: '#6956e8', showLegend: false, showDirectLabels: true, showDirectLabelLines: false, showHorizontalGrid: true, showVerticalGrid: false, gridColor: '#dddddd', gridWidth: 1, gridType: 'solid', canvasWidth: 800, canvasHeight: 500,
 }
 const table: DataTable = { name: 'line', columns: ['year', 'a', 'b', 'c'], rows: [{ year: 2022, a: 10, b: 9.8, c: 9.6 }, { year: 2023, a: 10, b: 9.9, c: 9.8 }] }
+
+describe('heatmap title layout', () => {
+  it('reserves the scale width on the same side as the Y title', () => {
+    expect(heatmapScaleSideOffset({ ...config, kind: 'heatmap', yAxisPosition: 'left', heatmapScalePosition: 'left', heatmapShowScale: true })).toBe(80)
+    expect(heatmapScaleSideOffset({ ...config, kind: 'heatmap', yAxisPosition: 'right', heatmapScalePosition: 'right', heatmapShowScale: true })).toBe(80)
+    expect(heatmapScaleSideOffset({ ...config, kind: 'heatmap', yAxisPosition: 'left', heatmapScalePosition: 'right', heatmapShowScale: true })).toBe(0)
+    expect(heatmapScaleSideOffset({ ...config, kind: 'heatmap', yAxisPosition: 'left', heatmapScalePosition: 'left', heatmapShowScale: false })).toBe(0)
+  })
+
+  it('aligns horizontal scales to the final plot and keeps vertical scales shorter', () => {
+    const graphics = [{ id: 'heatmap-scale-bar', shape: {} }, { id: 'heatmap-scale-label-1', info: { ratio: .25 }, style: {} }]
+    const grid = { left: 140, right: 80, top: 130, bottom: 100 }
+    const top = positionHeatmapScaleGraphics(graphics, { ...config, kind: 'heatmap', heatmapScalePosition: 'top', xAxisPosition: 'top' }, grid, 800, 500, { x: 30, y: 20 }) as typeof graphics
+    expect(top[0].shape).toMatchObject({ x: 140, y: 76, width: 148.5, height: 12 })
+    expect(top[1].style).toMatchObject({ x: 177.125, align: 'center' })
+    const left = positionHeatmapScaleGraphics(graphics, { ...config, kind: 'heatmap', heatmapScalePosition: 'left', yAxisPosition: 'left' }, grid, 800, 500, { x: 30, y: 20 }) as typeof graphics
+    expect(Number((left[0]!.shape as { height?: number }).height)).toBe(Number((top[0]!.shape as { width?: number }).width))
+    expect(left[0].shape).toMatchObject({ x: 32, width: 12 })
+  })
+
+  it('reads heatmap bounds from the rendered coordinate rectangle, excluding labels', () => {
+    const instance = { getModel: () => ({ getComponent: () => ({ coordinateSystem: { getRect: () => ({ x: 173, y: 91, width: 427, height: 286 }) } }) }) }
+    expect(heatmapPlotBounds(instance, { ...config, kind: 'heatmap' })).toEqual({ left: 173, right: 600, top: 91, bottom: 377 })
+  })
+})
+
+describe('Butterfly category layout', () => {
+  it('uses the shared date-label planner for central categories', () => {
+    const dated: DataTable = {
+      name: 'dated',
+      columns: ['date', 'a', 'b'],
+      rows: [
+        { date: new Date(2024, 0, 1), a: 10, b: 12 },
+        { date: new Date(2024, 1, 1), a: 11, b: 13 },
+        { date: new Date(2025, 0, 1), a: 12, b: 14 },
+      ],
+      timeProfiles: { date: { frequency: 'monthly', confidence: 1, label: 'Ежемесячно', source: 'intervals' } },
+    }
+    const butterfly = { ...config, kind: 'butterfly' as const, xField: 'date', yFields: ['a', 'b'], butterflyLeftFields: ['a'], butterflyRightFields: ['b'], dateLabelFormat: 'month-context-ru' as const }
+    expect(butterflyCategoryLayout(dated, butterfly).labels.map(({ label }) => label)).toEqual(['янв.\n2024', 'февр.', 'янв.\n2025'])
+  })
+})
 
 describe('direct legend rendering', () => {
   it('embeds uploaded fonts for SVG and PNG export', () => {
@@ -52,6 +95,39 @@ describe('direct legend rendering', () => {
     chart.dispose()
   })
 
+  it('hides selected series labels and applies an individual text style', () => {
+    const styled: ChartConfig = { ...config, seriesStyles: { a: { showDirectLabel: false }, b: { directLabelText: { ...text(22), color: '#e56b45', weight: 700 } }, c: {} } }
+    const chart = echarts.init(null, undefined, { renderer: 'svg', ssr: true, width: 800, height: 500 })
+    chart.setOption(getChartPlugin('line').buildOption(table, styled), true)
+    const graphics = directLegendGraphics(chart, table, styled) as Array<{ id?: string; style?: { fill?: string; fontSize?: number; fontWeight?: number } }>
+    expect(graphics.some((item) => item.id === 'direct-legend-name-a')).toBe(false)
+    expect(graphics.find((item) => item.id === 'direct-legend-name-b')?.style).toMatchObject({ fill: '#e56b45', fontSize: 22, fontWeight: 700 })
+    expect(graphics.some((item) => item.id === 'direct-legend-name-c')).toBe(true)
+    chart.dispose()
+  })
+
+  it('keeps remaining direct-label colors and anchors tied to their original series', () => {
+    const palette = ['#6956e8', '#168a72', '#e56b45']
+    const visibleConfig: ChartConfig = { ...config, palette, showDirectLabelLines: true, seriesStyles: { a: {}, b: {}, c: {} } }
+    const hiddenConfig: ChartConfig = { ...visibleConfig, seriesStyles: { a: { showDirectLabel: false }, b: {}, c: {} } }
+    const chart = {
+      getWidth: () => 800,
+      getOption: () => ({ yAxis: [{ min: 0, max: 12 }] }),
+      convertToPixel: (finder: { xAxisIndex?: number }, value: number) => finder.xAxisIndex === 0 ? 100 + value * 200 : 440 - value * 30,
+    } as unknown as echarts.ECharts
+    const visible = directLegendGraphics(chart, table, visibleConfig) as Array<{ id?: string; left?: number; top?: number; shape?: { points?: number[][] }; style?: { fill?: string; stroke?: string } }>
+    const hidden = directLegendGraphics(chart, table, hiddenConfig) as typeof visible
+
+    for (const [name, color] of [['b', palette[1]], ['c', palette[2]]] as const) {
+      const visibleLabel = visible.find((item) => item.id === `direct-legend-name-${name}`)
+      expect(hidden.find((item) => item.id === `direct-legend-name-${name}`)).toMatchObject({ left: visibleLabel?.left, top: visibleLabel?.top, style: { fill: color } })
+      expect(hidden.find((item) => item.id === `direct-legend-line-${name}`)?.style?.stroke).toBe(color)
+      expect(hidden.find((item) => item.id === `direct-legend-line-${name}`)?.shape?.points?.[0]).toEqual(
+        visible.find((item) => item.id === `direct-legend-line-${name}`)?.shape?.points?.[0],
+      )
+    }
+  })
+
   it('does not overflow the call stack on long line series', () => {
     const points = 10_000
     const longTable: DataTable = {
@@ -83,7 +159,7 @@ describe('direct legend rendering', () => {
   })
 
   it('places horizontal bar direct labels over the top row and centered on the bar', () => {
-    const barConfig: ChartConfig = { ...config, kind: 'bar', barOrientation: 'horizontal', categoryAxisInverse: true, yFields: ['a'], seriesStyles: { a: {} } }
+    const barConfig: ChartConfig = { ...config, kind: 'bar', barOrientation: 'horizontal', categoryAxisInverse: true, xAxisPosition: 'top', yAxisPosition: 'right', yFields: ['a'], seriesStyles: { a: {} } }
     const chart = {
       convertToPixel: (finder: { xAxisIndex?: number; yAxisIndex?: number }, value: number) => finder.xAxisIndex === 0 ? 100 + value * 20 : 100 + value * 100,
       getWidth: () => 800,
@@ -95,6 +171,27 @@ describe('direct legend rendering', () => {
     expect(label.style).toMatchObject({ align: 'center', textAlign: 'center' })
   })
 
+  it('does not move or recolor grouped horizontal-bar labels when another label is hidden', () => {
+    const palette = ['#6956e8', '#168a72', '#e56b45']
+    const visibleConfig: ChartConfig = { ...config, kind: 'bar', barOrientation: 'horizontal', categoryAxisInverse: true, yFields: ['a', 'b', 'c'], palette, showDirectLabelLines: true, seriesStyles: { a: {}, b: {}, c: {} } }
+    const hiddenConfig: ChartConfig = { ...visibleConfig, seriesStyles: { a: { showDirectLabel: false }, b: {}, c: {} } }
+    const chart = {
+      convertToPixel: (finder: { xAxisIndex?: number }, value: number) => finder.xAxisIndex === 0 ? 100 + value * 20 : 100 + value * 100,
+      getWidth: () => 800,
+    } as unknown as echarts.ECharts
+    const visible = directLegendGraphics(chart, table, visibleConfig) as Array<{ id?: string; left?: number; top?: number; shape?: { points?: number[][] }; style?: { fill?: string; stroke?: string } }>
+    const hidden = directLegendGraphics(chart, table, hiddenConfig) as typeof visible
+
+    for (const [name, color] of [['b', palette[1]], ['c', palette[2]]] as const) {
+      const visibleLabel = visible.find((item) => item.id === `direct-legend-name-${name}`)
+      const hiddenLabel = hidden.find((item) => item.id === `direct-legend-name-${name}`)
+      expect(hiddenLabel).toMatchObject({ left: visibleLabel?.left, top: visibleLabel?.top, style: { fill: color } })
+      expect(hidden.find((item) => item.id === `direct-legend-line-${name}`)?.shape?.points?.[0]).toEqual(
+        visible.find((item) => item.id === `direct-legend-line-${name}`)?.shape?.points?.[0],
+      )
+    }
+  })
+
   it('handles null separators in styled line segments with direct labels', () => {
     const styledConfig: ChartConfig = {
       ...config,
@@ -103,6 +200,24 @@ describe('direct legend rendering', () => {
     const option = getChartPlugin('line').buildOption(table, styledConfig) as Record<string, unknown> & { series: Array<{ data?: unknown[] }> }
     expect(option.series.some((series) => series.data?.includes(null))).toBe(true)
     expect(() => suppressBuiltInDirectLabels(option, styledConfig)).not.toThrow()
+  })
+
+  it('does not duplicate absorbed values on the last stacked column beside direct labels', () => {
+    const barConfig: ChartConfig = { ...config, kind: 'normalized-stacked-bar', showValues: true, barValueLabelAbsorption: true }
+    const option = getChartPlugin('normalized-stacked-bar').buildOption(table, barConfig) as Record<string, unknown> & { series: Array<{ data?: Array<{ directLegendLabel?: boolean; label?: { show?: boolean } }> }> }
+    const directPoints = option.series.flatMap((series) => series.data?.filter((point) => point.directLegendLabel) ?? [])
+    expect(directPoints.length).toBeGreaterThan(0)
+    suppressBuiltInDirectLabels(option, barConfig)
+    expect(directPoints.every((point) => point.label?.show === false)).toBe(true)
+  })
+
+  it('keeps the configured value-label position on the last column beside direct labels', () => {
+    const barConfig: ChartConfig = { ...config, kind: 'bar', showValues: true, valueLabelPosition: 'inside-bottom' }
+    const option = getChartPlugin('bar').buildOption(table, barConfig) as Record<string, unknown> & { series: Array<{ data?: Array<{ directLegendLabel?: boolean; label?: { show?: boolean; position?: string } }> }> }
+    const directPoints = option.series.flatMap((series) => series.data?.filter((point) => point.directLegendLabel) ?? [])
+    suppressBuiltInDirectLabels(option, barConfig)
+    expect(directPoints).toHaveLength(3)
+    expect(directPoints.every((point) => point.label?.show === true && point.label.position === 'insideBottom')).toBe(true)
   })
 
   it('does not turn a regular line chart into an area chart while highlighting', () => {
@@ -118,6 +233,95 @@ describe('direct legend rendering', () => {
     const point = option.series.find((series) => series.name === 'a')?.data?.[1]
     expect(point?.symbolSize).toBeGreaterThanOrEqual(11)
     expect(point?.itemStyle).toMatchObject({ color: '#168a72', borderColor: '#168a72' })
+  })
+
+  it('highlights a selected treemap leaf inside nested categories', () => {
+    const hierarchy: DataTable = { name: 'hierarchy', columns: ['category', 'subcategory', 'value'], rows: [
+      { category: 'A', subcategory: 'A1', value: 10 },
+      { category: 'A', subcategory: 'A2', value: 8 },
+      { category: 'B', subcategory: 'B1', value: 6 },
+    ] }
+    const treemapConfig: ChartConfig = { ...config, kind: 'treemap', xField: 'category', yField: 'value', yFields: ['value'], treemapSubcategoryField: 'subcategory', aggregation: 'sum' }
+    type Node = { elementKey?: string; itemStyle?: { opacity?: number; borderColor?: string; borderWidth?: number }; children?: Node[] }
+    const option = getChartPlugin('treemap').buildOption(hierarchy, treemapConfig) as Record<string, unknown> & { series: Array<{ data: Node[] }> }
+    applySeriesVisualState(option, hierarchy, treemapConfig, null, 'A\u001fstring:A1')
+    const leaves = option.series[0].data.flatMap((node) => node.children ?? [])
+    expect(leaves.find((node) => node.elementKey === 'A\u001fstring:A1')?.itemStyle).toMatchObject({ borderColor: '#6956e8', borderWidth: 3 })
+    expect(leaves.find((node) => node.elementKey === 'B\u001fstring:B1')?.itemStyle?.opacity).toBeUndefined()
+
+    const groupOption = getChartPlugin('treemap').buildOption(hierarchy, treemapConfig) as Record<string, unknown> & { series: Array<{ data: Node[] }> }
+    applySeriesVisualState(groupOption, hierarchy, treemapConfig, null, 'treemap-group:A')
+    expect(groupOption.series[0].data.find((node) => node.elementKey === 'treemap-group:A')?.itemStyle?.borderWidth).toBe(0)
+    expect(groupOption.series[1].data.find((node) => node.elementKey === 'treemap-group:A')?.itemStyle).toMatchObject({ color: 'rgba(0,0,0,0)', borderColor: 'rgba(0,0,0,0)', borderWidth: 0 })
+    expect(groupOption.series[1].data.find((node) => node.elementKey === 'treemap-group:B')?.itemStyle?.borderWidth).toBe(0)
+  })
+
+  it('outlines the laid-out treemap category without filling it', () => {
+    let renderedStyle: Record<string, unknown> = {}
+    const host = { type: 'rect', setStyle: (style: Record<string, unknown>) => { renderedStyle = style }, markRedraw: () => undefined }
+    Object.assign(echarts.helper.getECData(host as never), { seriesIndex: 1, dataIndex: 7 })
+    const instance = {
+      getOption: () => ({ series: [{ name: 'Treemap' }, { name: '__treemap-groups' }] }),
+      getModel: () => ({ getSeriesByIndex: () => ({ getData: () => ({ getName: (index: number) => index === 7 ? 'Проблемы с клиентами' : 'Другое' }) }) }),
+      getZr: () => ({ storage: { getDisplayList: () => [host] } }),
+    } as unknown as echarts.ECharts
+
+    outlineSelectedTreemapGroup(instance, 'treemap-group:Проблемы с клиентами')
+
+    expect(renderedStyle).toEqual({ fill: 'rgba(0,0,0,0)', stroke: '#6956e8', lineWidth: 3 })
+  })
+
+  it('wraps a treemap category across the complete width and keeps its value separate', () => {
+    const lines = wrapTreemapLabelText('Экономическая и политическая нестабильность\n8', 150, 17, 'Arial', 700)
+    expect(lines[0].replace('\u200b', '')).toBe('Экономическая и')
+    expect(lines.at(-1)).toBe('8')
+  })
+
+  it('keeps fitted treemap labels wrapped instead of truncating them with an ellipsis', () => {
+    let rendered: Record<string, unknown> = {}
+    const label = {
+      style: { text: 'Затрудняюсь ответить\n12', padding: 4, fontSize: 20, fontFamily: 'Arial', fontWeight: 700, lineHeight: 24 },
+      setStyle: (style: Record<string, unknown>) => { rendered = style },
+      markRedraw: () => undefined,
+      getBoundingRect: () => ({}),
+    }
+    const host = {
+      zlevel: 0,
+      getTextContent: () => label,
+      getBoundingRect: () => ({ x: 0, y: 0, width: 170, height: 100 }),
+      getPaintRect: () => ({ x: 0, y: 0, width: 170, height: 100 }),
+    }
+    fitTreemapLabelBoxes({ getZr: () => ({ storage: { getDisplayList: () => [host] } }) } as unknown as echarts.ECharts)
+    expect(String(rendered.text).replaceAll('\u200b', '')).toBe('Затрудняюсь\nответить\n12')
+    expect(String(rendered.text)).not.toContain('…')
+    expect(rendered).toMatchObject({ overflow: undefined, ellipsis: undefined })
+  })
+
+  it('shows a hyphen only where a treemap line actually wraps', () => {
+    const wrapped = { textContent: 'кон\u00ad\ufeff' }
+    const intact = { textContent: 'кон\u00ad\ufeffкурен\u00ad\ufeffция' }
+    let selector = ''
+    materializeTreemapHyphens({ querySelectorAll: (value: string) => { selector = value; return [wrapped, intact] } } as unknown as ParentNode)
+    expect(selector).toBe('text[x]')
+    expect(wrapped.textContent).toBe('кон‐')
+    expect(intact.textContent).toBe('конкуренция')
+
+    const first = { textContent: 'Финансовы', nextElementSibling: null as unknown }
+    const second = { textContent: 'е трудности', nextElementSibling: null as unknown }
+    first.nextElementSibling = second
+    materializeTreemapHyphens({ querySelectorAll: () => [first, second] } as unknown as ParentNode)
+    expect(first.textContent).toBe('Финансо‐')
+    expect(second.textContent).toBe('вые трудности')
+  })
+
+  it('does not add glow, opacity or size changes to distribution dots', () => {
+    const distributionTable: DataTable = { name: 'distribution', columns: ['value'], rows: [{ value: 10 }, { value: 10 }, { value: 20 }] }
+    const distributionConfig: ChartConfig = { ...config, kind: 'jitter-plot', yField: 'value', yFields: ['value'], distributionPointSize: 9, distributionPointOpacity: .55 }
+    const option = getChartPlugin('jitter-plot').buildOption(distributionTable, distributionConfig) as Record<string, unknown> & { series: Array<{ name?: string; silent?: boolean; symbolSize?: number; itemStyle?: { opacity?: number; shadowBlur?: number }; data?: Array<{ symbolSize?: number; itemStyle?: { opacity?: number; shadowBlur?: number } }> }> }
+    const pointSeries = () => option.series.filter((series) => !series.silent)
+    const before = structuredClone(pointSeries())
+    applySeriesVisualState(option, distributionTable, distributionConfig, 'value', 'value\u001fnumber:10')
+    expect(pointSeries()).toEqual(before)
   })
 
   it('draws confidence direct labels only for visible interval series', () => {
@@ -193,31 +397,10 @@ describe('direct legend rendering', () => {
     chart.dispose()
   })
 
-  it('keeps Y affixes on the exact top-tick line and renders numeric X edge units', () => {
-    const numericTable: DataTable = { name: 'numeric', columns: ['year', 'a'], rows: [{ year: 10, a: 5 }, { year: 20, a: 12 }] }
-    const affixConfig: ChartConfig = { ...config, yFields: ['a'], seriesStyles: { a: {} }, numberPrefix: '+', numberSuffix: ' тыс.', xAxisStartLabel: ' лет', xAxisEndLabel: ' лет' }
-    const chart = echarts.init(null, undefined, { renderer: 'svg', ssr: true, width: 800, height: 500 })
-    chart.setOption(getChartPlugin('line').buildOption(numericTable, affixConfig), true)
-    const option = chart.getOption() as unknown as { yAxis: Array<{ max: number }> }
-    const top = Number(chart.convertToPixel({ yAxisIndex: 0 }, Number(option.yAxis[0].max)))
-    const bounds = { top, bottom: Number(chart.convertToPixel({ yAxisIndex: 0 }, 0)), left: 80, right: 740 }
-    const yGraphics = axisAffixGraphics(chart, affixConfig, bounds) as Array<{ id: string; top?: number; shape?: { width?: number } }>
-    expect(yGraphics).toHaveLength(4)
-    expect(yGraphics[0].id).toBe('axis-y-top-background')
-    expect(yGraphics[0].shape?.width).toBeGreaterThan(20)
-    expect(new Set(yGraphics.filter((item) => item.id !== 'axis-y-top-background').map((item) => item.top))).toEqual(new Set([top - Math.round(14 * 1.2) / 2]))
-    const xGraphics = xAxisEdgeGraphics(chart, numericTable, affixConfig, bounds) as Array<{ y?: number }>
-    expect(xGraphics).toHaveLength(4)
-    expect(new Set(xGraphics.map((item) => item.y))).toHaveLength(1)
-    expect(() => chart.setOption({ graphic: [...yGraphics, ...xGraphics] }, { replaceMerge: ['graphic'] })).not.toThrow()
-    expect(chart.renderToSVGString()).not.toContain('NaN')
-    chart.dispose()
-  })
-
   it('renders every chart kind with dense styling without invalid SVG geometry', () => {
     const numericTable: DataTable = { name: 'matrix', columns: ['x', 'a', 'b'], rows: [{ x: 1, a: 2, b: 4 }, { x: 2, a: 3, b: 1 }, { x: 3, a: 5, b: 6 }] }
-    for (const kind of ['bar', 'stacked-bar', 'normalized-stacked-bar', 'horizontal-bar', 'horizontal-stacked-bar', 'horizontal-normalized-stacked-bar', 'line', 'spline', 'step-line', 'range-line', 'step-range-line', 'confidence-line', 'area', 'stacked-area', 'normalized-stacked-area', 'scatter', 'bubble'] as const) {
-      const matrixConfig: ChartConfig = { ...config, kind, xField: 'x', yField: 'a', yFields: ['a', 'b'], showLegend: true, showValues: true, showVerticalGrid: true, showHorizontalGrid: true, xAxisStartLabel: ' ед.', xAxisEndLabel: ' ед.', scatterSizeField: 'b', seriesStyles: {}, elementStyles: {} }
+    for (const kind of ['bar', 'stacked-bar', 'normalized-stacked-bar', 'horizontal-bar', 'horizontal-stacked-bar', 'horizontal-normalized-stacked-bar', 'dumbbell', 'line', 'spline', 'step-line', 'range-line', 'step-range-line', 'confidence-line', 'area', 'stacked-area', 'normalized-stacked-area', 'scatter', 'bubble'] as const) {
+      const matrixConfig: ChartConfig = { ...config, kind, xField: 'x', yField: 'a', yFields: ['a', 'b'], showLegend: true, showValues: true, showVerticalGrid: true, showHorizontalGrid: true, xAxisNumberSuffix: ' ед.', scatterSizeField: 'b', seriesStyles: {}, elementStyles: {} }
       const chart = echarts.init(null, undefined, { renderer: 'svg', ssr: true, width: 800, height: 500 })
       expect(() => chart.setOption(getChartPlugin(kind).buildOption(numericTable, matrixConfig), true)).not.toThrow()
       const svg = chart.renderToSVGString()

@@ -55,6 +55,18 @@ describe('time frequency inference', () => {
     expect(formatTimeValue(new Date(2024, 0, 1), undefined, 'year-week-en')).toBe('2024-W01')
   })
 
+  it('provides Russian counterparts for textual English period formats', () => {
+    const date = new Date(2024, 3, 5)
+    expect(formatTimeValue(date, undefined, 'half-only-ru')).toBe('П1')
+    expect(formatTimeValue(date, undefined, 'half-year-ru')).toBe('П1 2024')
+    expect(formatTimeValue(date, undefined, 'year-half-ru')).toBe('2024 · П1')
+    expect(formatTimeValue(date, undefined, 'quarter-only-ru')).toBe('К2')
+    expect(formatTimeValue(date, undefined, 'year-month-ru')).toBe('2024 апр.')
+    expect(formatTimeValue(date, undefined, 'date-dmy-ru')).toBe('05 апр. 2024')
+    expect(formatTimeValue(date, undefined, 'week-only-ru')).toBe('Нед. 14')
+    expect(formatTimeValue(date, undefined, 'year-week-ru')).toBe('2024 · нед. 14')
+  })
+
   it('uses ISO week years at calendar-year boundaries', () => {
     expect(formatTimeValue(new Date(2021, 0, 1), undefined, 'year-week-en')).toBe('2020-W53')
     expect(formatTimeValue(new Date(2021, 0, 4), undefined, 'year-week-en')).toBe('2021-W01')

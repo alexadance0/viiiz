@@ -1,5 +1,5 @@
 ---
-name: DataCanvas
+name: Виииз
 description: A strict editorial data-visualization editor for fast, polished chart creation.
 colors:
   ink: "#202027"
@@ -79,13 +79,13 @@ components:
     rounded: "{rounded.lg}"
 ---
 
-# Design System: DataCanvas
+# Design System: Виииз
 
 ## 1. Overview
 
 **Creative North Star: "The Editorial Chart Desk"**
 
-DataCanvas should feel like a precise editorial workstation for making charts: white surfaces, disciplined typography, visible structure, and quiet controls that help the user move from raw data to a polished export. The interface is a product tool, so the chart and data remain the main subject; styling exists to support confidence, speed, and legibility.
+Виииз should feel like a precise editorial workstation for making charts: white surfaces, disciplined typography, visible structure, and quiet controls that help the user move from raw data to a polished export. The interface is a product tool, so the chart and data remain the main subject; styling exists to support confidence, speed, and legibility.
 
 The current system uses DM Sans for the product shell, Manrope for stronger headings, compact control typography, white panels, pale lavender-gray backgrounds, and a single violet accent. The future direction should keep the useful restraint while moving away from generic SaaS polish: less decorative purple text, fewer heavy card tropes, more typographic hierarchy, cleaner alignment, and color used as a rare mark of state or emphasis.
 
@@ -158,7 +158,7 @@ The palette is a restrained neutral system with one violet accent and clear sema
 
 ## 4. Elevation
 
-DataCanvas is flat by default and uses tonal layering, borders, and sticky structure before shadows. Shadows appear when a surface genuinely floats above the workbench: chart paper, dialogs, hoverable project previews, dropdown-like controls, and selected canvas handles.
+Виииз is flat by default and uses tonal layering, borders, and sticky structure before shadows. Shadows appear when a surface genuinely floats above the workbench: chart paper, dialogs, hoverable project previews, dropdown-like controls, and selected canvas handles.
 
 ### Shadow Vocabulary
 

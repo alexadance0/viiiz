@@ -5,6 +5,24 @@ interface NumberInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, '
   onValueChange(value: number): void
 }
 
+interface OptionalNumberInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onChange'> {
+  value?: number | null
+  onValueChange(value: number | null): void
+}
+
+export const clampNumber = (value: number, min?: number | string, max?: number | string) => {
+  const minimum = min == null ? -Infinity : Number(min)
+  const maximum = max == null ? Infinity : Number(max)
+  return Math.min(maximum, Math.max(minimum, value))
+}
+
+export const normalizeNumberDraft = (draft: string) => {
+  if (draft === '') return null
+  const normalized = draft.replace(/^(-?)0+(?=\d)/, '$1')
+  const value = Number(normalized)
+  return Number.isFinite(value) ? { draft: normalized, value } : null
+}
+
 export function NumberInput({ value, onValueChange, onBlur, onFocus, ...props }: NumberInputProps) {
   const [draft, setDraft] = useState(String(value))
   const focused = useRef(false)
@@ -14,24 +32,44 @@ export function NumberInput({ value, onValueChange, onBlur, onFocus, ...props }:
   }, [value])
 
   return <input {...props} type="number" value={draft} onFocus={(event) => { focused.current = true; onFocus?.(event) }} onChange={(event) => {
-    let next = event.target.value
-    if (next === '') { setDraft(''); return }
-    next = next.replace(/^(-?)0+(?=\d)/, '$1')
-    setDraft(next)
-    const parsed = Number(next)
-    if (Number.isFinite(parsed)) {
-      const minimum = props.min == null ? -Infinity : Number(props.min)
-      const maximum = props.max == null ? Infinity : Number(props.max)
-      onValueChange(Math.min(maximum, Math.max(minimum, parsed)))
-    }
+    const next = normalizeNumberDraft(event.target.value)
+    if (!next) { setDraft(event.target.value); return }
+    setDraft(next.draft)
+    onValueChange(clampNumber(next.value, props.min, props.max))
   }} onBlur={(event) => {
     focused.current = false
-    const parsed = draft === '' ? Number.NaN : Number(draft)
-    if (!Number.isFinite(parsed)) setDraft(String(value))
+    const next = normalizeNumberDraft(draft)
+    if (!next) setDraft(String(value))
     else {
-      const minimum = props.min == null ? -Infinity : Number(props.min)
-      const maximum = props.max == null ? Infinity : Number(props.max)
-      const normalized = Math.min(maximum, Math.max(minimum, parsed))
+      const normalized = clampNumber(next.value, props.min, props.max)
+      setDraft(String(normalized)); onValueChange(normalized)
+    }
+    onBlur?.(event)
+  }}/>
+}
+
+export function OptionalNumberInput({ value, onValueChange, onBlur, onFocus, placeholder = 'Авто', ...props }: OptionalNumberInputProps) {
+  const externalDraft = value == null || !Number.isFinite(value) ? '' : String(value)
+  const [draft, setDraft] = useState(externalDraft)
+  const focused = useRef(false)
+
+  useEffect(() => {
+    if (!focused.current) setDraft(externalDraft)
+  }, [externalDraft])
+
+  return <input {...props} type="number" value={draft} placeholder={placeholder} onFocus={(event) => { focused.current = true; onFocus?.(event) }} onChange={(event) => {
+    const nextDraft = event.target.value
+    if (nextDraft === '') { setDraft(''); onValueChange(null); return }
+    const next = normalizeNumberDraft(nextDraft)
+    if (!next) { setDraft(nextDraft); return }
+    setDraft(next.draft)
+    onValueChange(clampNumber(next.value, props.min, props.max))
+  }} onBlur={(event) => {
+    focused.current = false
+    const next = normalizeNumberDraft(draft)
+    if (!next) setDraft(externalDraft)
+    else {
+      const normalized = clampNumber(next.value, props.min, props.max)
       setDraft(String(normalized)); onValueChange(normalized)
     }
     onBlur?.(event)

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ColorChannel, ColorSpace } from '@heroui/react'
 import { Calendar, ColorArea, ColorField, ColorPicker, ColorSlider, ColorSwatch, DateField, DatePicker, parseColor } from '@heroui/react'
 import { getLocalTimeZone, parseDate, today } from '@internationalized/date'
@@ -37,12 +37,19 @@ interface ColorControlProps {
 }
 
 export function ColorControl({ value, code, icon, title = 'Выбрать цвет', compact = false, swatches = [], popoverContent, onChange }: ColorControlProps) {
-  const [draft, setDraft] = useState(value)
+  const [color, setColor] = useState(() => safeColor(value).toFormat('hsb'))
+  const colorRef = useRef(color)
   const [recentColors, setRecentColors] = useState<string[]>(() => readRecentColors())
+  const [paletteSnapshot, setPaletteSnapshot] = useState<string[]>([])
   const [colorSpace, setColorSpace] = useState<ColorSpace>('hsl')
-  useEffect(() => setDraft(value), [value])
-  const color = useMemo(() => safeColor(draft), [draft])
-  const palette = useMemo(() => [...new Set([...recentColors, ...swatches, value, ...baseSwatches].filter(Boolean))].slice(0, 18), [recentColors, swatches, value])
+  useEffect(() => {
+    const next = safeColor(value).toFormat('hsb')
+    colorRef.current = next
+    setColor(next)
+  }, [value])
+  const draft = colorText(color)
+  const availablePalette = useMemo(() => [...new Set([...recentColors, ...swatches, ...baseSwatches].filter(Boolean))].slice(0, 18), [recentColors, swatches])
+  const palette = paletteSnapshot.length ? paletteSnapshot : availablePalette
   const rememberColor = (next: string) => {
     setRecentColors((current) => {
       const colors = [next, ...current.filter((item) => item.toLowerCase() !== next.toLowerCase())].slice(0, 12)
@@ -50,25 +57,39 @@ export function ColorControl({ value, code, icon, title = 'Выбрать цве
       return colors
     })
   }
-  const commit = (next: string) => { setDraft(next); onChange(next); rememberColor(next) }
+  const updateDraft = (next: ReturnType<typeof parseColor>) => {
+    colorRef.current = next
+    setColor(next)
+  }
+  const publish = (next = colorText(colorRef.current), remember = false) => {
+    onChange(next)
+    if (remember) rememberColor(next)
+  }
+  const commit = (next: string, remember = false) => {
+    const parsed = safeColor(next).toFormat('hsb')
+    updateDraft(parsed)
+    publish(colorText(parsed), remember)
+  }
+  const finishGesture = () => requestAnimationFrame(() => publish())
   const pickScreenColor = async () => {
     const EyeDropper = (window as unknown as { EyeDropper?: new () => { open(): Promise<{ sRGBHex: string }> } }).EyeDropper
     if (!EyeDropper) return
-    try { commit((await new EyeDropper().open()).sRGBHex) } catch { /* user cancelled */ }
+    try { commit((await new EyeDropper().open()).sRGBHex, true) } catch { /* user cancelled */ }
   }
   return <div className={`color-control hero-color-control ${compact ? 'compact' : ''}`}>
-    <ColorPicker aria-label={title} value={color} onChange={(next) => commit(colorText(next))} className="hero-color-picker">
-      <ColorPicker.Trigger className="hero-color-trigger" aria-label={title}>
+    <ColorPicker aria-label={title} value={color} onChange={updateDraft} className="hero-color-picker">
+      <ColorPicker.Trigger className="hero-color-trigger" aria-label={title} onPress={() => setPaletteSnapshot(availablePalette)}>
         <ColorSwatch color={color} />
         {icon && <span className="hero-color-icon">{icon}</span>}
+        {!compact && <><code>{code ?? value}</code><ChevronDown className="hero-color-chevron" size={14} /></>}
       </ColorPicker.Trigger>
-      <ColorPicker.Popover className="hero-color-popover" placement="bottom left">
-        <ColorArea aria-label={`${title}: насыщенность и яркость`} colorSpace="hsb" xChannel="saturation" yChannel="brightness"><ColorArea.Thumb /></ColorArea>
-        <ColorSlider aria-label={`${title}: оттенок`} colorSpace="hsb" channel="hue"><span>Hue</span><ColorSlider.Track><ColorSlider.Thumb /></ColorSlider.Track></ColorSlider>
-        <ColorSlider aria-label={`${title}: прозрачность`} colorSpace="hsb" channel="alpha"><span>Alpha</span><ColorSlider.Track><ColorSlider.Thumb /></ColorSlider.Track></ColorSlider>
+      <ColorPicker.Popover className="hero-color-popover" placement="bottom left"><div className="hero-color-popover-content" onBlurCapture={() => publish()}>
+        <ColorArea aria-label={`${title}: насыщенность и яркость`} value={color} onChange={updateDraft} colorSpace="hsb" xChannel="saturation" yChannel="brightness" onPointerUp={finishGesture}><ColorArea.Thumb /></ColorArea>
+        <ColorSlider aria-label={`${title}: оттенок`} value={color} onChange={updateDraft} colorSpace="hsb" channel="hue" onPointerUp={finishGesture}><span>Hue</span><ColorSlider.Track><ColorSlider.Thumb /></ColorSlider.Track></ColorSlider>
+        <ColorSlider aria-label={`${title}: прозрачность`} value={color} onChange={updateDraft} colorSpace="hsb" channel="alpha" onPointerUp={finishGesture}><span>Alpha</span><ColorSlider.Track><ColorSlider.Thumb /></ColorSlider.Track></ColorSlider>
         <div className="hero-color-actions">
           <button type="button" onClick={pickScreenColor} disabled={!('EyeDropper' in window)} title="Взять цвет с экрана"><Pipette size={13} />Пипетка</button>
-          <button type="button" onClick={() => commit(randomColor())} title="Случайный цвет"><Shuffle size={13} />Рандом</button>
+          <button type="button" onClick={() => commit(randomColor(), true)} title="Случайный цвет"><Shuffle size={13} />Рандом</button>
         </div>
         {popoverContent}
         <div className="hero-color-swatches">{palette.map((next) => <button type="button" key={next} aria-label={`Цвет ${next}`} className={next.toLowerCase() === draft.toLowerCase() ? 'active' : ''} onClick={() => commit(next)}><i style={{ background: next }} /></button>)}</div>
@@ -77,17 +98,16 @@ export function ColorControl({ value, code, icon, title = 'Выбрать цве
           <option value="hsb">HSB</option>
           <option value="rgb">RGB</option>
         </select>
-        <div className="hero-color-fields">
+        <div className="hero-color-fields" onBlurCapture={() => publish()}>
           {channelsBySpace[colorSpace].map((channel) => <ColorField key={channel} aria-label={`${title}: ${channel}`} channel={channel} colorSpace={colorSpace}>
             <ColorField.Group><ColorField.Prefix>{channelLabels[channel]}</ColorField.Prefix><ColorField.Input /></ColorField.Group>
           </ColorField>)}
         </div>
-        <ColorField aria-label={`${title}: HEX`} value={color} onChange={(next) => next && commit(next.toString('hex'))}>
+        <div onBlurCapture={() => publish()}><ColorField aria-label={`${title}: HEX`} value={color} onChange={(next) => next && updateDraft(next.toFormat('hsb'))}>
           <ColorField.Group><ColorField.Prefix>#</ColorField.Prefix><ColorField.Input /></ColorField.Group>
-        </ColorField>
-      </ColorPicker.Popover>
+        </ColorField></div>
+      </div></ColorPicker.Popover>
     </ColorPicker>
-    {!compact && <code>{code ?? value}</code>}
   </div>
 }
 

@@ -1,7 +1,13 @@
 import type { ChartConfig } from './types'
 import { isNormalizedStackedChart } from './chartKinds'
 
-export function formatChartNumber(value: unknown, config: Pick<ChartConfig, 'kind' | 'valueMode' | 'numberLocale' | 'numberDecimals' | 'numberOperation' | 'numberFactor' | 'numberGrouping' | 'numberZeroLabel'>): string {
+type NumberFormatConfig = Pick<ChartConfig, 'kind' | 'valueMode' | 'numberLocale' | 'numberDecimals' | 'numberOperation' | 'numberFactor' | 'numberGrouping' | 'numberZeroLabel' | 'numberPrefix' | 'numberSuffix' | 'yAxisAffixScope' | 'xAxisNumberPrefix' | 'xAxisNumberSuffix' | 'xAxisAffixScope' | 'valueLabelAffixesLinked' | 'valueLabelPrefix' | 'valueLabelSuffix' | 'xAxisStartLabel' | 'xAxisEndLabel'>
+export type AxisTickPosition = 'first' | 'middle' | 'last'
+
+export const axisAffixApplies = (scope: ChartConfig['yAxisAffixScope'], position?: AxisTickPosition) =>
+  position == null || scope == null || scope === 'all' || scope === 'edges' && position !== 'middle' || scope === position
+
+const formatNumber = (value: unknown, config: NumberFormatConfig, prefix: string, suffix: string): string => {
   const numeric = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(numeric)) return String(value ?? '')
   if (numeric === 0 && config.numberZeroLabel != null && config.numberZeroLabel !== '') return config.numberZeroLabel
@@ -15,7 +21,27 @@ export function formatChartNumber(value: unknown, config: Pick<ChartConfig, 'kin
     minimumFractionDigits: decimals == null ? 0 : decimals,
   }
   const formatted = new Intl.NumberFormat(config.numberLocale ?? 'ru-RU', options).format(scaled)
-  return `${formatted}${config.valueMode === 'percent' || isNormalizedStackedChart(config.kind) ? '%' : ''}`
+  const percent = config.valueMode === 'percent' || isNormalizedStackedChart(config.kind) ? '%' : ''
+  return `${prefix}${formatted}${percent}${suffix}`
 }
 
-export const formatXAxisNumber = (value: unknown, config: Parameters<typeof formatChartNumber>[1]) => formatChartNumber(value, { ...config, kind: isNormalizedStackedChart(config.kind) ? 'bar' : config.kind, valueMode: 'absolute' })
+export const formatYAxisNumber = (value: unknown, config: NumberFormatConfig, position?: AxisTickPosition) => {
+  const show = axisAffixApplies(config.yAxisAffixScope, position)
+  return formatNumber(value, config, show ? config.numberPrefix ?? '' : '', show ? config.numberSuffix ?? '' : '')
+}
+
+export const formatChartNumber = (value: unknown, config: NumberFormatConfig) =>
+  config.valueLabelAffixesLinked === false
+    ? formatNumber(value, config, config.valueLabelPrefix ?? '', config.valueLabelSuffix ?? '')
+    : formatYAxisNumber(value, config)
+
+export const formatXAxisNumber = (value: unknown, config: NumberFormatConfig, position?: AxisTickPosition) => {
+  const show = axisAffixApplies(config.xAxisAffixScope, position)
+  return formatNumber(value, {
+    ...config,
+    kind: isNormalizedStackedChart(config.kind) ? 'bar' : config.kind,
+    valueMode: 'absolute',
+    numberOperation: 'none',
+    numberFactor: 1,
+  }, show ? config.xAxisNumberPrefix ?? '' : '', show ? config.xAxisNumberSuffix ?? config.xAxisEndLabel ?? config.xAxisStartLabel ?? '' : '')
+}

@@ -53,10 +53,13 @@ export interface DataIssue {
   examples?: string[]
 }
 
-export type ChartKind = 'bar' | 'stacked-bar' | 'normalized-stacked-bar'
-  | 'horizontal-bar' | 'horizontal-stacked-bar' | 'horizontal-normalized-stacked-bar'
-  | 'line' | 'spline' | 'step-line' | 'range-line' | 'step-range-line' | 'confidence-line'
+export type ChartKind = 'bar' | 'stacked-bar' | 'normalized-stacked-bar' | 'waterfall'
+  | 'horizontal-bar' | 'butterfly' | 'horizontal-stacked-bar' | 'horizontal-normalized-stacked-bar'
+  | 'lollipop' | 'horizontal-lollipop' | 'dumbbell'
+  | 'line' | 'spline' | 'step-line' | 'indexed-line' | 'seasonal-line' | 'slope' | 'range-line' | 'step-range-line' | 'confidence-line'
+  | 'moving-average-line' | 'moving-average-scatter' | 'heatmap' | 'treemap'
   | 'area' | 'stacked-area' | 'normalized-stacked-area' | 'scatter' | 'bubble'
+  | 'boxplot' | 'violinplot' | 'raincloud' | 'histogram' | 'kde-plot' | 'ridgeline' | 'beeswarm' | 'strip-plot' | 'jitter-plot' | 'counts-plot' | 'barcode-plot'
 export interface ChartTextStyle {
   fontFamily: string
   size: number
@@ -68,7 +71,8 @@ export interface ChartTextStyle {
 }
 export type MarkerShape = 'circle' | 'rect' | 'roundRect' | 'triangle' | 'diamond'
 export interface MarkerStyle { showMarker?: boolean; markerShape?: MarkerShape; markerSize?: number; markerFill?: string; markerBorder?: string; markerBorderWidth?: number }
-export interface ChartElementStyle extends MarkerStyle { color?: string; fillOpacity?: number; borderColor?: string; borderWidth?: number; barWidth?: number; showLabel?: boolean; label?: string; valueText?: ChartTextStyle; lineWidth?: number; lineType?: 'solid' | 'dashed' | 'dotted' }
+export type TreemapLabelPosition = 'top-left' | 'top-center' | 'top-right' | 'center-left' | 'center' | 'center-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
+export interface ChartElementStyle extends MarkerStyle { color?: string; fillOpacity?: number; borderColor?: string; borderWidth?: number; barWidth?: number; showLabel?: boolean; showName?: boolean; showValue?: boolean; labelAutoContrast?: boolean; label?: string; labelPosition?: 'top' | 'right' | 'bottom' | 'left'; waterfallLabelPosition?: ChartConfig['valueLabelPosition']; treemapLabelPosition?: TreemapLabelPosition; valueText?: ChartTextStyle; lineWidth?: number; lineType?: 'solid' | 'dashed' | 'dotted' }
 export interface ChartSeriesStyle extends MarkerStyle {
   color?: string
   fillOpacity?: number
@@ -79,6 +83,8 @@ export interface ChartSeriesStyle extends MarkerStyle {
   lineType?: 'solid' | 'dashed' | 'dotted'
   legendLabel?: string
   legendNote?: string
+  showDirectLabel?: boolean
+  directLabelText?: ChartTextStyle
   showLegendLine?: boolean
   scatterTrendline?: boolean
   scatterTrendBand?: boolean
@@ -86,8 +92,11 @@ export interface ChartSeriesStyle extends MarkerStyle {
   scatterTrendWidth?: number
   scatterTrendType?: 'solid' | 'dashed' | 'dotted'
   scatterTrendBandOpacity?: number
+  distributionSummaryColor?: string
+  distributionSummaryWidth?: number
+  distributionSummaryLength?: number
 }
-export interface ChartElementSelection { key: string; seriesName: string; category: string; value: string; target?: 'element' | 'value-label' }
+export interface ChartElementSelection { key: string; seriesName: string; category: string; value: string; label?: string; color?: string; target?: 'element' | 'value-label' | 'category-label'; axis?: 'x' | 'y' }
 export interface ChartSeriesSelection { name: string; color: string }
 export interface AnnotationFragment { id: string; text: string; color: string; bold: boolean; italic: boolean; underline?: boolean; backgroundColor?: string }
 export interface ChartAnnotation {
@@ -130,7 +139,8 @@ export interface ChartConfig {
   paletteName?: string
   palette?: string[]
   paletteBaseColor?: string
-  canvasPreset?: 'square' | 'portrait' | 'story' | 'presentation-wide' | 'presentation-standard' | 'custom'
+  paletteGradientColors?: [string, string, string]
+  canvasPreset?: 'square' | 'portrait' | 'presentation-wide' | 'presentation-standard' | 'custom'
   canvasWidth?: number
   canvasHeight?: number
   canvasBackground?: string
@@ -139,8 +149,16 @@ export interface ChartConfig {
   canvasMarginRight?: number
   canvasMarginBottom?: number
   canvasMarginLeft?: number
+  titleSubtitleGap?: number
+  headerPlotGap?: number
+  headerLegendGap?: number
+  legendPlotGap?: number
+  plotFooterGap?: number
+  noteSourceGap?: number
   kind: ChartKind
   xField: string
+  /** Two X positions shown by a slope chart. Values use `slopePositionKey`. */
+  slopeXValues?: string[]
   yField: string
   yFields: string[]
   seriesField: string
@@ -178,17 +196,46 @@ export interface ChartConfig {
   numberFactor?: number
   numberPrefix?: string
   numberSuffix?: string
+  yAxisAffixScope?: 'all' | 'first' | 'last' | 'edges'
+  xAxisNumberPrefix?: string
+  xAxisNumberSuffix?: string
+  xAxisAffixScope?: 'all' | 'first' | 'last' | 'edges'
+  valueLabelAffixesLinked?: boolean
+  valueLabelPrefix?: string
+  valueLabelSuffix?: string
   numberGrouping?: boolean
   numberZeroLabel?: string
+  /** @deprecated Use xAxisNumberPrefix/xAxisNumberSuffix for every numeric X tick. */
   xAxisStartLabel?: string
+  /** @deprecated Use xAxisNumberPrefix/xAxisNumberSuffix for every numeric X tick. */
   xAxisEndLabel?: string
   valueLabelPosition?: 'auto' | 'top' | 'inside-top' | 'inside-center' | 'inside-bottom' | 'bottom'
   valueLabelAutoContrast?: boolean
   valueLabelHideOverlap?: boolean
+  barValueLabelAbsorption?: boolean
+  barValueLabelInsidePosition?: 'start' | 'center' | 'end'
+  barValueLabelOutsidePosition?: 'start' | 'end'
+  barValueLabelAbsorptionPadding?: number
+  barCategorySort?: 'none' | 'value-asc' | 'value-desc' | 'name-asc' | 'name-desc'
+  barCategorySortSeries?: string
+  waterfallShowTotal?: boolean
+  waterfallTotalLabel?: string
+  waterfallIncreaseColor?: string
+  waterfallDecreaseColor?: string
+  waterfallTotalColor?: string
+  waterfallConnectorColor?: string
+  waterfallLabelContent?: 'change' | 'cumulative' | 'both'
+  waterfallSignMode?: 'negative-only' | 'plus-minus' | 'none' | 'custom'
+  waterfallPositivePrefix?: string
+  waterfallNegativePrefix?: string
+  waterfallShowTotalValue?: boolean
+  waterfallLabelGap?: number
   xAxisTitle: string
   yAxisTitle: string
   xAxisTitleGap: number
   yAxisTitleGap: number
+  xAxisLabelGap?: number
+  yAxisLabelGap?: number
   xAxisPosition: 'top' | 'bottom'
   yAxisPosition: 'left' | 'right'
   xAxisMin?: string
@@ -202,6 +249,8 @@ export interface ChartConfig {
   dateLabelFormat?: DateLabelFormat
   showXAxisTitle: boolean
   showYAxisTitle: boolean
+  showXAxisLabels?: boolean
+  showYAxisLabels?: boolean
   showXAxisLine: boolean
   showYAxisLine: boolean
   axisLineColor: string
@@ -224,10 +273,76 @@ export interface ChartConfig {
   barBorderRadius?: number
   barSeriesGap?: number
   barOrientation?: 'vertical' | 'horizontal'
+  butterflyLeftFields?: string[]
+  butterflyRightFields?: string[]
+  butterflyCategoryPosition?: 'center' | 'left' | 'right'
   categoryAxisInverse?: boolean
   areaFillOpacity?: number
   stepPosition?: 'start' | 'end'
   intervalFillOpacity?: number
+  /** Use the colour of the boundary that is above, or one chosen colour for the whole interval. */
+  intervalFillMode?: 'by-bound' | 'custom'
+  intervalFillColor?: string
+  rangeLowerField?: string
+  rangeUpperField?: string
+  dumbbellStartField?: string
+  dumbbellEndField?: string
+  dumbbellOrientation?: 'vertical' | 'horizontal'
+  dumbbellShowDifference?: boolean
+  dumbbellDifferenceFormat?: 'absolute' | 'percent'
+  dumbbellDifferencePosition?: 'start' | 'middle' | 'end'
+  dumbbellPercentDecimals?: number
+  dumbbellShowStartValue?: boolean
+  dumbbellShowEndValue?: boolean
+  dumbbellConnectorColor?: string
+  dumbbellConnectorWidth?: number
+  dumbbellConnectorOpacity?: number
+  dumbbellConnectorType?: 'solid' | 'dashed' | 'dotted'
+  dumbbellColorByChange?: boolean
+  dumbbellIncreaseColor?: string
+  dumbbellDecreaseColor?: string
+  dumbbellNeutralColor?: string
+  dumbbellSort?: 'none' | 'difference' | 'start' | 'end'
+  dumbbellSortDirection?: 'asc' | 'desc'
+  slopeShowValues?: boolean
+  slopeShowSeriesNames?: boolean
+  slopeShowYAxis?: boolean
+  indexBaseXValue?: string
+  seasonalAccentYears?: string[]
+  seasonalMutedColor?: string
+  seasonalMutedOpacity?: number
+  movingAverageWindow?: number
+  movingAverageRawOpacity?: number
+  heatmapYField?: string
+  heatmapLowColor?: string
+  heatmapMidColor?: string
+  heatmapHighColor?: string
+  heatmapScaleMode?: 'sequential' | 'diverging'
+  heatmapMidpoint?: number
+  heatmapShowScale?: boolean
+  heatmapScalePosition?: 'right' | 'left' | 'top' | 'bottom'
+  heatmapScaleMin?: number | null
+  heatmapScaleMax?: number | null
+  heatmapCellGap?: number
+  heatmapRowSort?: 'none' | 'average' | 'min' | 'max' | 'last'
+  heatmapRowSortDirection?: 'ascending' | 'descending'
+  heatmapMissingColor?: string
+  heatmapMissingLabel?: string
+  treemapSubcategoryField?: string
+  treemapGap?: number
+  treemapGroupGap?: number
+  treemapShowGroupLabels?: boolean
+  treemapShowLeafLabels?: boolean
+  treemapShowGroupValues?: boolean
+  treemapShowLeafValues?: boolean
+  treemapGroupLabelPosition?: TreemapLabelPosition
+  treemapLabelPosition?: TreemapLabelPosition
+  treemapGroupText?: ChartTextStyle
+  treemapLeafText?: ChartTextStyle
+  treemapGroupOrder?: string[]
+  treemapLeafOrder?: Record<string, string[]>
+  treemapHiddenCategories?: string[]
+  treemapValueFormat?: 'absolute' | 'percent'
   intervalGroups?: Array<{ main: string; lower: string; upper: string; showBounds?: boolean }>
   scatterLabelField?: string
   scatterSizeField?: string
@@ -243,6 +358,9 @@ export interface ChartConfig {
   scatterHollow?: boolean
   scatterShowLabels?: boolean
   scatterLabelPosition?: 'top' | 'right' | 'bottom' | 'left'
+  distributionLabelField?: string
+  distributionShowLabels?: boolean
+  distributionLabelPosition?: 'top' | 'right' | 'bottom' | 'left'
   scatterTrendline?: boolean
   scatterTrendColor?: string
   scatterTrendWidth?: number
@@ -257,6 +375,38 @@ export interface ChartConfig {
   scatterQuadrants?: boolean
   scatterQuadrantColors?: [string, string, string, string]
   scatterQuadrantLabels?: [string, string, string, string]
+  distributionGroupField?: string
+  distributionLayoutMode?: 'measures' | 'categories'
+  distributionCategoryOrder?: string[]
+  distributionCategoryStyles?: Record<string, { color?: string; label?: string; visible?: boolean }>
+  distributionOrientation?: 'horizontal' | 'vertical'
+  distributionPointSize?: number
+  distributionPointOpacity?: number
+  distributionTickWidth?: number
+  distributionJitter?: number
+  distributionWidth?: number
+  distributionBandwidth?: number
+  distributionViolinMode?: 'full' | 'half' | 'split'
+  distributionViolinSummaryMode?: 'box' | 'lines'
+  distributionViolinShowWhiskers?: boolean
+  distributionViolinHalfSide?: 'first' | 'second'
+  distributionViolinSplitFirst?: string
+  distributionViolinSplitSecond?: string
+  distributionRaincloudPointMode?: 'overlay' | 'separate'
+  distributionShowPoints?: boolean
+  distributionShowAllPoints?: boolean
+  distributionShowMedian?: boolean
+  distributionSummaryStatistic?: 'median' | 'mean'
+  distributionSummaryWidth?: number
+  distributionSummaryLength?: number
+  distributionShowOutliers?: boolean
+  distributionBinCount?: number
+  distributionHistogramMin?: number | null
+  distributionHistogramMax?: number | null
+  distributionHistogramLabels?: 'none' | 'count' | 'range'
+  distributionHistogramRangeDecimals?: number
+  distributionDensityFillOpacity?: number
+  distributionRidgelineOverlap?: number
   scatterDiagonal?: boolean
   scatterDiagonalColor?: string
   scatterDiagonalWidth?: number
@@ -280,23 +430,33 @@ export interface ChartConfig {
   zeroLineColor?: string
   zeroLineWidth?: number
   zeroLineType?: 'solid' | 'dashed' | 'dotted'
-  xAxisLabelRotate?: number
+  xAxisLabelRotate?: 0 | 30 | 45 | 60 | 90 | 'auto'
   xAxisLabelOverflow?: 'auto' | 'wrap' | 'truncate'
+  categoryLabelOverrides?: { x?: Record<string, string>; y?: Record<string, string> }
+  legendMarker?: 'auto' | 'circle' | 'square' | 'line' | 'diamond' | 'triangle'
 }
 
 export type DateLabelFormat = 'auto' | 'year-full' | 'year-short' | 'year-first-full'
-  | 'half-only' | 'half-year-en' | 'year-half-en'
-  | 'quarter-only' | 'quarter-year' | 'year-quarter' | 'quarter-year-en' | 'year-quarter-en' | 'quarter-context-en' | 'quarter-context-ru'
-  | 'month-year' | 'month-short-year' | 'year-month' | 'month-only-ru' | 'month-full-ru' | 'month-number' | 'month-number-year' | 'month-only-en' | 'month-en-year' | 'year-month-en' | 'month-context-ru' | 'month-context-en'
-  | 'day-month' | 'day-month-year' | 'date-dmy-slash' | 'date-mdy-slash' | 'date-dmy-en' | 'date-mdy-en' | 'day-context-month-ru' | 'day-context-month-en' | 'iso'
-  | 'week-only' | 'week-year' | 'week-year-en' | 'year-week-en' | 'week-context-en' | 'week-context-ru'
+  | 'half-only' | 'half-only-ru' | 'half-year-en' | 'year-half-en' | 'half-year-ru' | 'year-half-ru'
+  | 'quarter-only' | 'quarter-only-ru' | 'quarter-year' | 'year-quarter' | 'quarter-year-en' | 'year-quarter-en' | 'quarter-context-en' | 'quarter-context-ru'
+  | 'month-year' | 'month-short-year' | 'year-month' | 'month-only-ru' | 'month-full-ru' | 'month-number' | 'month-number-year' | 'month-only-en' | 'month-en-year' | 'year-month-en' | 'year-month-ru' | 'month-context-ru' | 'month-context-en'
+  | 'day-month' | 'day-month-year' | 'date-dmy-slash' | 'date-mdy-slash' | 'date-dmy-en' | 'date-dmy-ru' | 'date-mdy-en' | 'day-context-month-ru' | 'day-context-month-en' | 'iso'
+  | 'week-only' | 'week-only-ru' | 'week-year' | 'week-year-en' | 'year-week-en' | 'year-week-ru' | 'week-context-en' | 'week-context-ru'
 
 export interface ChartPlugin {
   id: ChartKind
   label: string
-  category: 'comparison' | 'bar-horizontal' | 'trend' | 'area' | 'relationship'
+  category: 'comparison' | 'bar-horizontal' | 'trend' | 'smoothing' | 'area' | 'relationship' | 'distribution' | 'heatmap' | 'hierarchy'
   settings: ChartSettingsCapabilities
+  defaultConfig: Partial<ChartConfig>
+  inferMapping(table: DataTable): Pick<ChartConfig, 'xField' | 'yField' | 'yFields'>
+  validate(table: DataTable, config: ChartConfig): ChartValidationResult
   buildOption(table: DataTable, config: ChartConfig): Record<string, unknown>
+}
+
+export interface ChartValidationResult {
+  ok: boolean
+  errors: Array<{ field: string; message: string }>
 }
 
 export interface ChartSettingsCapabilities {
@@ -309,6 +469,7 @@ export interface ChartSettingsCapabilities {
     normalizedStack: boolean
     areaLayout: boolean
     scatterLayout: boolean
+    distributionLayout: boolean
     lineVariant: boolean
   }
 }

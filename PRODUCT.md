@@ -6,13 +6,13 @@ product
 
 ## Users
 
-DataCanvas is for analysts and students who need to turn tabular data into clear, good-looking charts quickly. They may start from CSV, XLSX, Parquet, or a public Google Sheet, then move through import, data review, chart selection, detailed styling, and export.
+Виииз is for analysts and students who need to turn tabular data into clear, good-looking charts quickly. They may start from CSV, XLSX, Parquet, or a public Google Sheet, then move through import, data review, chart selection, detailed styling, and export.
 
 Their context is practical and time-sensitive: they need a chart for analysis, a class assignment, a presentation, a report, or a publication-ready asset. They value speed and intuition, but they also need enough customization to make the result feel deliberate rather than generic.
 
 ## Product Purpose
 
-DataCanvas helps people assemble polished visualizations in the browser without code. Success means a user can import data, understand whether it is usable, choose the right chart, adjust typography, labels, colors, axes, annotations, and export a clean PNG or SVG without fighting the interface.
+Виииз helps people assemble polished visualizations in the browser without code. Success means a user can import data, understand whether it is usable, choose the right chart, adjust typography, labels, colors, axes, annotations, and export a clean PNG or SVG without fighting the interface.
 
 The product should make chart-making feel controlled, legible, and professional. The UI should reveal power progressively: quick paths stay simple, while deeper controls remain discoverable for users who need fine tuning.
 
@@ -24,7 +24,7 @@ The desired design language is strict editorial / typographic product design on 
 
 ## Anti-references
 
-Do not make DataCanvas feel like a bright startup SaaS template, a playful toy BI tool, a cluttered Excel clone, or an over-decorated dashboard. Avoid generic gradient-heavy marketing, excessive cards, loud purple SaaS polish, decorative illustration, visual noise, and controls that compete with the chart being edited.
+Do not make Виииз feel like a bright startup SaaS template, a playful toy BI tool, a cluttered Excel clone, or an over-decorated dashboard. Avoid generic gradient-heavy marketing, excessive cards, loud purple SaaS polish, decorative illustration, visual noise, and controls that compete with the chart being edited.
 
 The product should not look overloaded. If a control, label, border, shadow, icon, or animation does not help the user understand or complete the workflow, it should be removed or made quieter.
 

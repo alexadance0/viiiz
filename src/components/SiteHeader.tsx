@@ -1,7 +1,8 @@
 import { Link, NavLink } from 'react-router-dom'
+import { APP_NAME } from '../shared/config/app'
 
 export function Logo() {
-  return <Link className="site-logo" to="/"><span>D</span>DataCanvas</Link>
+  return <Link className="site-logo" to="/"><span>В</span>{APP_NAME}</Link>
 }
 
 export function SiteHeader() {

@@ -1,6 +1,6 @@
 import { prepareChartData } from './chartData'
-import type { ChartConfig, DataTable } from './types'
-import { isNormalizedStackedChart } from './chartKinds'
+import type { ChartConfig, DataTable, DataValue } from './types'
+import { isBarChart, isNormalizedStackedChart } from './chartKinds'
 
 export const axisValue = (value?: string) => {
   const parsed = value?.trim() ? Number(value) : Number.NaN
@@ -12,6 +12,8 @@ export const dateValue = (value?: string) => {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+export const slopePositionKey = (value: DataValue) => value instanceof Date ? `date:${value.toISOString()}` : `${typeof value}:${String(value ?? '')}`
+
 export const orderedBounds = (min?: number | null, max?: number | null): [number | undefined, number | undefined] =>
   min != null && max != null && min > max ? [max, min] : [min ?? undefined, max ?? undefined]
 
@@ -21,10 +23,12 @@ const applyCategoryRange = (prepared: ReturnType<typeof prepareChartData>, confi
     dateAxis ? dateValue(config.xAxisMin) : axisValue(config.xAxisMin),
     dateAxis ? dateValue(config.xAxisMax) : axisValue(config.xAxisMax),
   )
-  if (min == null && max == null) return prepared
+  const selectedSlopePositions = config.kind === 'slope' && config.slopeXValues?.length === 2 ? new Set(config.slopeXValues) : null
+  if (min == null && max == null && !selectedSlopePositions) return prepared
   const indices = prepared.categories.flatMap((value, index) => {
     const numeric = value instanceof Date ? value.getTime() : typeof value === 'number' ? value : Number(value)
-    return Number.isFinite(numeric) && (min == null || numeric >= min) && (max == null || numeric <= max) ? [index] : []
+    const inRange = min == null && max == null || Number.isFinite(numeric) && (min == null || numeric >= min) && (max == null || numeric <= max)
+    return inRange && (!selectedSlopePositions || selectedSlopePositions.has(slopePositionKey(value))) ? [index] : []
   })
   return {
     categories: indices.map((index) => prepared.categories[index]),
@@ -39,19 +43,42 @@ const orderSeries = <T extends { name: string }>(series: T[], order?: string[]) 
     (positions.get(left.name) ?? Number.MAX_SAFE_INTEGER) - (positions.get(right.name) ?? Number.MAX_SAFE_INTEGER))
 }
 
+const sortBarCategories = (prepared: ReturnType<typeof prepareChartData>, config: ChartConfig) => {
+  const mode = config.barCategorySort ?? 'none'
+  if (!isBarChart(config.kind) || mode === 'none' || prepared.categories.some((category) => category instanceof Date || typeof category === 'number')) return prepared
+  const selected = prepared.series.find((series) => series.name === config.barCategorySortSeries)
+  const indices = prepared.categories.map((_, index) => index)
+  indices.sort((left, right) => {
+    if (mode === 'name-asc' || mode === 'name-desc') {
+      const result = String(prepared.categories[left] ?? '').localeCompare(String(prepared.categories[right] ?? ''), 'ru', { numeric: true, sensitivity: 'base' })
+      return mode === 'name-desc' ? -result : result
+    }
+    const value = (index: number) => selected ? selected.data[index] : prepared.series.reduce((sum, series) => sum + (series.data[index] ?? 0), 0)
+    const leftValue = value(left), rightValue = value(right)
+    if (leftValue == null) return rightValue == null ? left - right : 1
+    if (rightValue == null) return -1
+    const result = leftValue - rightValue
+    return result ? mode === 'value-desc' ? -result : result : left - right
+  })
+  return {
+    categories: indices.map((index) => prepared.categories[index]),
+    series: prepared.series.map((series) => ({ ...series, data: indices.map((index) => series.data[index]) })),
+  }
+}
+
 export const prepareVisibleChartData = (table: DataTable, config: ChartConfig) => {
   const source = prepareChartData(table, isNormalizedStackedChart(config.kind) ? { ...config, valueMode: 'absolute' } : config)
+  const prepared = sortBarCategories(applyCategoryRange(source, config), config)
   if (isNormalizedStackedChart(config.kind)) {
-    source.categories.forEach((_, categoryIndex) => {
-      const positive = source.series.reduce((sum, series) => sum + Math.max(0, series.data[categoryIndex] ?? 0), 0)
-      const negative = source.series.reduce((sum, series) => sum + Math.abs(Math.min(0, series.data[categoryIndex] ?? 0)), 0)
-      source.series.forEach((series) => {
+    prepared.categories.forEach((_, categoryIndex) => {
+      const positive = prepared.series.reduce((sum, series) => sum + Math.max(0, series.data[categoryIndex] ?? 0), 0)
+      const negative = prepared.series.reduce((sum, series) => sum + Math.abs(Math.min(0, series.data[categoryIndex] ?? 0)), 0)
+      prepared.series.forEach((series) => {
         const value = series.data[categoryIndex]
         series.data[categoryIndex] = value == null ? null : value >= 0 ? positive ? value / positive * 100 : 0 : negative ? value / negative * 100 : 0
       })
     })
   }
-  const prepared = applyCategoryRange(source, config)
   return { ...prepared, series: orderSeries(prepared.series, config.seriesOrder) }
 }
 

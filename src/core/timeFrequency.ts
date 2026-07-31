@@ -94,9 +94,13 @@ export function formatTimeValue(value: DataValue, profile?: TimeProfile, format:
   if (format === 'year-short') return shortYear
   if (format === 'year-first-full') return index === 0 ? String(year) : shortYear
   if (format === 'half-only') return `H${half}`
+  if (format === 'half-only-ru') return `П${half}`
   if (format === 'half-year-en') return `H${half} ${year}`
   if (format === 'year-half-en') return `${year} H${half}`
+  if (format === 'half-year-ru') return `П${half} ${year}`
+  if (format === 'year-half-ru') return `${year} · П${half}`
   if (format === 'quarter-only') return `Q${quarter}`
+  if (format === 'quarter-only-ru') return `К${quarter}`
   if (format === 'quarter-year-en') return `Q${quarter} ${year}`
   if (format === 'year-quarter-en') return `${year} Q${quarter}`
   if (format === 'month-only-ru') return ruMonths[value.getMonth()]
@@ -106,12 +110,14 @@ export function formatTimeValue(value: DataValue, profile?: TimeProfile, format:
   if (format === 'month-only-en') return enMonths[value.getMonth()]
   if (format === 'month-en-year') return `${enMonths[value.getMonth()]} ${year}`
   if (format === 'year-month-en') return `${year} ${enMonths[value.getMonth()]}`
+  if (format === 'year-month-ru') return `${year} ${ruMonths[value.getMonth()]}`
   if (format === 'iso') return `${year}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
   if (format === 'day-month') return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit' }).format(value)
   if (format === 'day-month-year') return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(value)
   if (format === 'date-dmy-slash') return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`
   if (format === 'date-mdy-slash') return `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/${year}`
   if (format === 'date-dmy-en') return `${String(day).padStart(2, '0')} ${enMonths[value.getMonth()]} ${year}`
+  if (format === 'date-dmy-ru') return `${String(day).padStart(2, '0')} ${ruMonths[value.getMonth()]} ${year}`
   if (format === 'date-mdy-en') return `${enMonths[value.getMonth()]} ${String(day).padStart(2, '0')}, ${year}`
   if (format === 'quarter-year') return `К${Math.floor(value.getMonth() / 3) + 1} ${year}`
   if (format === 'year-quarter') return `${year} · К${Math.floor(value.getMonth() / 3) + 1}`
@@ -119,9 +125,11 @@ export function formatTimeValue(value: DataValue, profile?: TimeProfile, format:
   if (format === 'month-year') return new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(value)
   if (format === 'month-short-year') return new Intl.DateTimeFormat('ru-RU', { month: 'short', year: '2-digit' }).format(value)
   if (format === 'week-only') return `W${String(isoWeek.week).padStart(2, '0')}`
+  if (format === 'week-only-ru') return `Нед. ${isoWeek.week}`
   if (format === 'week-year') return `Нед. ${isoWeek.week} · ${isoWeek.year}`
   if (format === 'week-year-en') return `W${String(isoWeek.week).padStart(2, '0')} ${isoWeek.year}`
   if (format === 'year-week-en') return `${isoWeek.year}-W${String(isoWeek.week).padStart(2, '0')}`
+  if (format === 'year-week-ru') return `${isoWeek.year} · нед. ${isoWeek.week}`
   if (profile?.frequency === 'annual') return String(year)
   if (profile?.frequency === 'semiannual') return `${year} · П${value.getMonth() < 6 ? 1 : 2}`
   if (profile?.frequency === 'quarterly') return `${year} · К${Math.floor(value.getMonth() / 3) + 1}`

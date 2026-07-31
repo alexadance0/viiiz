@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Logo } from '../components/SiteHeader'
+import '../site.css'
 
 const projects = [
   { title: 'Выручка по месяцам', meta: 'Столбчатая диаграмма · 6 строк', type: 'bars', date: 'Сегодня, 14:32' },

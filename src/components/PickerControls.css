@@ -1,10 +1,23 @@
 .hero-color-control {
-  display: flex;
+  display: block;
+  width: 100%;
+  height: 40px;
   align-items: center;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
-  padding: 5px 8px;
+  padding: 0;
+  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+}
+
+.hero-color-control:hover {
+  border-color: #c9c5d1;
+  background: #fcfbfd;
+}
+
+.hero-color-control:focus-within {
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px #6956e817;
 }
 
 .hero-color-control.compact {
@@ -14,30 +27,51 @@
   border: 0;
 }
 
-.hero-color-picker { display: block; }
+.hero-color-picker {
+  display: block;
+  width: 100%;
+}
 
 .hero-color-trigger {
-  position: relative;
-  width: 28px;
-  height: 26px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 38px;
+  padding: 5px 9px;
   border: 0;
-  border-radius: 6px;
-  background: #fff;
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: #202027;
-  overflow: hidden;
+  text-align: left;
   cursor: pointer;
 }
 
 .hero-color-control.compact .hero-color-trigger {
+  position: relative;
+  display: block;
   width: 28px;
   height: 28px;
+  padding: 0;
+  overflow: hidden;
 }
 
 .hero-color-trigger .color-swatch {
+  position: static;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--color-swatch-current);
+  box-shadow: inset 0 0 0 1px #20202714;
+}
+
+.hero-color-control.compact .hero-color-trigger .color-swatch {
   position: absolute;
   inset: 5px;
-  border-radius: 3px;
-  background: var(--color-swatch-current);
+  width: auto;
+  height: auto;
+  border-radius: var(--radius-xs);
 }
 
 .hero-color-icon {
@@ -52,9 +86,22 @@
 }
 
 .hero-color-control code {
-  margin-left: 8px;
-  color: #777580;
-  font-size: 10px;
+  min-width: 0;
+  overflow: hidden;
+  margin: 0;
+  color: #686470;
+  font: 600 11px/1 DM Sans, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hero-color-chevron {
+  color: #96919d;
+  transition: color .15s ease;
+}
+
+.hero-color-trigger:hover .hero-color-chevron {
+  color: var(--purple);
 }
 
 .hero-color-popover {
@@ -68,6 +115,7 @@
   z-index: 80;
   box-shadow: 0 8px 18px #20202714;
 }
+.hero-color-popover-content { display: contents; }
 
 .hero-color-popover .color-area {
   position: relative;
@@ -286,7 +334,8 @@
 }
 
 .hero-date-popover {
-  width: 246px;
+  box-sizing: border-box;
+  width: 280px;
   padding: 10px;
   border: 1px solid #e5e3eb;
   border-radius: 8px;
@@ -301,14 +350,14 @@
   position: relative;
   display: grid;
   gap: 8px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .hero-date-popover [data-slot=calendar-header] {
   display: grid;
-  grid-template-columns: 60px minmax(0, 1fr) 26px 26px;
+  grid-template-columns: 68px minmax(90px, 1fr) 34px 34px;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .hero-date-year-trigger,
@@ -334,6 +383,7 @@
 .hero-date-popover [data-slot=calendar-nav-button] {
   display: grid;
   place-items: center;
+  min-width: 0;
 }
 
 .hero-date-year-trigger:hover,

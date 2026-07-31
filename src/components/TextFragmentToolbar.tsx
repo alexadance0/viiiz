@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Toolbar, ToggleButton, ToggleButtonGroup } from '@heroui/react'
-import { Bold, Highlighter, Italic, PenLine, Type, Underline } from 'lucide-react'
+import { AlignCenter, AlignLeft, AlignRight, Bold, Highlighter, Italic, PenLine, Type, Underline } from 'lucide-react'
 import type { ChartConfig, ChartTextStyle } from '../core/types'
 import { textFonts } from '../core/textFonts'
 import { ColorControl } from './PickerControls'
@@ -15,6 +15,8 @@ interface Props {
   edge?: 'start' | 'end'
   onBeforeAction?(): void
   onApply(values: Partial<CSSStyleDeclaration>): void
+  alignment?: ChartTextStyle['align']
+  onAlignmentChange?(alignment: ChartTextStyle['align']): void
   onStrokeWidthChange?(value: number): void
   onCommand(command: 'bold' | 'italic' | 'underline'): void
   children?: React.ReactNode
@@ -27,7 +29,7 @@ const fontLabel = (fontFamily: string, ownFonts: string[]) => {
   return own ? `${own} · свой` : fontFamily.replaceAll('"', '').split(',')[0]
 }
 
-export function TextFragmentToolbar({ style, customFonts, strokeColor = '#ffffff', strokeWidth = 6, enableStroke = false, below, edge = 'start', onBeforeAction, onApply, onStrokeWidthChange, onCommand, children }: Props) {
+export function TextFragmentToolbar({ style, customFonts, strokeColor = '#ffffff', strokeWidth = 6, enableStroke = false, below, edge = 'start', onBeforeAction, onApply, alignment, onAlignmentChange, onStrokeWidthChange, onCommand, children }: Props) {
   const ownFonts = [...new Set(customFonts?.map((font) => font.name) ?? [])]
   const [fontFamily, setFontFamily] = useState(style.fontFamily)
   const [textColor, setTextColor] = useState(style.color)
@@ -39,7 +41,7 @@ export function TextFragmentToolbar({ style, customFonts, strokeColor = '#ffffff
   useEffect(() => setOutlineColor(strokeColor), [strokeColor])
   useEffect(() => setFontSize(String(style.size)), [style.size])
   const applySize = (next: number) => {
-    if (!Number.isFinite(next) || next < 8 || next > 96) return
+    if (!Number.isFinite(next) || next < 6 || next > 72) return
     setFontSize(String(next))
     onApply({ fontSize: `${next}px` })
   }
@@ -56,6 +58,7 @@ export function TextFragmentToolbar({ style, customFonts, strokeColor = '#ffffff
       <ToggleButton id="italic" aria-label="Курсив" onPress={() => onCommand('italic')}><Italic size={14} /></ToggleButton>
       <ToggleButton id="underline" aria-label="Подчёркивание" onPress={() => onCommand('underline')}><Underline size={14} /></ToggleButton>
     </ToggleButtonGroup>
+    {alignment && onAlignmentChange && <div className="annotation-align" role="group" aria-label={`Выравнивание текста: ${{ left: 'слева', center: 'по центру', right: 'справа' }[alignment]}`}>{([['left', AlignLeft, 'Выровнять слева'], ['center', AlignCenter, 'Выровнять по центру'], ['right', AlignRight, 'Выровнять справа']] as const).map(([next, Icon, label]) => <button type="button" key={next} className={alignment === next ? 'active' : ''} aria-label={label} aria-pressed={alignment === next} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); onAlignmentChange(next) }}><Icon size={14}/></button>)}</div>}
     <span className="toolbar-color-control text-color-control"><ColorControl compact title="Цвет текста" value={textColor} icon={<Type size={14} />} onChange={(next) => { setTextColor(next); onApply({ color: next }) }}/></span>
     <span className="toolbar-color-control highlight-color-control"><ColorControl compact title="Фон текста" value={highlightColor} icon={<Highlighter size={14} />} onChange={(next) => { setHighlightColor(next); onApply({ backgroundColor: next }) }}/></span>
     {enableStroke && <span className="toolbar-color-control stroke-color-control"><ColorControl compact title="Обводка букв" value={outlineColor} icon={<PenLine size={14} />} popoverContent={<label className="stroke-width-control"><span>Толщина силуэта</span><input type="range" min="1" max="12" step="1" value={strokeWidth} onChange={(event) => onStrokeWidthChange?.(Number(event.target.value))}/><output>{strokeWidth} px</output></label>} onChange={(next) => { setOutlineColor(next); onApply({ textShadow: '', webkitTextStrokeColor: next, webkitTextStrokeWidth: `${strokeWidth}px`, paintOrder: 'stroke fill' }) }}/></span>}

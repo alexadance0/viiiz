@@ -1,6 +1,7 @@
 import type { MarkerShape, MarkerStyle } from '../core/types'
 import { NumberInput } from './NumberInput'
 import { ColorControl } from './PickerControls'
+import { SettingsCheckbox } from './SettingsCheckbox'
 
 interface Props {
   value: MarkerStyle & { fillOpacity?: number }
@@ -15,7 +16,7 @@ export function MarkerSettings({ value, lineColor, onChange, individual = false,
   const fill = value.markerFill ?? '#ffffff'
   const border = value.markerBorder ?? lineColor
   return <div className="marker-settings">
-    {!alwaysVisible && !individual && <label className="check"><input type="checkbox" checked={shown} onChange={(event) => onChange({ showMarker: event.target.checked })}/>Показывать маркеры</label>}
+    {!alwaysVisible && !individual && <SettingsCheckbox isSelected={shown} onChange={(showMarker) => onChange({ showMarker })}>Показывать маркеры</SettingsCheckbox>}
     {shown && <>
       <label>Форма<select value={value.markerShape ?? 'circle'} onChange={(event) => onChange({ markerShape: event.target.value as MarkerShape })}><option value="circle">Круг</option><option value="rect">Квадрат</option><option value="roundRect">Скруглённый квадрат</option><option value="triangle">Треугольник</option><option value="diamond">Ромб</option></select></label>
       <label>Размер, px<NumberInput min="2" max="40" value={value.markerSize ?? 8} onValueChange={(markerSize) => onChange({ markerSize })}/></label>

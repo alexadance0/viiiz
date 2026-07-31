@@ -3,7 +3,7 @@ import { parquetWriteBuffer } from 'hyparquet-writer'
 import { DOMParser } from '@xmldom/xmldom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { convertColumn, inferTypes } from './dataProfile'
-import { demoTable, importExcelSheets, importFile, importGoogleSheet } from './importers'
+import { demoTable, distributionDemoTable, dumbbellDemoTable, importExcelSheets, importFile, importGoogleSheet, importGoogleSheets } from './importers'
 import { normalizeImportedTable } from './normalization'
 
 const xml = (value: string) => strToU8(value)
@@ -79,6 +79,11 @@ describe('other data sources', () => {
     ])
     expect(demoTable.rows[0].month).toBeInstanceOf(Date)
     expect(demoTable.columns).toEqual(expect.arrayContaining(['revenue', 'orders', 'profit', 'plan']))
+    expect(dumbbellDemoTable.columns).toEqual(['region', 'before', 'after'])
+    expect(dumbbellDemoTable.rows).toHaveLength(5)
+    expect(distributionDemoTable.columns).toEqual(['region', 'profit', 'orders'])
+    expect(distributionDemoTable.rows).toHaveLength(48)
+    expect(new Set(distributionDemoTable.rows.map((row) => row.region)).size).toBe(4)
   })
   it('imports and normalizes a real XLSX container', async () => {
     vi.stubGlobal('DOMParser', DOMParser)
@@ -123,5 +128,29 @@ describe('other data sources', () => {
     expect(fetchMock).toHaveBeenCalledWith('https://docs.google.com/spreadsheets/d/test-sheet-id/export?format=csv&gid=42')
     expect(table.timeProfiles?.period.frequency).toBe('semiannual')
     expect(table.rows.map((row) => row.value)).toEqual([1234.5, null])
+  })
+
+  it('uses the default sheet when a Google Sheets link has no gid', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('label,value\nA,1', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await importGoogleSheet('https://docs.google.com/spreadsheets/d/test-sheet-id/edit?usp=sharing')
+    expect(fetchMock).toHaveBeenCalledWith('https://docs.google.com/spreadsheets/d/test-sheet-id/export?format=csv')
+  })
+
+  it('recognizes a sheet identifier supplied in the URL fragment', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('label,value\nA,1', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await importGoogleSheet('https://docs.google.com/spreadsheets/d/test-sheet-id/edit#gid=42')
+    expect(fetchMock).toHaveBeenCalledWith('https://docs.google.com/spreadsheets/d/test-sheet-id/export?format=csv&gid=42')
+  })
+
+  it('loads every Google Sheets tab through the workbook export', async () => {
+    vi.stubGlobal('DOMParser', DOMParser)
+    const workbook = multiSheetFile()
+    const fetchMock = vi.fn().mockResolvedValue(new Response(workbook, { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const sheets = await importGoogleSheets('https://docs.google.com/spreadsheets/d/test-sheet-id/edit')
+    expect(fetchMock).toHaveBeenCalledWith('https://docs.google.com/spreadsheets/d/test-sheet-id/export?format=xlsx')
+    expect(sheets.map((sheet) => sheet.name)).toEqual(['Россия', 'Казахстан'])
   })
 })

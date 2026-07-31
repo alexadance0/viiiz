@@ -5,7 +5,6 @@
 .series-drag{display:grid;place-items:center;color:#aaa6b0;font-size:14px;user-select:none}
 .ordered-series-list .series-name-button{height:42px;padding:0 4px}
 .ordered-series-list .series-name-button span{min-width:0}
-.ordered-series-list .series-name-button small{margin-left:auto;color:#aaa6b0;font-size:6px;white-space:nowrap}
 .series-order-buttons{display:flex;flex-direction:column;border-left:1px solid var(--line);border-right:1px solid var(--line)}
 .series-order-buttons button{width:24px;height:21px;border:0;background:#fff;color:#77737e;font-size:9px;cursor:pointer}
 .series-order-buttons button:first-child{border-bottom:1px solid var(--line)}

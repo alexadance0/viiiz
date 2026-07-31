@@ -1,4 +1,4 @@
-# DataCanvas
+# Виииз
 
 Локальный MVP редактора визуализаций: импорт CSV/XLSX/Parquet/публичных Google Sheets, настройка bar/line/scatter и экспорт PNG/SVG.
 

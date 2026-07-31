@@ -3,6 +3,34 @@ import type { ColumnType, DataIssue, DataTable, DataValue, TimeFrequency, TimePr
 
 const serialize = (value: DataValue) => value instanceof Date ? `date:${value.toISOString()}` : `${typeof value}:${String(value)}`
 
+const transposeHeader = (value: DataValue, index: number) => {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10)
+  return String(value ?? '').trim() || `Строка ${index + 1}`
+}
+
+export function transposeTable(table: DataTable): DataTable {
+  if (table.columns.length < 2) throw new Error('Для транспонирования нужны минимум два столбца')
+  if (!table.rows.length) throw new Error('Нельзя транспонировать пустую таблицу')
+
+  const firstColumn = table.columns[0]
+  const usedHeaders = new Set([firstColumn])
+  const transposedHeaders = table.rows.map((row, index) => {
+    const base = transposeHeader(row[firstColumn], index)
+    let header = base
+    let suffix = 2
+    while (usedHeaders.has(header)) header = `${base} (${suffix++})`
+    usedHeaders.add(header)
+    return header
+  })
+  const rows = table.columns.slice(1).map((sourceColumn) => {
+    const row: Record<string, DataValue> = { [firstColumn]: sourceColumn }
+    table.rows.forEach((sourceRow, index) => { row[transposedHeaders[index]] = sourceRow[sourceColumn] ?? null })
+    return row
+  })
+
+  return { name: table.name, columns: [firstColumn, ...transposedHeaders], rows }
+}
+
 export function findDuplicateRowIndices(table: DataTable): number[] {
   const seen = new Map<string, number>()
   const duplicates: number[] = []
@@ -47,6 +75,26 @@ export function removeRows(table: DataTable, indices: number[]): DataTable {
     observationFlags: reindexMetadata(table.observationFlags, keptIndices),
     imputedCells: reindexMetadata(table.imputedCells, keptIndices),
     timeProfiles,
+  }
+}
+
+export function removeColumns(table: DataTable, columns: string[]): DataTable {
+  const removed = new Set(columns.filter((column) => table.columns.includes(column)))
+  if (!removed.size) return table
+  if (removed.size === table.columns.length) throw new Error('Нельзя удалить все столбцы таблицы')
+  const kept = table.columns.filter((column) => !removed.has(column))
+  const pickRow = (row: DataTable['rows'][number]) => Object.fromEntries(kept.map((column) => [column, row[column] ?? null]))
+  const pickMetadata = <T>(metadata: Record<string, T> | undefined) => metadata ? Object.fromEntries(kept.flatMap((column) => metadata[column] == null ? [] : [[column, metadata[column]]])) : undefined
+  return {
+    ...table,
+    columns: kept,
+    rows: table.rows.map(pickRow),
+    rawRows: table.rawRows?.map(pickRow),
+    normalizations: pickMetadata(table.normalizations),
+    observationFlags: pickMetadata(table.observationFlags),
+    timeProfiles: pickMetadata(table.timeProfiles),
+    dateRules: pickMetadata(table.dateRules),
+    imputedCells: pickMetadata(table.imputedCells),
   }
 }
 

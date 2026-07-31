@@ -1,9 +1,36 @@
 import { describe, expect, it } from 'vitest'
-import { datasetQualityIssues, findDuplicateRowIndices, findTimeGaps, removeDuplicateRows, removeRows } from './dataQuality'
+import { datasetQualityIssues, findDuplicateRowIndices, findTimeGaps, removeColumns, removeDuplicateRows, removeRows, transposeTable } from './dataQuality'
 import { normalizeImportedTable } from './normalization'
 import type { TimeProfile } from './types'
 
 const monthly: TimeProfile = { frequency: 'monthly', label: 'Месячные', confidence: 100, source: 'notation' }
+
+describe('table transpose', () => {
+  it('uses the first column as headers and preserves every value', () => {
+    const result = transposeTable({ name: 'sales', columns: ['region', 'profit', 'orders'], rows: [
+      { region: 'Север', profit: 10, orders: 2 },
+      { region: 'Юг', profit: 20, orders: 4 },
+    ] })
+    expect(result.columns).toEqual(['region', 'Север', 'Юг'])
+    expect(result.rows).toEqual([
+      { region: 'profit', Север: 10, Юг: 20 },
+      { region: 'orders', Север: 2, Юг: 4 },
+    ])
+  })
+
+  it('creates stable unique headers for duplicate and empty values', () => {
+    const result = transposeTable({ name: 'sales', columns: ['region', 'value'], rows: [
+      { region: 'Север', value: 1 }, { region: 'Север', value: 2 }, { region: '', value: 3 },
+    ] })
+    expect(result.columns).toEqual(['region', 'Север', 'Север (2)', 'Строка 3'])
+    expect(result.rows[0]).toEqual({ region: 'value', Север: 1, 'Север (2)': 2, 'Строка 3': 3 })
+  })
+
+  it('rejects tables that cannot be transposed', () => {
+    expect(() => transposeTable({ name: 'empty', columns: ['value'], rows: [{ value: 1 }] })).toThrow('минимум два столбца')
+    expect(() => transposeTable({ name: 'empty', columns: ['name', 'value'], rows: [] })).toThrow('пустую таблицу')
+  })
+})
 
 describe('duplicate rows', () => {
   it('finds only full-row duplicates, including equal dates', () => {
@@ -39,6 +66,22 @@ describe('duplicate rows', () => {
     expect(result.observationFlags?.value).toEqual({ 1: ['e'] })
     expect(result.imputedCells?.value).toEqual({ 0: { method: 'linear', generatedPeriod: true } })
     expect(() => removeRows(table, [0, 1, 2])).toThrow('все строки')
+  })
+
+  it('removes selected columns and their metadata', () => {
+    const table = {
+      name: 'data', columns: ['region', 'profit', 'orders'], rows: [{ region: 'Север', profit: 10, orders: 2 }],
+      rawRows: [{ region: 'Север', profit: '10', orders: '2' }],
+      normalizations: { profit: { kind: 'number' as const, format: 'integer', confidence: 100, converted: 1, ambiguous: 0 } },
+      observationFlags: { orders: { 0: ['e'] } },
+    }
+    const result = removeColumns(table, ['profit', 'missing'])
+    expect(result.columns).toEqual(['region', 'orders'])
+    expect(result.rows).toEqual([{ region: 'Север', orders: 2 }])
+    expect(result.rawRows).toEqual([{ region: 'Север', orders: '2' }])
+    expect(result.normalizations).toEqual({})
+    expect(result.observationFlags).toEqual({ orders: { 0: ['e'] } })
+    expect(() => removeColumns(table, table.columns)).toThrow('все столбцы')
   })
 })
 

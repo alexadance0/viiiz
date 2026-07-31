@@ -3,6 +3,8 @@ import readWorkbook, { type SheetData } from 'read-excel-file/browser'
 import { parquetReadObjects } from 'hyparquet'
 import type { DataTable, DataValue } from './types'
 
+export { categoricalDemoTable, demoTable, distributionDemoTable, dumbbellDemoTable } from './demoData'
+
 const normalize = (value: unknown): DataValue => {
   if (value == null) return null
   if (value instanceof Date) return value
@@ -71,44 +73,23 @@ export async function importFile(file: File): Promise<DataTable> {
 export async function importGoogleSheet(url: string): Promise<DataTable> {
   const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
   if (!match) throw new Error('Не удалось распознать ссылку Google Sheets')
-  const gid = new URL(url).searchParams.get('gid') ?? '0'
-  const response = await fetch(`https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv&gid=${gid}`)
+  const source = new URL(url)
+  const gid = source.searchParams.get('gid') ?? new URLSearchParams(source.hash.replace(/^#/, '')).get('gid')
+  const exportUrl = new URL(`https://docs.google.com/spreadsheets/d/${match[1]}/export`)
+  exportUrl.searchParams.set('format', 'csv')
+  if (gid) exportUrl.searchParams.set('gid', gid)
+  const response = await fetch(exportUrl.toString())
   if (!response.ok) throw new Error('Таблица должна быть доступна по ссылке')
   const parsed = Papa.parse<Record<string, unknown>>(await response.text(), { header: true, dynamicTyping: true, skipEmptyLines: true })
   if (parsed.errors.length && !parsed.data.length) throw new Error(parsed.errors[0].message)
   return makeTable('Google Sheets', parsed.data, parsed.errors.map((error) => `Строка ${(error.row ?? 0) + 1}: ${error.message}`).slice(0, 20))
 }
 
-const demoRows = Array.from({ length: 36 }, (_, index) => {
-  const seasonal = Math.sin(index / 2.2) * 14
-  const revenue = Math.round(72 + index * 4.2 + seasonal)
-  return {
-    day: new Date(2025, 0, index + 1),
-    week: new Date(2024, 0, 1 + index * 7),
-    month: new Date(2022, index, 1),
-    quarter: new Date(2017, index * 3, 1),
-    half_year: new Date(2008, index * 6, 1),
-    year: new Date(1990 + index, 0, 1),
-    revenue,
-    orders: Math.round(revenue * .43 + Math.cos(index / 3) * 4),
-    profit: Math.round(revenue * (.16 + (index % 5) * .012)),
-    plan: Math.round(76 + index * 4),
-  }
-})
-
-export const demoTable: DataTable = {
-  ...makeTable('Демо-данные · разные частоты', demoRows),
-  timeProfiles: {
-    day: { frequency: 'daily', label: 'Дневные', confidence: 100, source: 'intervals' },
-    week: { frequency: 'weekly', label: 'Недельные', confidence: 100, source: 'intervals' },
-    month: { frequency: 'monthly', label: 'Месячные', confidence: 100, source: 'intervals' },
-    quarter: { frequency: 'quarterly', label: 'Квартальные', confidence: 100, source: 'intervals' },
-    half_year: { frequency: 'semiannual', label: 'Полугодовые', confidence: 100, source: 'intervals' },
-    year: { frequency: 'annual', label: 'Годовые', confidence: 100, source: 'intervals' },
-  },
+export async function importGoogleSheets(url: string): Promise<Array<{ name: string; table: DataTable }>> {
+  const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
+  if (!match) throw new Error('Не удалось распознать ссылку Google Sheets')
+  const response = await fetch(`https://docs.google.com/spreadsheets/d/${match[1]}/export?format=xlsx`)
+  if (!response.ok) throw new Error('Таблица должна быть доступна по ссылке')
+  const file = new File([await response.blob()], 'Google Sheets.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  return importExcelSheets(file)
 }
-
-export const categoricalDemoTable: DataTable = makeTable('Демо-данные · топ стран', [
-  ['США', 29.2, 1], ['Китай', 18.7, 2], ['Германия', 4.7, 3], ['Япония', 4.1, 4], ['Индия', 3.9, 5],
-  ['Великобритания', 3.6, 6], ['Франция', 3.2, 7], ['Италия', 2.4, 8], ['Канада', 2.2, 9], ['Бразилия', 2.2, 10],
-].map(([country, gdp, place]) => ({ country, gdp_trillion_usd: gdp, place })))

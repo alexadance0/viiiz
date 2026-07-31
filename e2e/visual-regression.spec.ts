@@ -1,0 +1,149 @@
+import { expect, test, type Locator, type Page } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
+
+test.use({ viewport: { width: 1600, height: 1200 }, colorScheme: 'light', reducedMotion: 'reduce' })
+
+const escaped = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const setCheckbox = async (checkbox: Locator, selected: boolean) => {
+  if (await checkbox.isChecked() !== selected) await checkbox.press('Space')
+}
+
+const waitForLayout = async (page: Page) => {
+  await page.evaluate(() => document.fonts.ready)
+  await expect(page.locator('.chart-canvas-shell')).toHaveAttribute('data-layout-ready', 'true')
+  await expect(page.locator('.chart-canvas svg')).toBeVisible()
+  await expect(page.locator('.chart-canvas-shell')).toContainText('Источник:')
+}
+
+const openDemoChart = async (page: Page, demo: string, chart?: string) => {
+  await page.goto('/editor')
+  await page.getByRole('button', { name: demo, exact: true }).click()
+  await page.getByRole('button', { name: /Выбрать график/ }).click()
+  if (chart) await page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: new RegExp(`^${escaped(chart)}$`) }) }).click()
+  await waitForLayout(page)
+}
+
+const openDesign = async (page: Page) => {
+  await page.getByRole('button', { name: /Настроить оформление/ }).click()
+  await waitForLayout(page)
+}
+
+const openSettings = async (page: Page, name: string) => {
+  const summary = page.locator('summary').filter({ hasText: new RegExp(`^${name}$`) })
+  if (!(await summary.evaluate((element) => (element.parentElement as HTMLDetailsElement).open))) await summary.click()
+}
+
+test('critical chart-label layouts stay visually stable', async ({ page }) => {
+  await openDemoChart(page, 'Топ стран', 'Столбцы')
+  await setCheckbox(page.getByRole('checkbox', { name: 'place', exact: true }), true)
+  await openDesign(page)
+  await openSettings(page, 'Компоновка столбцов')
+  await page.getByLabel('Ширина группы, %').fill('100')
+  await page.getByLabel('Расстояние между рядами, %').fill('0')
+  await openSettings(page, 'Легенда')
+  await page.getByText('Справа у рядов', { exact: true }).click()
+  await openSettings(page, 'Подписи значений')
+  await setCheckbox(page.getByRole('checkbox', { name: 'Показывать подписи значений' }), true)
+
+  await page.getByLabel('Положение подписей').selectOption('inside-bottom')
+  await expect(page.locator('.chart-canvas-shell')).toHaveScreenshot('grouped-bar-direct-inside.png')
+
+  await page.getByLabel('Положение подписей').selectOption('top')
+  await expect(page.locator('.chart-canvas-shell')).toHaveScreenshot('grouped-bar-direct-outside.png')
+
+  await setCheckbox(page.getByRole('checkbox', { name: 'Автоматически помещать подпись внутрь' }), true)
+  await expect(page.locator('.chart-canvas-shell')).toHaveScreenshot('grouped-bar-absorbed.png')
+})
+
+test('normalized and horizontal bars keep their label geometry', async ({ page }) => {
+  await openDemoChart(page, 'Временной ряд', 'Нормированные столбцы')
+  await setCheckbox(page.getByRole('checkbox', { name: 'orders', exact: true }), true)
+  await openDesign(page)
+  await openSettings(page, 'Легенда')
+  await page.getByText('Справа у рядов', { exact: true }).click()
+  await openSettings(page, 'Подписи значений')
+  await setCheckbox(page.getByRole('checkbox', { name: 'Показывать подписи значений' }), true)
+  await setCheckbox(page.getByRole('checkbox', { name: 'Автоматически помещать подпись внутрь' }), true)
+  await setCheckbox(page.getByRole('checkbox', { name: 'Скрывать пересекающиеся подписи' }), true)
+  const valueLabels = await page.locator('.chart-canvas svg text').evaluateAll((nodes) => nodes.flatMap((node) => {
+    const text = node.textContent?.trim() ?? ''
+    if (!/^-?\d+,\d+%$/.test(text)) return []
+    const box = node.getBoundingClientRect()
+    return [{ text, left: box.left, right: box.right, top: box.top, bottom: box.bottom }]
+  }))
+  const overlaps = valueLabels.flatMap((label, index) => valueLabels.slice(index + 1).flatMap((other) =>
+    Math.min(label.right, other.right) - Math.max(label.left, other.left) > 1
+      && Math.min(label.bottom, other.bottom) - Math.max(label.top, other.top) > 1
+      ? [[label, other]] : []))
+  expect(overlaps, JSON.stringify(valueLabels)).toEqual([])
+  await expect(page.locator('.chart-canvas-shell')).toHaveScreenshot('normalized-bar-absorbed-direct.png')
+
+  await page.getByRole('button', { name: '← Тип графика' }).click()
+  await page.getByRole('button', { name: 'Линейчатая', exact: true }).click()
+  await openDesign(page)
+  await openSettings(page, 'Легенда')
+  await page.getByText('Над рядами', { exact: true }).click()
+  await openSettings(page, 'Подписи значений')
+  await setCheckbox(page.getByRole('checkbox', { name: 'Показывать подписи значений' }), true)
+  await setCheckbox(page.getByRole('checkbox', { name: 'Автоматически помещать подпись внутрь' }), false)
+  await page.getByLabel('Положение подписей').selectOption('inside-top')
+  await expect(page.locator('.chart-canvas-shell')).toHaveScreenshot('horizontal-bar-direct-inside.png')
+
+  await page.getByRole('button', { name: '← Тип графика' }).click()
+  await page.getByRole('button', { name: 'Леденцовая', exact: true }).click()
+  await openDesign(page)
+  await openSettings(page, 'Подписи значений')
+  await setCheckbox(page.getByRole('checkbox', { name: 'Показывать подписи значений' }), true)
+  const lollipopValueSizes = await page.locator('.chart-canvas svg text').evaluateAll((nodes) => [...new Set(nodes.flatMap((node) =>
+    ['202', '218', '83', '95'].includes(node.textContent?.trim() ?? '') ? [Number.parseFloat(getComputedStyle(node).fontSize)] : []))])
+  expect(lollipopValueSizes).toEqual([17])
+  await expect(page.locator('.chart-canvas-shell')).toHaveScreenshot('dense-lollipop-adaptive-labels.png')
+})
+
+test('treemap preview and exports keep complete labels and matching dimensions', async ({ page, context }) => {
+  await openDemoChart(page, 'Трудности бизнеса')
+  await openDesign(page)
+
+  const previewText = (await page.locator('.chart-canvas svg text').allTextContents()).join(' ').replaceAll('\u200b', '')
+  expect(previewText).toContain('Затрудняюсь ответить')
+  expect(previewText).toContain('Нестабильность')
+  expect(previewText).not.toContain('…')
+  const footerBoxes = await page.locator('.chart-canvas svg text').evaluateAll((nodes) => nodes.flatMap((node) => {
+    const text = node.textContent?.replaceAll('\u200b', '') ?? ''
+    if (!text.startsWith('Молодые предприниматели') && !text.startsWith('Источник:')) return []
+    const box = node.getBoundingClientRect()
+    return [{ text, x: box.x, y: box.y, width: box.width, height: box.height }]
+  }))
+  const noteBox = footerBoxes.find(({ text }) => text.startsWith('Молодые предприниматели'))
+  const sourceBox = footerBoxes.find(({ text }) => text.startsWith('Источник:'))
+  expect(noteBox).toBeDefined()
+  expect(sourceBox).toBeDefined()
+  expect(sourceBox!.y).toBeGreaterThanOrEqual(noteBox!.y + noteBox!.height + 4)
+  await expect(page.locator('.chart-canvas-shell')).toHaveScreenshot('treemap-long-russian-labels.png')
+
+  await page.locator('.export-menu > summary').click()
+  const svgDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Скачать SVG' }).click()
+  const svg = await readFile(await (await svgDownload).path()!, 'utf8')
+  expect(svg).toContain('Затрудняюсь')
+  expect(svg).toContain('ответить')
+  expect(svg).not.toContain('…')
+  expect(svg).toMatch(/width="1000"/)
+  expect(svg).toMatch(/height="750"/)
+
+  const svgPage = await context.newPage()
+  await svgPage.setContent(`<style>html,body{margin:0;background:white}</style>${svg}`)
+  await expect(svgPage.locator('svg')).toHaveScreenshot('treemap-export-svg.png')
+  await svgPage.close()
+
+  const pngDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Скачать PNG' }).click()
+  const png = await readFile(await (await pngDownload).path()!)
+  expect(png.readUInt32BE(16)).toBe(2000)
+  expect(png.readUInt32BE(20)).toBe(1500)
+  const pngPage = await context.newPage()
+  await pngPage.setContent(`<style>html,body{margin:0;background:white}img{display:block;width:1000px;height:750px}</style><img src="data:image/png;base64,${png.toString('base64')}">`)
+  await expect(pngPage.locator('img')).toHaveScreenshot('treemap-export-png.png')
+  await pngPage.close()
+})
