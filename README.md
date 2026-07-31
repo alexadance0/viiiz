@@ -21,4 +21,4 @@ npm run dev
 - `src/features/chart-export` — PNG/SVG serialization и embedding шрифтов.
 - `src/core/chartRegistry.ts` — переходный реестр/dispatch; старый `buildOption` сохранён как deprecated compatibility boundary до завершения миграции семейств.
 
-Поток рендера: editor config → `ChartDocument` → `ChartPlugin.compile` → `ChartScene` → layout/renderer. Новый график добавляется семантическим plugin compiler и регистрацией в `chartRegistry`; UI выбора строится из реестра и semantic capabilities.
+Поток рендера: editor config → `ChartDocument` → `ChartPlugin.compile` → `ChartScene` → layout/renderer. Обычные bar/stacked/horizontal-bar варианты уже используют native semantic scene и layout; остальные семейства явно остаются на legacy compatibility path. Новый график добавляется семантическим plugin compiler и регистрацией в `chartRegistry`; UI выбора строится из реестра и semantic capabilities.

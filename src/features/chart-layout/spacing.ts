@@ -10,11 +10,12 @@ export interface CompositionSpacing {
   legendPlot: number
   plotFooter: number
   noteSource: number
-  axisTickLabel: number
-  xAxisLabelTitle: number
-  yAxisLabelTitle: number
+  xAxis: AxisSpacing
+  yAxis: AxisSpacing
   directLabelPlot: number
 }
+
+export interface AxisSpacing { tickLabel: number; labelTitle: number }
 
 export function compositionSpacing(config: Partial<ChartConfig>): CompositionSpacing {
   const defaults = DEFAULT_COMPOSITION_SPACING
@@ -31,9 +32,8 @@ export function compositionSpacing(config: Partial<ChartConfig>): CompositionSpa
     legendPlot: config.legendPlotGap ?? defaults.legendPlot,
     plotFooter: config.plotFooterGap ?? defaults.plotFooter,
     noteSource: config.noteSourceGap ?? defaults.noteSource,
-    axisTickLabel: config.xAxisLabelGap ?? defaults.axisTickLabel,
-    xAxisLabelTitle: config.xAxisTitleGap ?? defaults.xAxisLabelTitle,
-    yAxisLabelTitle: config.yAxisTitleGap ?? defaults.yAxisLabelTitle,
+    xAxis: { tickLabel: config.xAxisLabelGap ?? defaults.axisTickLabel, labelTitle: config.xAxisTitleGap ?? defaults.xAxisLabelTitle },
+    yAxis: { tickLabel: config.yAxisLabelGap ?? defaults.axisTickLabel, labelTitle: config.yAxisTitleGap ?? defaults.yAxisLabelTitle },
     directLabelPlot: config.directLabelGap ?? defaults.directLabelPlot,
   }
 }

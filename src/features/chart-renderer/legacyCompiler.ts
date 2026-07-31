@@ -22,11 +22,11 @@ function optionElements(option: Record<string, unknown>): ChartElement[] {
 
 export function compileLegacyScene(table: DataTable, config: ChartConfig, buildOption: LegacyOptionBuilder): ChartScene {
   const document = chartDocumentFromLegacy(table, config)
-  const rendererPayload = buildOption(table, config)
-  return { document, elements: optionElements(rendererPayload), rendererPayload }
+  const legacyRendererPayload = buildOption(table, config)
+  return { migrationMode: 'legacy', document, elements: optionElements(legacyRendererPayload), legacyRendererPayload }
 }
 
 export function resolveScene(scene: ChartScene): ResolvedScene {
   const frame = resolveFrame({ canvas: scene.document.canvas, spacing: scene.document.composition })
-  return { ...scene, geometry: { canvas: frame.canvas, content: frame.content, plot: frame.plot } }
+  return { ...scene, geometry: { canvas: frame.canvas, content: frame.content, plot: frame.plot, reservations: {}, axes: {}, elements: {} } } as ResolvedScene
 }

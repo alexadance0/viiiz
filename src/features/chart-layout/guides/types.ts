@@ -11,6 +11,6 @@ export type GuideSpec =
 
 export function guideReservation(guide: GuideSpec, size: number, gap: number, priority = 40): LayoutReservation | undefined {
   if (!guide.visible || guide.kind === 'size-scale') return undefined
-  if (guide.kind === 'direct-series') return { side: guide.side, size, gap, mode: 'outside', priority }
-  return { side: guide.position, size, gap, mode: 'outside', priority }
+  if (guide.kind === 'direct-series') return { id: `guide:${guide.id}`, side: guide.side, size, gap, mode: 'outside', priority }
+  return { id: `guide:${guide.id}`, side: guide.position, size, gap, mode: 'outside', priority }
 }

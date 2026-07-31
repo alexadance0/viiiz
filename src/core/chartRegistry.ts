@@ -14,13 +14,15 @@ import { heatmapChartDefinitions } from '../features/chart-types/heatmap'
 import { treemapChartDefinitions } from '../features/chart-types/treemap'
 import { distributionChartDefinitions } from '../features/chart-types/distribution'
 import { compileLegacyScene } from '../features/chart-renderer/legacyCompiler'
+import { compileNativeBarScene, isNativeBarKind } from '../features/chart-types/bar/compiler'
+import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 import { repeatedChartCategories } from './chartData'
 import { absorbedBarLabelPlacement, barSeriesGeometry, denseValueLabelStride, isInsideValueLabel, showDenseValueLabel, valueLabelPosition } from './chartLabels'
 import { hyphenateSync as hyphenateRussian } from 'hyphen/ru'
 
 export { niceNumericScale, prepareVisibleChartData } from './chartScale'
 
-type LegacyChartPlugin = Omit<ChartPlugin, 'compile' | 'capabilities'>
+type LegacyChartPlugin = Omit<ChartPlugin, 'compile' | 'capabilities' | 'compilerMode'>
 
 function semanticCapabilities(plugin: LegacyChartPlugin): ChartPlugin['capabilities'] {
   const hierarchy = plugin.id === 'treemap', matrix = plugin.id === 'heatmap'
@@ -1008,7 +1010,13 @@ export function waterfallElementColor(table: DataTable, config: ChartConfig, key
 }
 
 export function chartElementColor(table: DataTable, config: ChartConfig, key: string) {
-  const option = getChartPlugin(config.kind).buildOption(table, config) as { series?: Array<{ name?: string; itemStyle?: { color?: unknown }; data?: unknown[]; labelItems?: unknown[] }> }
+  const plugin = getChartPlugin(config.kind)
+  if (plugin.compilerMode === 'native') {
+    const scene = plugin.compile(table, config)
+    if (scene.migrationMode !== 'native') throw new Error(`Native plugin ${plugin.id} returned a legacy scene.`)
+    return scene.plot.series.flatMap((series) => series.marks).find((mark) => mark.legacyKey === key)?.style.color
+  }
+  const option = plugin.buildOption(table, config) as { series?: Array<{ name?: string; itemStyle?: { color?: unknown }; data?: unknown[]; labelItems?: unknown[] }> }
   const nested = (items: unknown[]): Array<Record<string, unknown>> => items.flatMap((item) => item && typeof item === 'object'
     ? [item as Record<string, unknown>, ...nested((item as { children?: unknown[] }).children ?? [])]
     : [])
@@ -2400,11 +2408,28 @@ const legacyChartRegistry = [
   treemap,
 ]
 
-export const chartRegistry: ChartPlugin[] = legacyChartRegistry.map((plugin) => ({
+const nativeBarCapabilities: ChartPlugin['capabilities'] = {
+  coordinateSystem: 'cartesian',
+  axes: { category: { placements: ['side'] }, value: { scaleTypes: ['linear', 'log'] } },
+  guides: ['legend', 'direct-series'],
+  valueLabels: true,
+  markers: false,
+  orientation: ['vertical', 'horizontal'],
+  stacking: ['none', 'stacked', 'normalized'],
+}
+
+export const chartRegistry: ChartPlugin[] = legacyChartRegistry.map((plugin) => isNativeBarKind(plugin.id) ? {
   ...plugin,
+  compilerMode: 'native',
+  capabilities: nativeBarCapabilities,
+  compile: compileNativeBarScene,
+  buildOption: (table, config) => renderScene(compileNativeBarScene(table, config)),
+} : {
+  ...plugin,
+  compilerMode: 'legacy',
   capabilities: semanticCapabilities(plugin),
   compile: (table, config) => compileLegacyScene(table, config, plugin.buildOption),
-}))
+})
 
 export function getChartPlugin(id: ChartConfig['kind']) {
   return chartRegistry.find((plugin) => plugin.id === id) ?? chartRegistry[0]
@@ -2412,7 +2437,13 @@ export function getChartPlugin(id: ChartConfig['kind']) {
 
 export function chartValueLabelSelections(table: DataTable, config: ChartConfig): ChartElementSelection[] {
   const listingConfig = isDistributionChart(config.kind) ? { ...config, distributionShowAllPoints: true, distributionShowPoints: true } : config
-  const option = getChartPlugin(config.kind).buildOption(table, listingConfig) as { series?: Array<{ name?: string; data?: unknown[]; labelItems?: unknown[] }> }
+  const plugin = getChartPlugin(config.kind)
+  if (plugin.compilerMode === 'native') {
+    const scene = plugin.compile(table, listingConfig)
+    if (scene.migrationMode !== 'native') throw new Error(`Native plugin ${plugin.id} returned a legacy scene.`)
+    return scene.plot.series.flatMap((series) => series.marks.filter((mark) => mark.value != null).map((mark) => ({ key: mark.legacyKey, seriesName: series.name, category: mark.displayCategory, value: mark.displayValue, label: listingConfig.elementStyles[mark.legacyKey]?.label, color: listingConfig.elementStyles[mark.legacyKey]?.color, target: 'value-label' as const })))
+  }
+  const option = plugin.buildOption(table, listingConfig) as { series?: Array<{ name?: string; data?: unknown[]; labelItems?: unknown[] }> }
   const nestedItems = (items: unknown[]): unknown[] => items.flatMap((raw) => raw && typeof raw === 'object' ? [raw, ...nestedItems((raw as { children?: unknown[] }).children ?? [])] : [])
   const selections = option.series?.flatMap((series) => nestedItems([...(series.data ?? []), ...(series.labelItems ?? [])]).flatMap((raw) => {
     if (!raw || typeof raw !== 'object') return []

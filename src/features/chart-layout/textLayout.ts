@@ -12,6 +12,7 @@ export interface TextLayoutInput {
 }
 export interface TextLayoutResult {
   lines: string[]
+  lineRuns: Array<Array<{ text: string; style: ChartTextStyle }>>
   sourceText: string
   size: Size
   rotatedSize: Size
@@ -37,24 +38,44 @@ export const waitForFonts = async () => {
   invalidateTextLayoutCache()
 }
 
-function wrapParagraph(paragraph: string, width: number, style: ChartTextStyle, measure: Measure) {
-  if (!paragraph) return ['']
-  const words = paragraph.trim().split(/\s+/)
-  const lines: string[] = []
-  let line = ''
-  for (const word of words) {
-    const candidate = line ? `${line} ${word}` : word
-    if (measure(candidate, style) <= width) { line = candidate; continue }
-    if (line) { lines.push(line); line = '' }
-    if (measure(word, style) <= width) { line = word; continue }
+type ResolvedRun = { text: string; style: ChartTextStyle }
+const runWidth = (runs: ResolvedRun[], measure: Measure) => runs.reduce((sum, run) => sum + measure(run.text, run.style), 0)
+const mergeRun = (runs: ResolvedRun[], run: ResolvedRun) => {
+  const previous = runs.at(-1)
+  if (previous && JSON.stringify(previous.style) === JSON.stringify(run.style)) previous.text += run.text
+  else runs.push({ ...run })
+}
+
+function wrapRuns(runs: ResolvedRun[], width: number, measure: Measure, wrap: boolean) {
+  if (!wrap) return [runs]
+  const tokens = runs.flatMap((run) => run.text.split(/(\s+)/).filter(Boolean).map((text) => ({ text, style: run.style })))
+  const lines: ResolvedRun[][] = []
+  let line: ResolvedRun[] = []
+  const flush = () => {
+    while (line.length) {
+      const last = line.at(-1)!
+      last.text = last.text.trimEnd()
+      if (last.text) break
+      line.pop()
+    }
+    lines.push(line)
+    line = []
+  }
+  for (const token of tokens) {
+    if (!line.length && !token.text.trim()) continue
+    const candidate = line.map((run) => ({ ...run })); mergeRun(candidate, token)
+    if (runWidth(candidate, measure) <= width) { line = candidate; continue }
+    if (line.length) flush()
+    if (!token.text.trim()) continue
+    if (measure(token.text, token.style) <= width) { line = [{ ...token }]; continue }
     let fragment = ''
-    for (const character of word) {
-      if (fragment && measure(fragment + character, style) > width) { lines.push(fragment); fragment = character }
+    for (const character of token.text) {
+      if (fragment && measure(fragment + character, token.style) > width) { lines.push([{ text: fragment, style: token.style }]); fragment = character }
       else fragment += character
     }
-    line = fragment
+    line = fragment ? [{ text: fragment, style: token.style }] : []
   }
-  if (line) lines.push(line)
+  if (line.length || !lines.length) flush()
   return lines
 }
 
@@ -62,13 +83,23 @@ export function layoutText(input: TextLayoutInput, measure: Measure = canvasMeas
   const style = input.document.baseStyle
   const sourceText = input.document.blocks.map((block) => block.runs.map((run) => run.text).join('')).join('\n')
   const maxWidth = Math.max(1, input.maxWidth)
-  const key = measure === canvasMeasure ? JSON.stringify([sourceText, style, maxWidth, input.rotation ?? 0, input.wrap !== false]) : ''
+  const key = measure === canvasMeasure ? JSON.stringify([input.document, maxWidth, input.rotation ?? 0, input.wrap !== false]) : ''
   const cached = key && cache.get(key)
   if (cached) return cached
-  const lines = sourceText.split('\n').flatMap((paragraph) => input.wrap === false ? [paragraph] : wrapParagraph(paragraph, maxWidth, style, measure))
-  const lineHeight = Math.round(style.size * style.lineHeight / 100)
-  const size = { width: Math.min(maxWidth, Math.max(0, ...lines.map((line) => measure(line, style)))), height: Math.max(1, lines.length) * lineHeight }
-  const result = { lines, sourceText, size, rotatedSize: rotatedSize(size, input.rotation ?? 0), lineHeight }
+  const paragraphs: ResolvedRun[][] = [[]]
+  input.document.blocks.forEach((block, blockIndex) => {
+    if (blockIndex) paragraphs.push([])
+    block.runs.forEach((run) => run.text.split('\n').forEach((part, partIndex) => {
+      if (partIndex) paragraphs.push([])
+      if (part) mergeRun(paragraphs.at(-1)!, { text: part, style: { ...style, ...run.style } })
+    }))
+  })
+  const lineRuns = paragraphs.flatMap((paragraph) => wrapRuns(paragraph, maxWidth, measure, input.wrap !== false))
+  const lines = lineRuns.map((runs) => runs.map((run) => run.text).join(''))
+  const lineHeights = lineRuns.map((runs) => Math.max(Math.round(style.size * style.lineHeight / 100), ...runs.map((run) => Math.round(run.style.size * run.style.lineHeight / 100))))
+  const lineHeight = Math.max(...lineHeights)
+  const size = { width: Math.min(maxWidth, Math.max(0, ...lineRuns.map((runs) => runWidth(runs, measure)))), height: lineHeights.reduce((sum, height) => sum + height, 0) }
+  const result = { lines, lineRuns, sourceText, size, rotatedSize: rotatedSize(size, input.rotation ?? 0), lineHeight }
   if (key) cache.set(key, result)
   return result
 }

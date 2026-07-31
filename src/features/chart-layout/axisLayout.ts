@@ -28,5 +28,5 @@ export function axisReservation(axis: AxisSpec, priority = 50): LayoutReservatio
   const ticks = axis.ticks.visible ? axis.ticks.length : 0
   const title = axis.title?.visible && axis.title.text ? axis.title.size + axis.title.gap : 0
   const size = label + ticks + title
-  return size ? { side: axis.placement.side, size, gap: 0, mode: 'outside', priority } : undefined
+  return size ? { id: `axis:${axis.id}`, side: axis.placement.side, size, gap: 0, mode: 'outside', priority } : undefined
 }

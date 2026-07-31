@@ -1,6 +1,6 @@
 import type { Rect, Size } from './geometry'
 import { insetRect } from './geometry'
-import { applyReservations, type LayoutReservation } from './reservations'
+import { resolveReservations, type LayoutReservation, type ResolvedReservation } from './reservations'
 import type { CompositionSpacing } from './spacing'
 
 export interface FrameLayoutInput {
@@ -14,10 +14,12 @@ export interface ResolvedFrame {
   content: Rect
   plot: Rect
   reservations: LayoutReservation[]
+  resolvedReservations: ResolvedReservation[]
 }
 
 export function resolveFrame({ canvas, spacing, reservations = [] }: FrameLayoutInput): ResolvedFrame {
   const canvasRect = { x: 0, y: 0, width: canvas.width, height: canvas.height }
   const content = insetRect(canvasRect, spacing.canvasInsets)
-  return { canvas: canvasRect, content, plot: applyReservations(content, reservations), reservations }
+  const resolved = resolveReservations(content, reservations)
+  return { canvas: canvasRect, content, plot: resolved.plot, reservations, resolvedReservations: resolved.reservations }
 }

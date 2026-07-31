@@ -29,6 +29,7 @@ import type { ChartExportOptions, ExportTextBlock } from '../features/chart-expo
 import { DEFAULT_COMPOSITION_SPACING } from '../entities/chart/model/defaults'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 import { layoutText, plainTextDocument } from '../features/chart-layout/textLayout'
+import { legacySelection, type ChartSelection } from '../entities/chart/model/ChartSelection'
 
 const AnnotationOverlay = lazy(() => import('./AnnotationOverlay').then(({ AnnotationOverlay: Component }) => ({ default: Component })))
 const CanvasTextOverlay = lazy(() => import('./CanvasTextOverlay').then(({ CanvasTextOverlay: Component }) => ({ default: Component })))
@@ -1122,6 +1123,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const validation = plugin.validate(table, renderConfig)
       if (!validation.ok) throw new Error(validation.errors.map((error) => error.message).join(' '))
       const option = renderScene(plugin.compile(table, renderConfig)) as Record<string, unknown> & { graphic?: unknown[] }
+      const nativeLayoutSnapshot = plugin.compilerMode === 'native' ? cloneChartOption({ grid: option.grid, xAxis: option.xAxis, yAxis: option.yAxis, legend: option.legend }) : null
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       const firstTreemapLayout = config.kind === 'treemap' && (treemapLayout.current?.table !== table || treemapLayout.current.config !== config)
       option.animation = !reducedMotion && !firstTreemapLayout
@@ -1129,7 +1131,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       option.animationDurationUpdate ??= reducedMotion ? 0 : 240
       option.animationEasing ??= 'cubicOut'
       option.animationEasingUpdate ??= 'cubicOut'
-      for (const [axisKey, axisName] of [['xAxis', 'x'], ['yAxis', 'y']] as const) {
+      for (const [axisKey, axisName] of plugin.compilerMode === 'legacy' ? [['xAxis', 'x'], ['yAxis', 'y']] as const : []) {
         const axis = option[axisKey] as { axisLabel?: Record<string, unknown> } | undefined
         if (!axis?.axisLabel) continue
         const original = axis.axisLabel.formatter
@@ -1325,6 +1327,12 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       if (grid && config.kind === 'treemap') {
         ;(option.series as Array<Record<string, unknown>> | undefined)?.forEach((series) => Object.assign(series, { left: grid.left, top: grid.top, right: grid.right, bottom: grid.bottom }))
       }
+      if (nativeLayoutSnapshot) {
+        option.grid = nativeLayoutSnapshot.grid
+        option.xAxis = nativeLayoutSnapshot.xAxis
+        option.yAxis = nativeLayoutSnapshot.yAxis
+        option.legend = nativeLayoutSnapshot.legend
+      }
       suppressBuiltInDirectLabels(option, config)
       const cleanOption = cloneChartOption(option)
       applySeriesVisualState(option, table, config, selectedSeriesName, selectedElementKey, hoveredSeriesName)
@@ -1332,7 +1340,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         const axis = option[axisKey] as { nameTextStyle?: object; axisLabel?: object } | undefined
         if (!axis) continue
         if (selectedSettingsSection === `${axisKey[0]}-axis-title`) axis.nameTextStyle = { ...axis.nameTextStyle, ...selectionStyle }
-        if (selectedSettingsSection === `${axisKey[0]}-axis-labels`) axis.axisLabel = { ...axis.axisLabel, ...selectionStyle }
+        if (selectedSettingsSection === `${axisKey[0]}-axis-labels` && plugin.compilerMode === 'legacy') axis.axisLabel = { ...axis.axisLabel, ...selectionStyle }
       }
       if (selectedSettingsSection === 'legend') {
         const legend = option.legend as { textStyle?: object } | undefined
@@ -1744,7 +1752,8 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       }
       const handler = (params: unknown) => {
         if (suppressTreemapClick.current) { suppressTreemapClick.current = false; return }
-        const event = params as { componentType?: string; targetType?: string; seriesName?: string; name?: string; value?: unknown; color?: unknown; data?: { elementKey?: string; sourceSeriesName?: string; displayValue?: string; displayCategory?: string; displayLabel?: string; displayColor?: string; directLegendLabel?: boolean; itemStyle?: { color?: unknown } }; info?: { elementKey?: string; sourceSeriesName?: string; displayValue?: string; displayCategory?: string; displayLabel?: string; displayColor?: string }; event?: { target?: { type?: string; parent?: { type?: string } }; topTarget?: { type?: string; parent?: { type?: string } } } }
+        type RendererPoint = { elementId?: string; datumId?: string; seriesId?: string; elementKey?: string; sourceSeriesName?: string; displayValue?: string; displayCategory?: string; displayLabel?: string; displayColor?: string; directLegendLabel?: boolean; itemStyle?: { color?: unknown } }
+        const event = params as { componentType?: string; targetType?: string; seriesName?: string; name?: string; value?: unknown; color?: unknown; data?: RendererPoint; info?: RendererPoint; event?: { target?: { type?: string; parent?: { type?: string } }; topTarget?: { type?: string; parent?: { type?: string } } } }
         if (event.componentType === 'title') { onSettingsFocus?.(event.targetType === 'subtitle' || event.targetType === 'subtext' ? 'subtitle' : 'title'); return }
         if (event.componentType === 'xAxis' || event.componentType === 'yAxis') {
           const axis = event.componentType === 'xAxis' ? 'x' : 'y'
@@ -1764,6 +1773,11 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         const pointColor = pointData?.displayColor ?? (typeof event.data?.itemStyle?.color === 'string' ? event.data.itemStyle.color : undefined) ?? (typeof event.color === 'string' ? event.color : undefined)
         const renderTarget = event.event?.target ?? event.event?.topTarget
         const clickedValueLabel = event.targetType === 'label' || renderTarget?.type === 'text' || renderTarget?.type === 'tspan' || renderTarget?.parent?.type === 'text'
+        const nativeSelection = (target?: 'value-label') => {
+          if (!pointData?.elementId) return undefined
+          const selection: ChartSelection = { kind: 'element', id: pointData.elementId, role: target ?? 'mark', seriesId: pointData.seriesId, datumId: pointData.datumId, legacyKey: pointData.elementKey, series: seriesName, category: pointData.displayCategory ?? event.name ?? '', value: pointData.displayValue ?? String(event.value ?? ''), label: pointData.displayLabel, color: pointColor }
+          return legacySelection(selection) as ChartElementSelection
+        }
         if (clickedValueLabel && event.data?.directLegendLabel) { onSettingsFocus?.('legend'); return }
         if (config.kind === 'treemap' && selectedTreemapSeriesName !== seriesName) {
           onSelect?.({ key: `treemap-group:${seriesName}`, seriesName, category: seriesName, value: '', label: seriesName })
@@ -1778,7 +1792,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         }
         if (clickedValueLabel && pointData?.elementKey) {
           if (config.kind !== 'treemap' && selectedSettingsSection !== 'values') { onSettingsFocus?.('values'); return }
-          onSelect?.({ key: pointData.elementKey, seriesName, category: pointData.displayCategory ?? event.name ?? '', value: pointData.displayValue ?? String(event.value ?? ''), label: pointData.displayLabel, color: pointColor, target: 'value-label' })
+          onSelect?.(nativeSelection('value-label') ?? { key: pointData.elementKey, seriesName, category: pointData.displayCategory ?? event.name ?? '', value: pointData.displayValue ?? String(event.value ?? ''), label: pointData.displayLabel, color: pointColor, target: 'value-label' })
           onSettingsFocus?.('element')
           return
         }
@@ -1790,7 +1804,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           return
         }
         if (!pointData?.elementKey) { selectNearestValue(seriesName); return }
-        onSelect?.({ key: pointData.elementKey, seriesName, category: pointData.displayCategory ?? event.name ?? '', value: pointData.displayValue ?? String(event.value ?? ''), label: pointData.displayLabel, color: pointColor })
+        onSelect?.(nativeSelection() ?? { key: pointData.elementKey, seriesName, category: pointData.displayCategory ?? event.name ?? '', value: pointData.displayValue ?? String(event.value ?? ''), label: pointData.displayLabel, color: pointColor })
         onSettingsFocus?.('element')
       }
       const hoverHandler = (params: unknown) => {

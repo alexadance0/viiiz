@@ -20,3 +20,11 @@ Baseline: `13ac62d372432ae51536508084141bca953ea257` (clean worktree).
 ## Specialized behavior retained
 
 Treemap layout/font feedback, butterfly internal categories, direct labels, continuous heatmap/bubble guides, rich SVG export and current annotation/decorations coordinates remain specialized. They must be migrated independently after parity tests; none are treated as a standard legend or generic Cartesian behavior.
+
+## Phase 2 checkpoint — native ordinary bars
+
+Phase 2 baseline: `47f70f1282c778e3b51562ded863e8bdcc753c64`.
+
+`ChartScene` is now an explicit `LegacyChartScene | NativeChartScene` union. Legacy payloads are visibly named and only legacy plugins can produce them. The six ordinary bar kinds compile semantic rect marks with stable series/datum/element IDs, resolve frame/axis/guide rails through the shared layout layer, and render through the native ECharts adapter. Their helper and interaction paths consume semantic mark metadata instead of parsing a legacy option.
+
+The persisted `ChartConfig`, legacy element override keys, rich HTML fields, editor callbacks, and export entry points remain compatibility boundaries. Other families still use `compileLegacyScene`; this milestone does not claim a global migration. See `native-scene-migration.md` and `chart-family-parity.md` for the exact boundary.
