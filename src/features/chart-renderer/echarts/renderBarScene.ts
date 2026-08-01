@@ -2,9 +2,10 @@ import { formatXAxisNumber, formatYAxisNumber } from '../../../core/numberFormat
 import { absorbedBarLabelPlacement, barSeriesGeometry, denseValueLabelStride, showDenseValueLabel, valueLabelPosition } from '../../../core/chartLabels'
 import { measureTextWidth } from '../../../core/textMetrics'
 import type { ChartTextStyle } from '../../../core/types'
-import type { NativeChartScene, ResolvedScene } from '../../../entities/chart/model/ChartScene'
+import type { CartesianBarPlotScene, NativeChartScene, ResolvedSceneGeometry } from '../../../entities/chart/model/ChartScene'
+import type { ResolvedReservation } from '../../chart-layout/reservations'
 
-type ResolvedNativeScene = ResolvedScene & NativeChartScene
+export type ResolvedNativeBarScene = NativeChartScene & { plot: CartesianBarPlotScene; geometry: ResolvedSceneGeometry; resolvedReservations: ResolvedReservation[] }
 const textStyle = (style: ChartTextStyle) => ({ color: style.color, fontFamily: style.fontFamily, fontSize: style.size, fontWeight: style.weight, fontStyle: style.italic ? 'italic' : 'normal', lineHeight: Math.round(style.size * style.lineHeight / 100), align: style.align })
 const graphicTextStyle = (style: ChartTextStyle) => { const { color, ...rest } = textStyle(style); return { ...rest, fill: color } }
 const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!)
@@ -15,7 +16,7 @@ const contrastText = (color: string) => {
   return (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000 > 150 ? '#202027' : '#ffffff'
 }
 
-function customBarSeries(scene: ResolvedNativeScene) {
+function customBarSeries(scene: ResolvedNativeBarScene) {
   const config = scene.compatibilityConfig
   const stacked = scene.plot.stacking !== 'none'
   return scene.plot.series.flatMap((series, seriesIndex) => series.marks.flatMap((mark) => {
@@ -42,7 +43,7 @@ function customBarSeries(scene: ResolvedNativeScene) {
   }))
 }
 
-function absorbedLabelSeries(scene: ResolvedNativeScene) {
+function absorbedLabelSeries(scene: ResolvedNativeBarScene) {
   const config = scene.compatibilityConfig
   if (!config.barValueLabelAbsorption) return []
   const horizontal = scene.plot.orientation === 'horizontal', stacked = scene.plot.stacking !== 'none'
@@ -77,7 +78,7 @@ function absorbedLabelSeries(scene: ResolvedNativeScene) {
   })
 }
 
-function valueEdgeAffixSeries(scene: ResolvedNativeScene) {
+function valueEdgeAffixSeries(scene: ResolvedNativeBarScene) {
   const config = scene.compatibilityConfig
   if (scene.plot.orientation !== 'vertical' || !(config.showYAxisLabels ?? true) || !config.yAxisAffixScope || config.yAxisAffixScope === 'all' || !(config.numberPrefix || config.numberSuffix)) return []
   const positions = config.yAxisAffixScope === 'first' ? [['first', scene.plot.valueDomain.min] as const] : config.yAxisAffixScope === 'last' ? [['last', scene.plot.valueDomain.max] as const] : [['first', scene.plot.valueDomain.min] as const, ['last', scene.plot.valueDomain.max] as const]
@@ -98,7 +99,7 @@ function valueEdgeAffixSeries(scene: ResolvedNativeScene) {
   }]
 }
 
-function categoryLabelInterval(scene: ResolvedNativeScene) {
+function categoryLabelInterval(scene: ResolvedNativeBarScene) {
   const requested = scene.compatibilityConfig.xAxisStep
   if (requested != null) return Math.max(0, Math.round(requested) - 1)
   const categories = scene.plot.categories
@@ -113,7 +114,7 @@ function categoryLabelInterval(scene: ResolvedNativeScene) {
   return (index: number) => displayed.has(index)
 }
 
-function renderAxis(scene: ResolvedNativeScene, channel: 'category' | 'value') {
+function renderAxis(scene: ResolvedNativeBarScene, channel: 'category' | 'value') {
   const config = scene.compatibilityConfig
   const axis = channel === 'category' ? scene.plot.categoryAxis : scene.plot.valueAxis
   const side = axis.placement.kind === 'side' ? axis.placement.side : undefined
@@ -145,7 +146,7 @@ function renderAxis(scene: ResolvedNativeScene, channel: 'category' | 'value') {
   }
 }
 
-export function renderNativeBarScene(scene: ResolvedNativeScene): Record<string, unknown> {
+export function renderNativeBarScene(scene: ResolvedNativeBarScene): Record<string, unknown> {
   const config = scene.compatibilityConfig
   const horizontal = scene.plot.orientation === 'horizontal'
   const legendGuide = scene.guides.find((guide) => guide.kind === 'categorical-legend')

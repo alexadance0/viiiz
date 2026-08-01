@@ -1185,7 +1185,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const yTitleThickness = !editorialAxes && config.showYAxisTitle && config.yAxisTitle
         ? Math.round(yTitleStyle.size * yTitleStyle.lineHeight / 100) * Math.max(1, config.yAxisTitle.split('\n').length) + config.yAxisTitleGap
         : 0
-      const grid = option.grid as { top?: number; bottom?: number; left?: number; right?: number; containLabel?: boolean } | undefined
+      let grid = option.grid as { top?: number; bottom?: number; left?: number; right?: number; containLabel?: boolean } | undefined
       const heatmapScalePosition = config.heatmapScalePosition ?? 'right'
       const heatmapScaleVisible = config.kind === 'heatmap' && (config.heatmapShowScale ?? true)
       const heatmapYLabelStyle = config.yAxisLabelText ?? config.axisLabelText
@@ -1274,7 +1274,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const physicalXAxisTitle = isHorizontalBar(config) ? config.yAxisTitle : config.xAxisTitle
       const showPhysicalXAxisTitle = isHorizontalBar(config) ? config.showYAxisTitle : config.showXAxisTitle
       const physicalXAxisTitleGap = isHorizontalBar(config) ? config.yAxisTitleGap : config.xAxisTitleGap
-      const physicalXAxisOption = option.xAxis as { name?: string; nameGap?: number } | undefined
+      let physicalXAxisOption = option.xAxis as { name?: string; nameGap?: number } | undefined
       const physicalXAxisLabelOffset = Math.max(0, Number(physicalXAxisOption?.nameGap ?? physicalXAxisTitleGap) - physicalXAxisTitleGap)
       const physicalXAxisOuterReserve = grid?.containLabel === false ? physicalXAxisLabelOffset : 0
       const xAxisTitleReserve = !editorialAxes && showPhysicalXAxisTitle && physicalXAxisTitle ? Math.round(xAxisTitleStyle.size * xAxisTitleStyle.lineHeight / 100) * Math.max(1, physicalXAxisTitle.split('\n').length) + physicalXAxisTitleGap : 0
@@ -1325,13 +1325,16 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         grid[heatmapScalePosition] = Number(grid[heatmapScalePosition] ?? 0) + finalReserve
       }
       if (grid && config.kind === 'treemap') {
-        ;(option.series as Array<Record<string, unknown>> | undefined)?.forEach((series) => Object.assign(series, { left: grid.left, top: grid.top, right: grid.right, bottom: grid.bottom }))
+        const treemapGrid = grid
+        ;(option.series as Array<Record<string, unknown>> | undefined)?.forEach((series) => Object.assign(series, { left: treemapGrid.left, top: treemapGrid.top, right: treemapGrid.right, bottom: treemapGrid.bottom }))
       }
       if (nativeLayoutSnapshot) {
         option.grid = nativeLayoutSnapshot.grid
         option.xAxis = nativeLayoutSnapshot.xAxis
         option.yAxis = nativeLayoutSnapshot.yAxis
         option.legend = nativeLayoutSnapshot.legend
+        grid = option.grid as typeof grid
+        physicalXAxisOption = option.xAxis as typeof physicalXAxisOption
       }
       suppressBuiltInDirectLabels(option, config)
       const cleanOption = cloneChartOption(option)

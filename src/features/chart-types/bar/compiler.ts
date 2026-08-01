@@ -5,7 +5,7 @@ import { formatTimeValue } from '../../../core/timeFrequency'
 import type { ChartConfig, ChartKind, DataTable, DataValue } from '../../../core/types'
 import { chartDocumentFromLegacy } from '../../../entities/chart/model/legacyChartConfigAdapter'
 import { aggregateDatumId, markElementId, rawDatumId, seriesId, syntheticDatumId, type ChartElement } from '../../../entities/chart/model/ChartElement'
-import type { BarMarkScene, BarSeriesScene, NativeChartScene } from '../../../entities/chart/model/ChartScene'
+import type { BarMarkScene, BarSeriesScene, NativeBarChartScene } from '../../../entities/chart/model/ChartScene'
 import type { AxisSpec } from '../../chart-layout/axisLayout'
 import type { GuideSpec } from '../../chart-layout/guides/types'
 
@@ -31,7 +31,7 @@ function sourceRowIndex(table: DataTable, config: ChartConfig, category: DataVal
   })
 }
 
-export function compileNativeBarScene(table: DataTable, sourceConfig: ChartConfig): NativeChartScene {
+export function compileNativeBarScene(table: DataTable, sourceConfig: ChartConfig): NativeBarChartScene {
   if (!isNativeBarKind(sourceConfig.kind)) throw new Error(`Native bar compiler cannot compile ${sourceConfig.kind}.`)
   const orientation = horizontal(sourceConfig.kind) || sourceConfig.barOrientation === 'horizontal' ? 'horizontal' : 'vertical'
   const config = orientation === 'horizontal' ? { ...sourceConfig, barOrientation: 'horizontal' as const } : sourceConfig
@@ -107,5 +107,5 @@ export function compileNativeBarScene(table: DataTable, sourceConfig: ChartConfi
   const frameElements = ([['title', config.title, config.titleText], ['subtitle', config.subtitle, config.subtitleText], ['note', config.note, config.noteText], ['source', config.source, config.sourceText]] as const)
     .filter(([, text], index) => Boolean(text) && (index === 0 ? config.showTitle !== false : index === 1 ? config.showSubtitle !== false : index === 2 ? config.showNote !== false : config.showSource !== false))
     .map(([role, text, style]) => ({ id: `frame:${role}`, role, text, style }))
-  return { migrationMode: 'native', document: chartDocumentFromLegacy(table, config), compatibilityConfig: config, elements, guides, frameElements, plot: { kind: 'bar', orientation, stacking: stack, categories, categoryAxis, valueAxis, valueDomain, barWidth: config.barWidth ?? 68, seriesGap: config.barSeriesGap ?? 30, series } }
+  return { migrationMode: 'native', document: chartDocumentFromLegacy(table, config), compatibilityConfig: config, elements, guides, frameElements, plot: { kind: 'bar', categoryPlacement: 'band', orientation, stacking: stack, categories, categoryAxis, valueAxis, valueDomain, barWidth: config.barWidth ?? 68, seriesGap: config.barSeriesGap ?? 30, series } }
 }

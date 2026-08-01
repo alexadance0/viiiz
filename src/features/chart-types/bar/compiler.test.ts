@@ -12,6 +12,7 @@ describe('native bar compiler', () => {
     expect(scene.migrationMode).toBe('native')
     if (scene.migrationMode === 'native') {
       expect(scene.plot.kind).toBe('bar')
+      if (scene.plot.kind !== 'bar') throw new Error(`Expected bar plot, received ${scene.plot.kind}.`)
       expect(scene.plot.series[0].marks[0]).toMatchObject({ type: 'rect', value: expect.any(Number), legacyKey: expect.any(String) })
       expect('type' in scene.plot.series[0] && (scene.plot.series[0] as { type?: unknown }).type === 'bar').toBe(false)
     }

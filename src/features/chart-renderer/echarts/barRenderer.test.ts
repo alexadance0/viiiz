@@ -38,7 +38,9 @@ describe('native ECharts bar adapter', () => {
   })
 
   it('leaves non-migrated families on the explicit legacy path', () => {
-    expect(getChartPlugin('line').compilerMode).toBe('legacy')
+    expect(getChartPlugin('line').compilerMode).toBe('native')
+    expect(getChartPlugin('area').compilerMode).toBe('native')
+    expect(getChartPlugin('indexed-line').compilerMode).toBe('legacy')
     expect(getChartPlugin('scatter').compilerMode).toBe('legacy')
     expect(getChartPlugin('waterfall').compilerMode).toBe('legacy')
   })

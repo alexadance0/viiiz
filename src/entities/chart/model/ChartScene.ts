@@ -41,6 +41,7 @@ export interface BarSeriesScene {
 
 export interface CartesianBarPlotScene {
   kind: 'bar'
+  categoryPlacement: 'band'
   orientation: 'vertical' | 'horizontal'
   stacking: 'none' | 'stacked' | 'normalized'
   categories: Array<{ id: DatumId; value: DataValue; label: string; coordinate: string }>
@@ -52,14 +53,84 @@ export interface CartesianBarPlotScene {
   series: BarSeriesScene[]
 }
 
+export interface CartesianPointScene {
+  type: 'point'
+  id: ElementId
+  datumId: DatumId
+  seriesId: SeriesId
+  legacyKey: string
+  category: DataValue
+  categoryIndex: number
+  value: number | null
+  displayCategory: string
+  displayValue: string
+  marker: { visible: boolean; shape: 'circle' | 'rect' | 'roundRect' | 'triangle' | 'diamond'; size: number; fill: string; stroke: string; strokeWidth: number }
+  label: { visible: boolean; text: string; style: ChartTextStyle; position: NonNullable<ChartConfig['valueLabelPosition']> }
+}
+
+export interface LineSegmentScene {
+  id: ElementId
+  from: DatumId
+  to: DatumId
+  fromIndex: number
+  toIndex: number
+  stroke: { color: string; width: number; type: 'solid' | 'dashed' | 'dotted'; opacity: number }
+}
+
+interface CartesianPointSeriesScene {
+  id: SeriesId
+  name: string
+  color: string
+  visible: boolean
+  interpolation: 'linear' | 'spline' | 'step-start' | 'step-end'
+  missing: 'gap' | 'zero' | 'connect'
+  stroke: { color: string; width: number; type: 'solid' | 'dashed' | 'dotted'; opacity: number }
+  marker: { visible: boolean; shape: 'circle' | 'rect' | 'roundRect' | 'triangle' | 'diamond'; size: number; fill: string; stroke: string; strokeWidth: number }
+  points: CartesianPointScene[]
+}
+
+export interface LineSeriesScene extends CartesianPointSeriesScene {
+  segments: LineSegmentScene[]
+}
+
+export interface AreaSeriesScene extends CartesianPointSeriesScene {
+  fill: { color: string; opacity: number }
+}
+
+interface CartesianPointPlotScene {
+  categoryPlacement: 'point'
+  categories: Array<{ id: DatumId; value: DataValue; label: string; coordinate: string }>
+  categoryLabelPlan: { interval: 'auto' | number | ((index: number) => boolean); fontSize: number; rotation: number; hideOverlap: boolean; showMaxLabel?: boolean }
+  categoryAxis: AxisSpec
+  valueAxis: AxisSpec
+  valueDomain: { min: number; max: number; step: number }
+}
+
+export interface CartesianLinePlotScene extends CartesianPointPlotScene {
+  kind: 'line'
+  series: LineSeriesScene[]
+}
+
+export interface CartesianAreaPlotScene extends CartesianPointPlotScene {
+  kind: 'area'
+  stacking: 'none' | 'stacked' | 'normalized'
+  series: AreaSeriesScene[]
+}
+
+export type NativePlotScene = CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene
+
 export interface NativeChartScene extends ChartSceneBase {
   migrationMode: 'native'
-  plot: CartesianBarPlotScene
+  plot: NativePlotScene
   guides: GuideSpec[]
   frameElements: Array<{ id: ElementId; role: 'title' | 'subtitle' | 'note' | 'source'; text: string; style: ChartTextStyle }>
   /** Temporary presentation adapter until persisted ChartConfig is replaced by ChartDocument. */
   compatibilityConfig: ChartConfig
 }
+
+export type NativeBarChartScene = NativeChartScene & { plot: CartesianBarPlotScene }
+export type NativeLineChartScene = NativeChartScene & { plot: CartesianLinePlotScene }
+export type NativeAreaChartScene = NativeChartScene & { plot: CartesianAreaPlotScene }
 
 export type ChartScene = LegacyChartScene | NativeChartScene
 
@@ -75,3 +146,4 @@ export interface ResolvedSceneGeometry {
 export type ResolvedScene =
   | (LegacyChartScene & { geometry: ResolvedSceneGeometry })
   | (NativeChartScene & { geometry: ResolvedSceneGeometry; resolvedReservations: ResolvedReservation[] })
+export type ResolvedNativeChartScene = NativeChartScene & { geometry: ResolvedSceneGeometry; resolvedReservations: ResolvedReservation[] }

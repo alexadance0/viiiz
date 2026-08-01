@@ -1130,13 +1130,13 @@ describe('individual chart element styles', () => {
     expect(option.xAxis.axisLabel.formatter('', 1)).toBe('Фев')
   })
 
-  it('reserves canvas space for a suffix after the last numeric X value', () => {
+  it('keeps a suffix after the last numeric X value local to the point axis', () => {
     const numericTable: DataTable = { name: 'numeric', columns: ['month', 'value'], rows: [{ month: 10, value: 10 }, { month: 20, value: 20 }] }
     const plain = base('line')
     const withUnit = { ...plain, xAxisNumberSuffix: ' лет' }
     const plainOption = getChartPlugin('line').buildOption(numericTable, plain) as { grid: { right: number } }
     const unitOption = getChartPlugin('line').buildOption(numericTable, withUnit) as { grid: { right: number } }
-    expect(unitOption.grid.right).toBeGreaterThan(plainOption.grid.right)
+    expect(unitOption.grid.right).toBe(plainOption.grid.right)
   })
 
   it('formats every physical numeric X tick on horizontal bars', () => {
@@ -1759,12 +1759,16 @@ describe('chart composition alignment', () => {
     expect(option.xAxis.data.map((value, index) => option.xAxis.axisLabel.formatter(value, index)).filter(Boolean)).toEqual(['H1', 'H2'])
   })
 
-  it('reserves room to the right of the final label for every cartesian chart', () => {
+  it('keeps native point-label edges local while preserving other cartesian reservations', () => {
     const dated: DataTable = { name: 'dated', columns: ['date', 'value'], rows: [{ date: new Date(2025, 0, 1), value: 1 }, { date: new Date(2025, 11, 31), value: 2 }] }
+    const nativePointKinds = new Set(['line', 'spline', 'step-line', 'area', 'stacked-area', 'normalized-stacked-area'])
     for (const kind of ['line', 'spline', 'step-line', 'range-line', 'step-range-line', 'confidence-line', 'area', 'stacked-area', 'normalized-stacked-area', 'bar', 'stacked-bar', 'normalized-stacked-bar', 'horizontal-bar', 'horizontal-stacked-bar', 'horizontal-normalized-stacked-bar', 'dumbbell', 'scatter', 'bubble'] as const) {
       const config = base(kind); config.xField = 'date'; config.dateLabelFormat = 'date-dmy-en'
       const option = getChartPlugin(kind).buildOption(dated, config) as { grid: { right: number } }
-      expect(option.grid.right, kind).toBeGreaterThan(30)
+      if (nativePointKinds.has(kind)) {
+        const short = getChartPlugin(kind).buildOption(dated, { ...config, dateLabelFormat: 'month-only-en' }) as { grid: { right: number } }
+        expect(option.grid.right, kind).toBe(short.grid.right)
+      } else expect(option.grid.right, kind).toBeGreaterThan(30)
     }
   })
 

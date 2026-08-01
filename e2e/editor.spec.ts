@@ -627,6 +627,25 @@ test('every chart type in the picker renders without runtime errors', async ({ p
   assertNoErrors()
 })
 
+test('native line and area kinds transition to each other and back to legacy charts', async ({ page }) => {
+  const assertNoErrors = await failOnRuntimeErrors(page)
+  await loadDemo(page)
+  for (const name of ['Линия', 'Сглаженная линия', 'Ступенчатая линия', 'Область', 'Области с накоплением', 'Нормированные области', 'Линия с интервалом', 'Линия']) {
+    await page.getByRole('button', { name: new RegExp(`^${escaped(name)}$`) }).click()
+    await expectRenderedChart(page)
+  }
+  await page.getByRole('button', { name: /Настроить оформление/ }).click()
+  await openExport(page)
+  const svgDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Скачать SVG' }).click()
+  const svg = await svgDownload
+  expect(await readFile(await svg.path()!, 'utf8')).toContain('<svg')
+  const pngDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Скачать PNG' }).click()
+  await expect((await pngDownload).suggestedFilename()).toMatch(/\.png$/)
+  assertNoErrors()
+})
+
 test('special charts expose clear data roles and render with useful defaults', async ({ page }) => {
   await loadDemo(page)
   await page.getByRole('button', { name: 'Гантельная' }).click()
