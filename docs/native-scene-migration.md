@@ -2,15 +2,15 @@
 
 ## Checkpoint
 
-Phase 3 baseline SHA: `ab264f5d7a69a466935b25873d68c8e1379a7113`.
+Phase 4 implementation baseline SHA: `ee59a994f4bac379129487214e744ad198e999b9`.
 
-Migrated kinds: the six ordinary bar kinds plus `line`, `spline`, `step-line`, `area`, `stacked-area`, and `normalized-stacked-area`.
+Migrated kinds: the six ordinary bar kinds plus `line`, `spline`, `step-line`, `indexed-line`, `seasonal-line`, `area`, `stacked-area`, and `normalized-stacked-area`.
 
 ## Render path
 
 ```text
 legacy ChartConfig adapter
-  → native bar, line, or area semantic compiler
+  → native bar, prepared-line, or area semantic compiler
   → NativeChartScene (discriminated bar/line/area plot, axes, guides, stable IDs)
   → shared frame/text/axis/reservation layout
   → ResolvedScene
@@ -24,7 +24,7 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 
 - `entities/chart/model`: explicit native/legacy scene union, discriminated bar/line/area plots, typed IDs, and family-neutral semantic mark visitors.
 - `features/chart-layout`: independent X/Y spacing, identified/resolved rails, styled-run text measurement, and authoritative native bar geometry.
-- `features/chart-types/bar`, `line`, and `area`: semantic compilers and the shared Cartesian layout resolver.
+- `features/chart-types/bar`, `line`, and `area`: semantic compilers, pure indexed/seasonal preparation, and the shared Cartesian layout resolver.
 - `features/chart-renderer/echarts`: native bar and point-plot adapters with plot-kind dispatch.
 - `core/chartRegistry.ts`: explicit compiler modes/capabilities and semantic helper branches.
 - `components/ChartCanvas.tsx`: native geometry is preserved across the temporary legacy composition block; native category formatters are not post-mutated; renderer IDs are adapted to existing callbacks at the outer boundary.
@@ -35,13 +35,13 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 - Saved files still use `ChartConfig`; `compatibilityConfig` carries presentation fields until `ChartDocument` persistence is migrated.
 - Existing `seriesStyles`, `elementStyles`, and category override keys remain unchanged and map onto stable native IDs.
 - Existing callback DTOs, rich HTML storage/overlays, annotations/decorations, and export commands remain unchanged.
-- Direct-series labels and wide line hit areas retain their ECharts compatibility representations after the semantic renderer emits stable metadata. Native frame geometry remains authoritative for the plot.
+- Direct-series guides now carry resolved per-series inclusion, labels, notes, text style, color, side, and leader-line policy. The shared renderer no longer derives direct-label inclusion from the legacy product kind. Wide line hit areas retain their ECharts compatibility representation.
 - `buildOption` remains on the plugin interface for unmigrated callers. For ordinary bars its implementation is a native compile/layout/render compatibility facade, not the legacy cartesian builder.
-- Waterfall, butterfly, lollipop, dumbbell, indexed/seasonal/slope lines, interval lines, smoothing, scatter/bubble, distribution, heatmap, and treemap retain their legacy compilers.
+- Waterfall, butterfly, lollipop, dumbbell, slope, interval lines, smoothing, scatter/bubble, distribution, heatmap, and treemap retain their legacy compilers.
 
 ## Tests added
 
-- 25 reusable ordinary-bar and 18 reusable basic-line/area characterization fixtures.
+- 25 reusable ordinary-bar, 18 reusable basic-line/area, and deterministic indexed/seasonal characterization fixtures.
 - compiler-mode, semantics, stable-ID, classification, layout rail, renderer translation, import guard, and throwing-builder tests.
 - Existing unit and Playwright coverage continues to cover interaction, undo/redo, category multiline editing, horizontal bars, legends/direct labels, and SVG/PNG export.
 
@@ -49,4 +49,4 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 
 The shared legacy `cartesian()` source still contains unreachable ordinary-bar and basic-line/area branches because specialized line, smoothing, and comparison charts share the function. The next safe removal is to split those specialized builders, then delete the migrated conditions and their compatibility option-shape tests. This can happen only after specialized direct-label and value-label overlay geometry consumes resolved scene element bounds directly.
 
-Waterfall, butterfly, lollipop, dumbbell, indexed/seasonal/slope lines, interval lines, smoothing, scatter/bubble, distribution, heatmap, and treemap remain separate migrations.
+Waterfall, butterfly, lollipop, dumbbell, slope, moving-average-line, moving-average-scatter, range-line, step-range-line, confidence-line, scatter/bubble, distribution, heatmap, and treemap remain separate migrations.

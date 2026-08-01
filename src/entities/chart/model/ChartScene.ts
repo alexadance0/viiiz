@@ -87,6 +87,7 @@ interface CartesianPointSeriesScene {
   stroke: { color: string; width: number; type: 'solid' | 'dashed' | 'dotted'; opacity: number }
   marker: { visible: boolean; shape: 'circle' | 'rect' | 'roundRect' | 'triangle' | 'diamond'; size: number; fill: string; stroke: string; strokeWidth: number }
   points: CartesianPointScene[]
+  presentation?: { opacity?: number; emphasis?: 'normal' | 'accent' | 'muted'; layerPriority?: number }
 }
 
 export interface LineSeriesScene extends CartesianPointSeriesScene {

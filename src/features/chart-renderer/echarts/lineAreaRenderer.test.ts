@@ -3,10 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { chartElementColor, chartValueLabelSelections, getChartPlugin } from '../../../core/chartRegistry'
 import type { ChartConfig, DataTable } from '../../../core/types'
 import { lineAreaFixtures } from '../../../test-fixtures/charts/lineArea'
+import { seasonalTrendConfig, seasonalTrendTable } from '../../../test-fixtures/charts/specializedTrends'
+import { indexedTrendConfig, indexedTrendTable } from '../../../test-fixtures/charts/specializedTrends'
 import { resolveNativeCartesianScene } from '../../chart-types/bar/layout'
 import { NATIVE_LINE_KINDS } from '../../chart-types/line/compiler'
 import { NATIVE_AREA_KINDS } from '../../chart-types/area/compiler'
 import { renderScene } from './renderScene'
+import { nativeMarkSelections } from '../../../entities/chart/model/sceneVisitors'
 
 function resolve(kind: 'bar' | 'line' | 'area', categories: Array<string | Date>, overrides: Partial<ChartConfig> = {}) {
   const source = lineAreaFixtures[0]
@@ -18,14 +21,18 @@ function resolve(kind: 'bar' | 'line' | 'area', categories: Array<string | Date>
 
 describe('native ECharts line and area adapter', () => {
   it.each([...NATIVE_LINE_KINDS, ...NATIVE_AREA_KINDS])('%s never reaches the legacy builder', (kind) => {
-    const source = lineAreaFixtures[10], plugin = getChartPlugin(kind), original = plugin.buildOption
+    const fixture = lineAreaFixtures[10]
+    const table = kind === 'seasonal-line' ? { ...fixture.table, rows: [...fixture.table.rows, ...fixture.table.rows.map((row) => ({ ...row, period: new Date((row.period as Date).getFullYear() + 1, (row.period as Date).getMonth(), 1) }))] } : fixture.table
+    const plugin = getChartPlugin(kind), original = plugin.buildOption
     plugin.buildOption = () => { throw new Error('legacy builder reached') }
     try {
-      const config = { ...source.config, kind }
-      expect(() => renderScene(plugin.compile(source.table, config))).not.toThrow()
-      const category = source.table.rows[0].period
-      expect(chartElementColor(source.table, config, `first\u001f${category instanceof Date ? category.toISOString() : String(category)}`)).toBeTruthy()
-      expect(chartValueLabelSelections(source.table, config)).not.toHaveLength(0)
+      const config = { ...fixture.config, kind, showValues: true, ...(kind === 'indexed-line' ? { indexBaseXValue: `date:${(table.rows[0].period as Date).toISOString()}` } : {}), ...(kind === 'seasonal-line' ? { seasonalAccentYears: ['2026'] } : {}) }
+      const scene = plugin.compile(table, config)
+      expect(() => renderScene(scene)).not.toThrow()
+      const selections = scene.migrationMode === 'native' ? nativeMarkSelections(scene) : []
+      expect(selections).not.toHaveLength(0)
+      expect(chartElementColor(table, config, selections[0].legacyKey)).toBeTruthy()
+      expect(chartValueLabelSelections(table, config)).not.toHaveLength(0)
     } finally { plugin.buildOption = original }
   })
 
@@ -86,13 +93,42 @@ describe('native ECharts line and area adapter', () => {
     }
   })
 
+  it('renders Seasonal presentation and direct identification from semantic fields', () => {
+    const scene = getChartPlugin('seasonal-line').compile(seasonalTrendTable, seasonalTrendConfig)
+    if (scene.migrationMode !== 'native') throw new Error('Expected native scene')
+    const option = renderScene(scene) as { series: Array<{ name: string; z?: number; lineStyle?: { color?: string; opacity?: number }; endLabel?: { formatter?: string } }> }
+    expect(option.series.find((series) => series.name === '2023')).toMatchObject({ lineStyle: { color: '#d9d7df', opacity: .45 } })
+    expect(option.series.find((series) => series.name === '2024')).toMatchObject({ z: 1001, lineStyle: { color: seasonalTrendConfig.color, opacity: 1 }, endLabel: { formatter: '{name|2024}' } })
+    expect(option.series.find((series) => series.name === '2023')?.endLabel).toBeUndefined()
+  })
+
+  it('renders indexed values consistently in marks, labels, tooltip metadata, and zero line', () => {
+    const scene = getChartPlugin('indexed-line').compile(indexedTrendTable, { ...indexedTrendConfig, showValues: true, showZeroLine: true })
+    if (scene.migrationMode !== 'native') throw new Error('Expected native scene')
+    const option = renderScene(scene) as { series: Array<{ name: string; markLine?: unknown; data: Array<{ value?: number | null; displayValue?: string; label?: { formatter?: string } }> }> }
+    const series = option.series.find((item) => item.name === 'value')!
+    expect(series.data.map((point) => point.value)).toEqual([100, 150, null, 50])
+    expect(series.data[0]).toMatchObject({ displayValue: '100', label: { formatter: '100' } })
+    expect(series.markLine).toBeTruthy()
+  })
+
+  it('renders legend labels from the semantic guide without changing series identity', () => {
+    const scene = getChartPlugin('indexed-line').compile(indexedTrendTable, { ...indexedTrendConfig, showLegend: true, showDirectLabels: false, seriesStyles: { value: { legendLabel: 'Индекс' } } })
+    if (scene.migrationMode !== 'native') throw new Error('Expected native scene')
+    const option = renderScene(scene) as { legend: { formatter: (name: string) => string }; series: Array<{ name: string }> }
+    expect(option.series.some((series) => series.name === 'value')).toBe(true)
+    expect(option.legend.formatter('value')).toBe('Индекс')
+  })
+
   it('keeps semantic compilers free from renderer and ECharts imports', () => {
     const line = readFileSync(new URL('../../chart-types/line/compiler.ts', import.meta.url), 'utf8')
     const area = readFileSync(new URL('../../chart-types/area/compiler.ts', import.meta.url), 'utf8')
     expect(`${line}\n${area}`).not.toMatch(/echarts|renderLineAreaScene|buildOption/)
+    const renderer = readFileSync(new URL('./renderLineAreaScene.ts', import.meta.url), 'utf8')
+    expect(renderer).not.toMatch(/compatibilityConfig\.kind/)
   })
 
   it('keeps specialized line-like families explicitly legacy', () => {
-    for (const kind of ['indexed-line', 'seasonal-line', 'slope', 'range-line', 'step-range-line', 'confidence-line', 'moving-average-line', 'scatter', 'waterfall'] as const) expect(getChartPlugin(kind).compilerMode).toBe('legacy')
+    for (const kind of ['slope', 'range-line', 'step-range-line', 'confidence-line', 'moving-average-line', 'moving-average-scatter', 'scatter', 'waterfall'] as const) expect(getChartPlugin(kind).compilerMode).toBe('legacy')
   })
 })

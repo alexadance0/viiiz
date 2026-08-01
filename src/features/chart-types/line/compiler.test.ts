@@ -1,12 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { getChartPlugin } from '../../../core/chartRegistry'
 import { lineAreaFixtures } from '../../../test-fixtures/charts/lineArea'
+import { indexedTrendConfig, indexedTrendTable, seasonalTrendConfig, seasonalTrendTable } from '../../../test-fixtures/charts/specializedTrends'
+import { resolveNativeCartesianScene } from '../bar/layout'
 import { compileNativeLineScene, NATIVE_LINE_KINDS } from './compiler'
 import { compileNativeAreaScene, NATIVE_AREA_KINDS } from '../area/compiler'
 
+const specialized = (kind: 'indexed-line' | 'seasonal-line') => {
+  const source = lineAreaFixtures[10]
+  if (kind === 'indexed-line') return { table: source.table, config: { ...source.config, kind, indexBaseXValue: `date:${(source.table.rows[0].period as Date).toISOString()}` } }
+  const table = { ...source.table, rows: [...source.table.rows, ...source.table.rows.map((row) => ({ ...row, period: new Date((row.period as Date).getFullYear() + 1, (row.period as Date).getMonth(), 1) }))] }
+  return { table, config: { ...source.config, kind, seasonalAccentYears: ['2026'] } }
+}
+
 describe('native line and area compilers', () => {
   it.each(NATIVE_LINE_KINDS)('%s produces a semantic line plot', (kind) => {
-    const source = lineAreaFixtures[0], scene = compileNativeLineScene(source.table, { ...source.config, kind })
+    const source = kind === 'indexed-line' || kind === 'seasonal-line' ? specialized(kind) : { table: lineAreaFixtures[0].table, config: { ...lineAreaFixtures[0].config, kind } }
+    const scene = compileNativeLineScene(source.table, source.config)
     expect(getChartPlugin(kind).compilerMode).toBe('native')
     expect(scene.plot).toMatchObject({ kind: 'line', categoryPlacement: 'point' })
     expect(scene.plot.series[0].points[0]).toMatchObject({ type: 'point', legacyKey: expect.any(String), datumId: expect.any(String) })
@@ -36,9 +46,112 @@ describe('native line and area compilers', () => {
     expect(normalized.plot.valueDomain).toMatchObject({ min: -100, max: 100, step: 20 })
   })
 
+  it('indexes prepared values without changing ordinary Line identities or source data', () => {
+    const snapshot = structuredClone(indexedTrendTable)
+    const indexed = compileNativeLineScene(indexedTrendTable, indexedTrendConfig)
+    const ordinary = compileNativeLineScene(indexedTrendTable, { ...indexedTrendConfig, kind: 'line' })
+    expect(indexed.plot.series[0].points.map((point) => point.value)).toEqual([100, 150, null, 50])
+    expect(indexed.plot.series[1].points.map((point) => point.value)).toEqual([100, 50, -0, 200])
+    expect(indexed.plot.series.map((series) => series.id)).toEqual(ordinary.plot.series.map((series) => series.id))
+    expect(indexed.plot.series.flatMap((series) => series.points.map((point) => [point.id, point.datumId, point.legacyKey]))).toEqual(ordinary.plot.series.flatMap((series) => series.points.map((point) => [point.id, point.datumId, point.legacyKey])))
+    expect(indexedTrendTable).toEqual(snapshot)
+  })
+
+  it('selects an indexed date base by stable identity when rendered labels are ambiguous', () => {
+    const table = { name: 'ambiguous dates', columns: ['date', 'value'], rows: [{ date: new Date(2023, 0, 1), value: 10 }, { date: new Date(2024, 0, 1), value: 20 }] }
+    const scene = compileNativeLineScene(table, { ...indexedTrendConfig, yFields: ['value'], dateLabelFormat: 'month-only-ru', indexBaseXValue: `date:${(table.rows[1].date as Date).toISOString()}` })
+    expect(scene.plot.categories.map((category) => category.label)).toEqual(['янв.', 'янв.'])
+    expect(scene.plot.series[0].points.map((point) => point.value)).toEqual([50, 100])
+  })
+
+  it('keeps a zero-base series invalid without discarding valid sibling series', () => {
+    const table = { name: 'mixed bases', columns: ['period', 'zero', 'valid'], rows: [{ period: 'base', zero: 0, valid: 5 }, { period: 'after', zero: 10, valid: 10 }] }
+    const scene = compileNativeLineScene(table, { ...indexedTrendConfig, xField: 'period', yField: 'zero', yFields: ['zero', 'valid'], indexBaseXValue: 'string:base' })
+    expect(scene.plot.series[0].points.map((point) => point.value)).toEqual([null, null])
+    expect(scene.plot.series[1].points.map((point) => point.value)).toEqual([100, 200])
+  })
+
+  it('compiles Seasonal into deterministic month/year Line semantics and presentation', () => {
+    const scene = compileNativeLineScene(seasonalTrendTable, seasonalTrendConfig)
+    const direct = scene.guides.find((guide) => guide.kind === 'direct-series')!
+    expect(scene.plot).toMatchObject({ kind: 'line', categoryPlacement: 'point' })
+    expect(scene.plot.categories).toHaveLength(12)
+    expect(scene.plot.categories.map((category) => category.id)).toEqual(scene.plot.categories.map((_, month) => `synthetic:month:number%3A${month}`))
+    expect(scene.plot.series.map((series) => series.name)).toEqual(['2023', '2024'])
+    expect(scene.plot.series[0].points.slice(0, 3).map((point) => point.value)).toEqual([15, null, 30])
+    expect(scene.plot.series[0]).toMatchObject({ color: '#d9d7df', presentation: { emphasis: 'muted', opacity: .45 } })
+    expect(scene.plot.series[1]).toMatchObject({ color: seasonalTrendConfig.color, presentation: { emphasis: 'accent', opacity: 1, layerPriority: 1 } })
+    expect(direct).toMatchObject({ visible: true, side: 'right', items: [{ label: '2023', visible: false }, { label: '2024', visible: true }] })
+    expect(scene.plot.categories.map((category) => category.label).filter(Boolean)).toEqual(['янв.', 'февр.', 'мар.', 'апр.', 'май', 'июн.', 'июл.', 'авг.', 'сент.', 'окт.', 'нояб.', 'дек.'])
+  })
+
+  it('gives explicit seasonal colors precedence and measures only semantic direct items', () => {
+    const config = { ...seasonalTrendConfig, seriesStyles: { '2023': { color: '#123456' }, '2024': { legendLabel: 'Акцентный год', legendNote: 'Комментарий', directLabelText: { ...(seasonalTrendConfig.directLabelText ?? seasonalTrendConfig.legendText), size: 23 } } } }
+    const scene = compileNativeLineScene(seasonalTrendTable, config)
+    expect(scene.plot.series[0]).toMatchObject({ color: '#123456', presentation: { opacity: 1 } })
+    const direct = scene.guides.find((guide) => guide.kind === 'direct-series')!
+    expect(direct.items.filter((item) => item.visible)).toMatchObject([{ label: 'Акцентный год', note: 'Комментарий', style: { size: 23 } }])
+    expect(resolveNativeCartesianScene(scene).geometry.reservations['guide:direct-series']?.width).toBeGreaterThan(80)
+  })
+
+  it('keeps seasonal category and series IDs stable across presentation-only changes', () => {
+    const first = compileNativeLineScene(seasonalTrendTable, seasonalTrendConfig)
+    const second = compileNativeLineScene(seasonalTrendTable, { ...seasonalTrendConfig, canvasWidth: 720, xAxisPosition: 'top', yAxisPosition: 'right', showLegend: false, seasonalAccentYears: ['2023'], dateLabelFormat: 'iso' })
+    expect(second.plot.categories.map((category) => category.id)).toEqual(first.plot.categories.map((category) => category.id))
+    expect(second.plot.series.map((series) => series.id)).toEqual(first.plot.series.map((series) => series.id))
+    expect(second.plot.series.flatMap((series) => series.points.map((point) => point.datumId))).toEqual(first.plot.series.flatMap((series) => series.points.map((point) => point.datumId)))
+  })
+
+  it('applies seasonal month settings locally without mutating saved ordinary Line settings', () => {
+    const config = { ...seasonalTrendConfig, dateLabelFormat: 'iso' as const, dateAxisStepUnit: 'day' as const, dateAxisAnchor: '2023-01-15', xAxisMin: '2023-01-01', xAxisMax: '2024-12-31', xAxisStep: 3 }
+    const snapshot = structuredClone(config)
+    const seasonal = compileNativeLineScene(seasonalTrendTable, config)
+    expect(seasonal.plot.categories[0].label).toBe('янв.')
+    expect(config).toEqual(snapshot)
+    const ordinary = compileNativeLineScene(seasonalTrendTable, { ...config, kind: 'line' })
+    expect(ordinary.compatibilityConfig).toMatchObject({ dateLabelFormat: 'iso', dateAxisStepUnit: 'day', dateAxisAnchor: '2023-01-15', xAxisMin: '2023-01-01', xAxisMax: '2024-12-31', xAxisStep: 3 })
+  })
+
+  it('keeps the Cartesian rail origin invariant for ordinary, indexed, and seasonal Lines', () => {
+    const ordinary = resolveNativeCartesianScene(compileNativeLineScene(indexedTrendTable, { ...indexedTrendConfig, kind: 'line' }))
+    const indexed = resolveNativeCartesianScene(compileNativeLineScene(indexedTrendTable, indexedTrendConfig))
+    const seasonal = resolveNativeCartesianScene(compileNativeLineScene(seasonalTrendTable, seasonalTrendConfig))
+    expect(indexed.geometry.axes.value.x).toBe(ordinary.geometry.axes.value.x)
+    expect(seasonal.geometry.axes.value.x).toBe(seasonal.geometry.content.x)
+    expect(seasonal.geometry.reservations['axis:category-edge-left']).toBeUndefined()
+    expect(seasonal.geometry.reservations['axis:category-edge']).toBeUndefined()
+  })
+
+  it.each([
+    ['bottom', 'left'], ['top', 'left'], ['bottom', 'right'],
+  ] as const)('uses shared indexed geometry with X %s and Y %s', (xAxisPosition, yAxisPosition) => {
+    const first = indexedTrendTable.rows[0].date as Date
+    const config = { ...indexedTrendConfig, xAxisPosition, yAxisPosition, xAxisLabelRotate: 45 as const, yAxisMin: -50, yAxisMax: 250, categoryLabelOverrides: { x: { [first.toISOString()]: 'Long\nbase label' } } }
+    const scene = resolveNativeCartesianScene(compileNativeLineScene(indexedTrendTable, config))
+    expect(scene.plot.valueDomain).toMatchObject({ min: -50, max: 250 })
+    expect(scene.geometry.reservations['axis:category-edge-left']).toBeUndefined()
+    expect(scene.geometry.reservations['axis:category-edge']).toBeUndefined()
+    if (yAxisPosition === 'left') expect(scene.geometry.axes.value.x).toBe(scene.geometry.content.x)
+    else expect(scene.geometry.axes.value.x + scene.geometry.axes.value.width).toBe(scene.geometry.content.x + scene.geometry.content.width)
+  })
+
+  it('keeps ordinary Line direct identification fully semantic', () => {
+    const source = lineAreaFixtures[9]
+    const scene = compileNativeLineScene(source.table, { ...source.config, seriesStyles: { first: { showDirectLabel: false }, second: { legendLabel: 'Second label', legendNote: 'Note', showLegendLine: true } } })
+    expect(scene.guides.find((guide) => guide.kind === 'direct-series')).toMatchObject({ side: 'right', items: [
+      { label: 'first', visible: false }, { label: 'Second label', note: 'Note', visible: true, leaderLine: true },
+    ] })
+  })
+
+  it('keeps compiled specialized scenes free from ECharts option vocabulary', () => {
+    for (const scene of [compileNativeLineScene(indexedTrendTable, indexedTrendConfig), compileNativeLineScene(seasonalTrendTable, seasonalTrendConfig)]) {
+      expect(JSON.stringify(scene)).not.toMatch(/endLabel|labelLayout|smoothMonotone|zlevel|boundaryGap|connectNulls/)
+    }
+  })
+
   it('rejects every kind outside its explicit family boundary', () => {
     const source = lineAreaFixtures[0]
-    expect(() => compileNativeLineScene(source.table, { ...source.config, kind: 'indexed-line' })).toThrow(/cannot compile indexed-line/)
+    expect(() => compileNativeLineScene(source.table, { ...source.config, kind: 'slope' })).toThrow(/cannot compile slope/)
     expect(() => compileNativeAreaScene(source.table, { ...source.config, kind: 'confidence-line' })).toThrow(/cannot compile confidence-line/)
   })
 })

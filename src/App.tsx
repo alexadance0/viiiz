@@ -398,7 +398,7 @@ function App() {
     const plugin = chartModule?.getChartPlugin(kind)
     if (!plugin) return
     setConfig((value) => {
-      const targetXField = kind === 'seasonal-line' ? table.columns.find((column) => types[column] === 'date') ?? value.xField : value.xField
+      const targetXField = kind === 'seasonal-line' && types[value.xField] !== 'date' ? table.columns.find((column) => types[column] === 'date') ?? value.xField : value.xField
       const distributionKind = isDistributionKind(kind)
       const measures = distributionKind ? numericColumns : numericColumns.filter((column) => column !== targetXField)
       const preservedMeasures = compatibleMeasureSelection(value.yFields, measures, value.yField)

@@ -89,31 +89,37 @@ function segmentSeries(scene: ResolvedPointScene) {
 export function renderNativePointScene(scene: ResolvedPointScene): Record<string, unknown> {
   const config = scene.compatibilityConfig
   const legendGuide = scene.guides.find((guide) => guide.kind === 'categorical-legend')
+  const directGuide = scene.guides.find((guide) => guide.kind === 'direct-series')
+  const directItems = new Map(directGuide?.items.map((item) => [item.seriesId, item]) ?? [])
+  const seriesNames = new Map(scene.plot.series.map((item) => [item.id, item.name]))
+  const legendLabels = new Map(legendGuide?.items.map((item) => [seriesNames.get(item.seriesId) ?? item.seriesId, item.label]) ?? [])
   const legendRail = scene.geometry.reservations['guide:legend']
-  const directLeft = config.yAxisPosition === 'right'
+  const directLeft = directGuide?.side === 'left'
   const series = scene.plot.series.map((item, seriesIndex) => {
-    const style = config.seriesStyles[item.name]
     const firstIndex = item.points.findIndex((point) => point.value != null)
-    const showDirect = config.showDirectLabels && style?.showDirectLabel !== false
-    const directText = style?.legendNote ? `{name|${style.legendLabel?.trim() || item.name}}\n{note|${style.legendNote}}` : `{name|${style?.legendLabel?.trim() || item.name}}`
-    const directStyle = style?.directLabelText ?? config.directLabelText ?? config.legendText
-    const directLabel = { show: true, distance: config.directLabelGap ?? 14, formatter: directText, width: Math.max(80, scene.geometry.reservations['guide:direct-series']?.width ?? 120), overflow: 'break', ...textStyle(directStyle), color: item.color, rich: { name: { ...textStyle(directStyle), color: style?.directLabelText?.color ?? item.color }, note: { ...textStyle(directStyle), color: style?.directLabelText?.color ?? item.color, fontSize: Math.max(8, directStyle.size - 2), opacity: .75 } } }
+    const direct = directItems.get(item.id)
+    const showDirect = directGuide?.visible && direct?.visible
+    const directText = direct?.note ? `{name|${direct.label}}\n{note|${direct.note}}` : `{name|${direct?.label ?? item.name}}`
+    const directStyle = direct?.style ?? config.directLabelText ?? config.legendText
+    const directLabel = { show: true, distance: config.directLabelGap ?? 14, formatter: directText, width: Math.max(80, scene.geometry.reservations['guide:direct-series']?.width ?? 120), overflow: 'break', ...textStyle(directStyle), rich: { name: textStyle(directStyle), note: { ...textStyle(directStyle), fontSize: Math.max(8, directStyle.size - 2), opacity: .75 } } }
+    const defaultZ = 30 + (scene.plot.series.length - seriesIndex) * 10
+    const z = item.presentation?.emphasis === 'accent' ? 1000 + (item.presentation.layerPriority ?? seriesIndex) : defaultZ + (item.presentation?.layerPriority ?? 0)
     return {
-      id: item.id, name: item.name, type: 'line', stack: scene.plot.kind === 'area' && scene.plot.stacking !== 'none' ? 'total' : undefined, triggerEvent: true, clip: true, z: 30 + (scene.plot.series.length - seriesIndex) * 10,
+      id: item.id, name: item.name, type: 'line', stack: scene.plot.kind === 'area' && scene.plot.stacking !== 'none' ? 'total' : undefined, triggerEvent: true, clip: true, z,
       ...interpolationOption(item.interpolation), showSymbol: true, symbol: item.marker.shape, symbolSize: item.marker.size, connectNulls: item.missing === 'connect',
-      lineStyle: item.stroke, itemStyle: { color: item.marker.fill, borderColor: item.marker.stroke, borderWidth: item.marker.strokeWidth },
+      lineStyle: { ...item.stroke, opacity: item.presentation?.opacity ?? item.stroke.opacity }, itemStyle: { color: item.marker.fill, borderColor: item.marker.stroke, borderWidth: item.marker.strokeWidth },
       areaStyle: scene.plot.kind === 'area' ? scene.plot.series[seriesIndex].fill : undefined, emphasis: { scale: false },
       label: { show: config.showValues, position: config.valueLabelPosition === 'auto' || config.valueLabelPosition == null ? 'top' : config.valueLabelPosition, formatter: (params: { dataIndex?: number }) => params.dataIndex == null ? '' : item.points[params.dataIndex]?.label.text ?? '', ...textStyle(config.valueText) },
       markLine: seriesIndex === 0 && config.showZeroLine && config.yAxisScaleType !== 'log' ? { silent: true, symbol: 'none', data: [{ yAxis: 0 }], lineStyle: { color: config.zeroLineColor, width: config.zeroLineWidth, type: config.zeroLineType }, label: { show: false } } : undefined,
       endLabel: showDirect && !directLeft ? directLabel : undefined,
-      labelLine: showDirect ? { show: style?.showLegendLine ?? config.showDirectLabelLines ?? false, length: config.directLabelGap ?? 14, length2: 8, lineStyle: { color: item.color, width: config.directLabelLineWidth ?? 1, type: config.directLabelLineType ?? 'solid' } } : undefined,
+      labelLine: showDirect ? { show: direct?.leaderLine ?? false, length: config.directLabelGap ?? 14, length2: 8, lineStyle: { color: direct?.color ?? item.color, width: config.directLabelLineWidth ?? 1, type: config.directLabelLineType ?? 'solid' } } : undefined,
       labelLayout: showDirect ? { align: directLeft ? 'right' : 'left', moveOverlap: 'shiftY', hideOverlap: false } : { hideOverlap: config.valueLabelHideOverlap ?? false, moveOverlap: 'shiftY' },
       data: item.points.map((point, index) => {
         const pointLabel = { show: point.label.visible, formatter: point.label.text, position: point.label.position === 'auto' ? 'top' : point.label.position, ...textStyle(point.label.style) }
-        const direct = showDirect && directLeft && index === firstIndex
+        const directPoint = showDirect && directLeft && index === firstIndex
         return {
           value: point.value, name: scene.plot.categories[index]?.coordinate, elementId: point.id, datumId: point.datumId, seriesId: point.seriesId, elementKey: point.legacyKey, sourceSeriesName: item.name, displayValue: point.displayValue, displayCategory: point.displayCategory, displayColor: item.color,
-          symbol: point.marker.shape, symbolSize: point.marker.visible ? point.marker.size : 0, itemStyle: { color: point.marker.fill, borderColor: point.marker.stroke, borderWidth: point.marker.strokeWidth }, label: direct ? { ...directLabel, position: 'left', align: 'right' } : pointLabel, emphasis: { label: pointLabel }, directLegendLabel: direct,
+          symbol: point.marker.shape, symbolSize: point.marker.visible ? point.marker.size : 0, itemStyle: { color: point.marker.fill, borderColor: point.marker.stroke, borderWidth: point.marker.strokeWidth }, label: directPoint ? { ...directLabel, position: 'left', align: 'right' } : pointLabel, emphasis: { label: pointLabel }, directLegendLabel: directPoint,
         }
       }),
     }
@@ -127,7 +133,7 @@ export function renderNativePointScene(scene: ResolvedPointScene): Record<string
     animation: true, backgroundColor: scene.document.canvas.background, color: scene.plot.series.map((item) => item.color), textStyle: { fontFamily: scene.document.theme.fontFamily },
     title: { text: title?.text ?? '', subtext: subtitle?.text ?? '', left: scene.geometry.content.x, top: Math.max(0, scene.geometry.content.y - 8), textStyle: title ? textStyle(title.style) : undefined, subtextStyle: subtitle ? textStyle(subtitle.style) : undefined, itemGap: scene.document.composition.titleSubtitle, triggerEvent: true },
     tooltip: { trigger: 'axis', formatter: (input: unknown) => { const items = (Array.isArray(input) ? input : [input]) as Array<{ dataIndex?: number; seriesName?: string; value?: unknown; data?: { displayValue?: string; displayCategory?: string } }>; const visible = items.filter((entry) => entry.seriesName && !entry.seriesName.startsWith('__')); const index = visible[0]?.dataIndex ?? 0; return [`<b>${escapeHtml(visible[0]?.data?.displayCategory ?? scene.plot.series[0]?.points[index]?.displayCategory ?? '')}</b>`, ...visible.map((entry) => `${escapeHtml(entry.seriesName)}: <b>${escapeHtml(entry.data?.displayValue ?? formatYAxisNumber(entry.value as number, config))}</b>`)].join('<br/>') } },
-    legend: { show: legendGuide?.visible ?? false, data: scene.plot.series.map((item) => ({ name: item.name, icon: config.legendMarker === 'circle' ? 'circle' : config.legendMarker === 'diamond' ? 'diamond' : config.legendMarker === 'triangle' ? 'triangle' : config.legendMarker === 'square' ? 'rect' : 'path://M0 4H24V7H0Z', itemStyle: { color: item.color, borderWidth: 0 } })), orient: legendGuide?.kind === 'categorical-legend' && (legendGuide.position === 'left' || legendGuide.position === 'right') ? 'vertical' : 'horizontal', left: legendRail?.x ?? scene.geometry.content.x, top: legendRail?.y, right: legendGuide?.kind === 'categorical-legend' && legendGuide.position === 'right' ? canvas.width - (legendRail?.x ?? 0) - (legendRail?.width ?? 0) : undefined, itemWidth: 24, itemHeight: 10, itemGap: 18, textStyle: textStyle(config.legendText) },
+    legend: { show: legendGuide?.visible ?? false, data: scene.plot.series.map((item) => ({ name: item.name, icon: config.legendMarker === 'circle' ? 'circle' : config.legendMarker === 'diamond' ? 'diamond' : config.legendMarker === 'triangle' ? 'triangle' : config.legendMarker === 'square' ? 'rect' : 'path://M0 4H24V7H0Z', itemStyle: { color: item.color, borderWidth: 0 } })), formatter: (name: string) => legendLabels.get(name) ?? name, orient: legendGuide?.kind === 'categorical-legend' && (legendGuide.position === 'left' || legendGuide.position === 'right') ? 'vertical' : 'horizontal', left: legendRail?.x ?? scene.geometry.content.x, top: legendRail?.y, right: legendGuide?.kind === 'categorical-legend' && legendGuide.position === 'right' ? canvas.width - (legendRail?.x ?? 0) - (legendRail?.width ?? 0) : undefined, itemWidth: 24, itemHeight: 10, itemGap: 18, textStyle: textStyle(config.legendText) },
     grid: { left: plot.x, top: plot.y, right: canvas.width - plot.x - plot.width, bottom: canvas.height - plot.y - plot.height, containLabel: false },
     xAxis: categoryAxis(scene), yAxis: valueAxis(scene), series: [...series, ...segmentSeries(scene), ...hits, ...axisAffixSeries(scene)], graphic: [...verticalTitle, ...footer],
   }

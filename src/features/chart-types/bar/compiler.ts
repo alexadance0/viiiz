@@ -97,7 +97,11 @@ export function compileNativeBarScene(table: DataTable, sourceConfig: ChartConfi
   const valueAxis = axis({ id: 'value', channel: 'value', orientation: orientation === 'vertical' ? 'vertical' : 'horizontal', placement: { kind: 'side', side: valueSide }, line: { visible: config.showYAxisLine }, ticks: { visible: config.showYTicks, length: config.tickLength }, labels: { visible: config.showYAxisLabels ?? true, size: 0, gap: config.yAxisLabelGap ?? 8, style: valueStyle }, title: { visible: config.showYAxisTitle, text: config.yAxisTitle, size: 0, gap: config.yAxisTitleGap, style: valueTitleStyle } })
   const guides: GuideSpec[] = [
     { id: 'legend', kind: 'categorical-legend', visible: config.showLegend && !config.showDirectLabels, coordinateSpace: 'content', position: config.legendPosition ?? 'top', items: series.map((item) => ({ seriesId: item.id, label: config.seriesStyles[item.name]?.legendLabel?.trim() || item.name })) },
-    { id: 'direct-series', kind: 'direct-series', visible: Boolean(config.showDirectLabels), coordinateSpace: 'plot', side: orientation === 'vertical' && config.yAxisPosition === 'right' ? 'left' : 'right', style: config.directLabelText ?? config.legendText, leaderLines: config.showDirectLabelLines ?? false },
+    { id: 'direct-series', kind: 'direct-series', visible: Boolean(config.showDirectLabels), coordinateSpace: 'plot', side: orientation === 'vertical' && config.yAxisPosition === 'right' ? 'left' : 'right', items: series.map((item) => {
+      const style = config.seriesStyles[item.name]
+      const directStyle = style?.directLabelText ?? config.directLabelText ?? config.legendText
+      return { seriesId: item.id, label: style?.legendLabel?.trim() || item.name, note: style?.legendNote?.trim() || undefined, visible: Boolean(config.showDirectLabels) && style?.showDirectLabel !== false, style: { ...directStyle, color: style?.directLabelText?.color ?? item.color }, color: item.color, leaderLine: style?.showLegendLine ?? config.showDirectLabelLines ?? false }
+    }) },
   ]
   const elements: ChartElement[] = [
     ...series.flatMap((item) => item.marks.map((mark): ChartElement => ({ id: mark.id, role: 'mark', coordinateSpace: 'data', selectable: true, seriesId: mark.seriesId, datumId: mark.datumId, legacyKey: mark.legacyKey }))),

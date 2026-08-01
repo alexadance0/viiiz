@@ -1,4 +1,5 @@
 import { effectiveDateStepUnit, moveDateContextToVisibleLabels, planCategoryDateLabels } from '../../../core/chartDateAxis'
+import type { PreparedChartData, PreparedSeries } from '../../../core/chartData'
 import { niceNumericScale, orderedBounds, prepareVisibleChartData } from '../../../core/chartScale'
 import { formatChartNumber } from '../../../core/numberFormat'
 import { formatTimeValue } from '../../../core/timeFrequency'
@@ -10,7 +11,7 @@ import type { AreaSeriesScene, CartesianAreaPlotScene, CartesianLinePlotScene, C
 import type { AxisSpec } from '../../chart-layout/axisLayout'
 import type { GuideSpec } from '../../chart-layout/guides/types'
 
-export const NATIVE_LINE_KINDS = ['line', 'spline', 'step-line'] as const
+export const NATIVE_LINE_KINDS = ['line', 'spline', 'step-line', 'indexed-line', 'seasonal-line'] as const
 export const NATIVE_AREA_KINDS = ['area', 'stacked-area', 'normalized-stacked-area'] as const
 export type NativeLineKind = typeof NATIVE_LINE_KINDS[number]
 export type NativeAreaKind = typeof NATIVE_AREA_KINDS[number]
@@ -36,6 +37,16 @@ function sourceRowIndex(table: DataTable, config: ChartConfig, category: DataVal
 
 const interpolation = (kind: NativePointKind, config: ChartConfig) => kind === 'spline' ? 'spline' as const : kind === 'step-line' ? config.stepPosition === 'start' ? 'step-start' as const : 'step-end' as const : 'linear' as const
 const stacking = (kind: NativeAreaKind) => kind === 'normalized-stacked-area' ? 'normalized' as const : kind === 'stacked-area' ? 'stacked' as const : 'none' as const
+
+interface PreparedLinePolicy {
+  categoryId?: (value: DataValue, index: number) => string
+  datumId?: (series: PreparedSeries, categoryIndex: number) => string
+  color?: (series: PreparedSeries, index: number) => string
+  presentation?: (series: PreparedSeries, index: number) => LineSeriesScene['presentation']
+  directSide?: 'left' | 'right'
+  directRequested?: boolean
+  directVisible?: (series: PreparedSeries) => boolean
+}
 
 function categoryLabelPlan(values: DataValue[], labels: string[], config: ChartConfig) {
   const dateCategories = values.some((value) => value instanceof Date)
@@ -69,8 +80,7 @@ function categoryLabelPlan(values: DataValue[], labels: string[], config: ChartC
   return { labels: moveDateContextToVisibleLabels(labels, values, config.dateLabelFormat, displayed), interval, fontSize, rotation, hideOverlap: categoricalText || dateCategories ? false : config.xAxisStep == null && anchorIndex < 0, showMaxLabel: categoricalText || config.xAxisAffixScope != null && config.xAxisAffixScope !== 'all' ? true : undefined }
 }
 
-export function compileNativePointScene(table: DataTable, config: ChartConfig, kind: NativePointKind): NativeChartScene {
-  const prepared = prepareVisibleChartData(table, config)
+export function compilePreparedPointScene(table: DataTable, config: ChartConfig, kind: NativePointKind, prepared: PreparedChartData, policy: PreparedLinePolicy = {}): NativeChartScene {
   const initialLabels = planCategoryDateLabels(prepared.categories, table, config).map((label, index) => {
     const value = prepared.categories[index], key = coordinate(value, index)
     return config.categoryLabelOverrides?.x?.[key] ?? label
@@ -78,12 +88,12 @@ export function compileNativePointScene(table: DataTable, config: ChartConfig, k
   const planned = categoryLabelPlan(prepared.categories, initialLabels, config)
   const categories = prepared.categories.map((value, index) => {
     const key = coordinate(value, index)
-    return { id: syntheticDatumId('category', typed(value)), value, coordinate: key, label: planned.labels[index] ?? String(value ?? '') }
+    return { id: policy.categoryId?.(value, index) ?? syntheticDatumId('category', typed(value)), value, coordinate: key, label: planned.labels[index] ?? String(value ?? '') }
   })
   const area = isNativeAreaKind(kind)
   const series = prepared.series.map((source, seriesIndex): LineSeriesScene | AreaSeriesScene => {
     const id = seriesId(config.seriesField || 'measure', source.name)
-    const color = seriesColor(config, source.name, seriesIndex)
+    const color = policy.color?.(source, seriesIndex) ?? seriesColor(config, source.name, seriesIndex)
     const style = config.seriesStyles[source.name]
     const stroke = { color, width: style?.lineWidth ?? 3, type: style?.lineType ?? 'solid' as const, opacity: 1 }
     const marker = { visible: style?.showMarker ?? false, shape: style?.markerShape ?? 'circle' as const, size: style?.markerSize ?? 8, fill: style?.markerFill ?? '#ffffff', stroke: style?.markerBorder ?? color, strokeWidth: style?.markerBorderWidth ?? 2 }
@@ -92,7 +102,7 @@ export function compileNativePointScene(table: DataTable, config: ChartConfig, k
       const legacyKey = legacyPointElementKey(source.name, category)
       const override = config.elementStyles[legacyKey]
       const rowIndex = sourceRowIndex(table, config, category, source.name)
-      const datumId = config.aggregation === 'none' && rowIndex >= 0 ? rawDatumId(rowIndex, source.name) : aggregateDatumId(category, source.name)
+      const datumId = policy.datumId?.(source, categoryIndex) ?? (config.aggregation === 'none' && rowIndex >= 0 ? rawDatumId(rowIndex, source.name) : aggregateDatumId(category, source.name))
       return {
         type: 'point', id: markElementId(id, datumId), datumId, seriesId: id, legacyKey, category, categoryIndex, value,
         displayCategory: formatTimeValue(category, table.timeProfiles?.[config.xField], config.dateLabelFormat),
@@ -108,7 +118,7 @@ export function compileNativePointScene(table: DataTable, config: ChartConfig, k
         label: { visible: override?.showLabel ?? config.showValues, text: override?.label || formatChartNumber(value, config), style: override?.valueText ?? config.valueText, position: config.valueLabelPosition ?? 'auto' },
       }
     })
-    if (area) return { id, name: source.name, color, visible: true, interpolation: 'linear', missing: config.missingMode, stroke, marker, points, fill: { color, opacity: style?.fillOpacity ?? config.areaFillOpacity ?? .32 } }
+    if (area) return { id, name: source.name, color, visible: true, interpolation: 'linear', missing: config.missingMode, stroke, marker, points, fill: { color, opacity: style?.fillOpacity ?? config.areaFillOpacity ?? .32 }, presentation: policy.presentation?.(source, seriesIndex) }
     const valid = points.flatMap((point, index) => point.value == null ? [] : [index])
     const segments: LineSegmentScene[] = valid.slice(1).flatMap((right, pairIndex) => {
       if (kind === 'spline') return []
@@ -122,7 +132,7 @@ export function compileNativePointScene(table: DataTable, config: ChartConfig, k
       const segmentDatum = syntheticDatumId('segment', `${points[left].datumId}:${points[right].datumId}`)
       return [{ id: markElementId(id, segmentDatum), from: points[left].datumId, to: points[right].datumId, fromIndex: left, toIndex: right, stroke: { color: candidate.color ?? stroke.color, width: candidate.lineWidth ?? stroke.width, type: candidate.lineType ?? stroke.type, opacity: 1 } }]
     })
-    return { id, name: source.name, color, visible: true, interpolation: interpolation(kind, config), missing: config.missingMode, stroke: { ...stroke, opacity: segments.length ? 0 : 1 }, marker, points, segments }
+    return { id, name: source.name, color, visible: true, interpolation: interpolation(kind, config), missing: config.missingMode, stroke: { ...stroke, opacity: segments.length ? 0 : 1 }, marker, points, segments, presentation: policy.presentation?.(source, seriesIndex) }
   })
   const stack = area ? stacking(kind as NativeAreaKind) : 'none'
   const scaleValues = stack === 'none' ? series.flatMap((item) => item.points.map((point) => point.value)) : categories.flatMap((_, categoryIndex) => {
@@ -142,9 +152,15 @@ export function compileNativePointScene(table: DataTable, config: ChartConfig, k
   const categoryStyle = config.xAxisLabelText ?? config.axisLabelText, valueStyle = config.yAxisLabelText ?? config.axisLabelText
   const categoryAxis = axis({ id: 'category', channel: 'category', orientation: 'horizontal', placement: { kind: 'side', side: config.xAxisPosition }, line: { visible: config.showXAxisLine }, ticks: { visible: config.showXTicks, length: config.tickLength }, labels: { visible: config.showXAxisLabels ?? true, size: 0, gap: config.xAxisLabelGap ?? 8, rotation: planned.rotation, style: { ...categoryStyle, size: planned.fontSize } }, title: { visible: config.showXAxisTitle, text: config.xAxisTitle, size: 0, gap: config.xAxisTitleGap, style: config.xAxisTitleText ?? config.axisTitleText } })
   const valueAxis = axis({ id: 'value', channel: 'value', orientation: 'vertical', placement: { kind: 'side', side: config.yAxisPosition }, line: { visible: config.showYAxisLine }, ticks: { visible: config.showYTicks, length: config.tickLength }, labels: { visible: config.showYAxisLabels ?? true, size: 0, gap: config.yAxisLabelGap ?? 8, style: valueStyle }, title: { visible: config.showYAxisTitle, text: config.yAxisTitle, size: 0, gap: config.yAxisTitleGap, style: config.yAxisTitleText ?? config.axisTitleText } })
+  const directRequested = policy.directRequested ?? Boolean(config.showDirectLabels)
+  const directItems = series.map((item, index) => {
+    const style = config.seriesStyles[item.name]
+    const directStyle = style?.directLabelText ?? config.directLabelText ?? config.legendText
+    return { seriesId: item.id, label: style?.legendLabel?.trim() || item.name, note: style?.legendNote?.trim() || undefined, visible: style?.showDirectLabel !== false && (policy.directVisible?.(prepared.series[index]) ?? Boolean(config.showDirectLabels)), style: { ...directStyle, color: style?.directLabelText?.color ?? item.color }, color: item.color, leaderLine: style?.showLegendLine ?? config.showDirectLabelLines ?? false }
+  })
   const guides: GuideSpec[] = [
-    { id: 'legend', kind: 'categorical-legend', visible: config.showLegend && !config.showDirectLabels, coordinateSpace: 'content', position: config.legendPosition ?? 'top', items: series.map((item) => ({ seriesId: item.id, label: config.seriesStyles[item.name]?.legendLabel?.trim() || item.name })) },
-    { id: 'direct-series', kind: 'direct-series', visible: Boolean(config.showDirectLabels), coordinateSpace: 'plot', side: config.yAxisPosition === 'right' ? 'left' : 'right', style: config.directLabelText ?? config.legendText, leaderLines: config.showDirectLabelLines ?? false },
+    { id: 'legend', kind: 'categorical-legend', visible: config.showLegend && !directRequested, coordinateSpace: 'content', position: config.legendPosition ?? 'top', items: series.map((item) => ({ seriesId: item.id, label: config.seriesStyles[item.name]?.legendLabel?.trim() || item.name })) },
+    { id: 'direct-series', kind: 'direct-series', visible: directItems.some((item) => item.visible), coordinateSpace: 'plot', side: policy.directSide ?? (config.yAxisPosition === 'right' ? 'left' : 'right'), items: directItems },
   ]
   const elements: ChartElement[] = [
     ...series.flatMap((item) => item.points.map((point): ChartElement => ({ id: point.id, role: 'mark', coordinateSpace: 'data', selectable: true, seriesId: point.seriesId, datumId: point.datumId, legacyKey: point.legacyKey }))),
@@ -160,7 +176,27 @@ export function compileNativePointScene(table: DataTable, config: ChartConfig, k
   return { migrationMode: 'native', document: chartDocumentFromLegacy(table, config), compatibilityConfig: config, elements, guides, frameElements, plot }
 }
 
+export function compileNativePointScene(table: DataTable, config: ChartConfig, kind: NativePointKind): NativeChartScene {
+  return compilePreparedPointScene(table, config, kind, prepareVisibleChartData(table, config))
+}
+
 export function compileNativeLineScene(table: DataTable, config: ChartConfig): NativeLineChartScene {
   if (!isNativeLineKind(config.kind)) throw new Error(`Native line compiler cannot compile ${config.kind}.`)
+  if (config.kind === 'seasonal-line') {
+    const effective = { ...config, dateLabelFormat: 'month-only-ru' as const, dateAxisStepUnit: 'month' as const, dateAxisAnchor: undefined, xAxisMin: '', xAxisMax: '', xAxisStep: 1 }
+    const accents = new Set(config.seasonalAccentYears ?? [])
+    const prepared = prepareVisibleChartData(table, effective)
+    return compilePreparedPointScene(table, effective, config.kind, prepared, {
+      categoryId: (_value, month) => syntheticDatumId('month', month),
+      datumId: (source, month) => aggregateDatumId(month, source.name),
+      color: (source) => config.seriesStyles[source.name]?.color ?? (accents.has(source.name) ? config.color : config.seasonalMutedColor ?? '#d9d7df'),
+      presentation: (source, index) => accents.has(source.name)
+        ? { emphasis: 'accent', opacity: 1, layerPriority: index }
+        : { emphasis: 'muted', opacity: config.seriesStyles[source.name]?.color == null ? config.seasonalMutedOpacity ?? .45 : 1 },
+      directSide: 'right',
+      directRequested: Boolean(config.showDirectLabels) || accents.size > 0,
+      directVisible: (source) => Boolean(config.showDirectLabels) || accents.has(source.name),
+    }) as NativeLineChartScene
+  }
   return compileNativePointScene(table, config, config.kind) as NativeLineChartScene
 }

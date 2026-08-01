@@ -2053,6 +2053,19 @@ describe('chart composition alignment', () => {
     expect(seasonalOption.grid.right).toBeGreaterThan(30)
   })
 
+  it('preserves specialized trend validation errors at the plugin boundary', () => {
+    const dated: DataTable = { name: 'dated', columns: ['date', 'value'], rows: [{ date: new Date(2024, 0, 1), value: 0 }, { date: new Date(2024, 1, 1), value: null }] }
+    const indexed = { ...base('indexed-line'), xField: 'date', yField: 'value', yFields: ['value'] }
+    expect(getChartPlugin('indexed-line').validate(dated, indexed).errors).toContainEqual({ field: 'indexBaseXValue', message: 'Выберите базовую дату для индекса.' })
+    expect(getChartPlugin('indexed-line').validate(dated, { ...indexed, indexBaseXValue: 'date:invalid' }).errors).toContainEqual({ field: 'indexBaseXValue', message: 'Выберите базовую дату для индекса.' })
+    expect(getChartPlugin('indexed-line').validate(dated, { ...indexed, indexBaseXValue: `date:${(dated.rows[0].date as Date).toISOString()}` }).errors).toContainEqual({ field: 'indexBaseXValue', message: 'В базовую дату должно быть ненулевое значение.' })
+
+    const categorical: DataTable = { name: 'categorical', columns: ['period', 'value'], rows: [{ period: 'A', value: 1 }, { period: 'B', value: 2 }] }
+    const seasonal = { ...base('seasonal-line'), xField: 'period', yField: 'value', yFields: ['value'] }
+    expect(getChartPlugin('seasonal-line').validate(categorical, seasonal).errors).toContainEqual({ field: 'xField', message: 'Для сравнения по годам выберите колонку с датами.' })
+    expect(getChartPlugin('seasonal-line').validate(dated, { ...seasonal, xField: 'date' }).errors).toContainEqual({ field: 'xField', message: 'Для сравнения нужны данные минимум за два года.' })
+  })
+
   it('builds moving averages for every selected series', () => {
     expect(movingAverage([1, 2, 3, 4, null, 6], 3)).toEqual([null, null, 2, 3, null, null])
     const smoothTable: DataTable = { name: 'smooth', columns: ['period', 'a', 'b'], rows: [1, 2, 3, 4].map((period) => ({ period, a: period, b: period * 10 })) }

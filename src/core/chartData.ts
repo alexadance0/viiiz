@@ -56,18 +56,32 @@ const aggregate = (values: number[], operation: ChartConfig['aggregation']): num
   return values[0]
 }
 
-export function prepareChartData(table: DataTable, config: ChartConfig): PreparedChartData {
-  if (config.kind === 'seasonal-line') {
-    const valueField = config.yFields[0] ?? config.yField
-    const datedRows = table.rows.flatMap((row) => row[config.xField] instanceof Date ? [{ row, date: row[config.xField] as Date }] : [])
-    const years = [...new Set(datedRows.map(({ date }) => date.getFullYear()))].sort((left, right) => left - right)
-    const values = new Map(years.map((year) => [year, Array.from({ length: 12 }, () => [] as number[])]))
-    datedRows.forEach(({ row, date }) => { const value = row[valueField]; if (typeof value === 'number' && Number.isFinite(value)) values.get(date.getFullYear())![date.getMonth()].push(value) })
-    const categories = Array.from({ length: 12 }, (_, month) => new Date(2000, month, 1))
-    const series = years.map((year) => ({ name: String(year), data: values.get(year)!.map((monthValues) => aggregate(monthValues, config.aggregation)) }))
-    if (config.missingMode === 'zero') series.forEach((item) => { item.data = item.data.map((value) => value ?? 0) })
-    return { categories, series }
+export function prepareSeasonalChartData(table: DataTable, config: ChartConfig): PreparedChartData {
+  const valueField = config.yFields[0] ?? config.yField
+  const datedRows = table.rows.flatMap((row) => row[config.xField] instanceof Date ? [{ row, date: row[config.xField] as Date }] : [])
+  const years = [...new Set(datedRows.map(({ date }) => date.getFullYear()))].sort((left, right) => left - right)
+  const values = new Map(years.map((year) => [year, Array.from({ length: 12 }, () => [] as number[])]))
+  datedRows.forEach(({ row, date }) => { const value = row[valueField]; if (typeof value === 'number' && Number.isFinite(value)) values.get(date.getFullYear())![date.getMonth()].push(value) })
+  const categories = Array.from({ length: 12 }, (_, month) => new Date(2000, month, 1))
+  const series = years.map((year) => ({ name: String(year), data: values.get(year)!.map((monthValues) => aggregate(monthValues, config.aggregation)) }))
+  return { categories, series: config.missingMode === 'zero' ? series.map((item) => ({ ...item, data: item.data.map((value) => value ?? 0) })) : series }
+}
+
+export function indexSeriesToBase(prepared: PreparedChartData, baseKey: string): PreparedChartData {
+  const baseIndex = prepared.categories.map(chartDataValueKey).indexOf(baseKey)
+  return {
+    categories: [...prepared.categories],
+    series: prepared.series.map((item) => {
+      const base = item.data[baseIndex]
+      return { ...item, data: typeof base === 'number' && Number.isFinite(base) && base !== 0
+        ? item.data.map((value) => typeof value === 'number' && Number.isFinite(value) ? value / base * 100 : null)
+        : item.data.map(() => null) }
+    }),
   }
+}
+
+export function prepareChartData(table: DataTable, config: ChartConfig): PreparedChartData {
+  if (config.kind === 'seasonal-line') return prepareSeasonalChartData(table, config)
   const categoryMap = new Map<string, DataValue>()
   table.rows.forEach((row) => categoryMap.set(chartDataValueKey(row[config.xField]), row[config.xField]))
   const categories = [...categoryMap.values()].sort((left, right) => {
@@ -104,14 +118,6 @@ export function prepareChartData(table: DataTable, config: ChartConfig): Prepare
     })
   }
   if (config.missingMode === 'zero') series.forEach((item) => { item.data = item.data.map((value) => value ?? 0) })
-  if (config.kind === 'indexed-line') {
-    const baseIndex = categoryKeys.indexOf(config.indexBaseXValue ?? '')
-    series.forEach((item) => {
-      const base = item.data[baseIndex]
-      item.data = typeof base === 'number' && Number.isFinite(base) && base !== 0
-        ? item.data.map((value) => typeof value === 'number' && Number.isFinite(value) ? value / base * 100 : null)
-        : item.data.map(() => null)
-    })
-  }
-  return { categories, series }
+  const prepared = { categories, series }
+  return config.kind === 'indexed-line' ? indexSeriesToBase(prepared, config.indexBaseXValue ?? '') : prepared
 }

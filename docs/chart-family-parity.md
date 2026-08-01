@@ -1,6 +1,6 @@
 # Chart family parity matrix
 
-Phase 3 baseline: `ab264f5d7a69a466935b25873d68c8e1379a7113`.
+Phase 4 implementation baseline: `ee59a994f4bac379129487214e744ad198e999b9`.
 
 | Kind | Family | Compiler | Layout | Interaction | Export | Legacy `buildOption` reachable? |
 |---|---|---|---|---|---|---|
@@ -13,6 +13,8 @@ Phase 3 baseline: `ab264f5d7a69a466935b25873d68c8e1379a7113`.
 | line | line | native | shared native Cartesian frame/axes | native point metadata → callback adapter | existing SVG/PNG boundary | no |
 | spline | line | native | shared native Cartesian frame/axes | native point metadata → callback adapter | existing SVG/PNG boundary | no |
 | step-line | line | native | shared native Cartesian frame/axes | native point metadata → callback adapter | existing SVG/PNG boundary | no |
+| indexed-line | specialized line transform | native | shared native Cartesian frame/axes | native point metadata → callback adapter | existing SVG/PNG boundary | no |
+| seasonal-line | specialized line transform | native | shared native Cartesian frame/axes | native point/year metadata → callback adapter | existing SVG/PNG boundary | no |
 | area | area | native | shared native Cartesian frame/axes | native point metadata → callback adapter | existing SVG/PNG boundary | no |
 | stacked-area | area | native | shared native Cartesian frame/axes | native point metadata → callback adapter | existing SVG/PNG boundary | no |
 | normalized-stacked-area | area | native | shared native Cartesian frame/axes | native point metadata → callback adapter | existing SVG/PNG boundary | no |
@@ -20,7 +22,7 @@ Phase 3 baseline: `ab264f5d7a69a466935b25873d68c8e1379a7113`.
 | butterfly | butterfly | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | lollipop / horizontal-lollipop | lollipop | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | dumbbell | dumbbell | legacy | legacy/hybrid | legacy | existing legacy path | yes |
-| indexed-line / seasonal-line / slope | specialized line | legacy | legacy/hybrid | legacy | existing legacy path | yes |
+| slope | specialized line | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | range-line / step-range-line / confidence-line | interval | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | moving-average-line / moving-average-scatter | smoothing | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | scatter / bubble / distribution | corresponding semantic family | legacy | legacy/hybrid | legacy | existing legacy path | yes |
@@ -41,3 +43,14 @@ Parity is enforced at three layers:
 Reusable fixtures in `src/test-fixtures/charts/lineArea.ts` cover gap/zero/connect missing values, linear/spline/step interpolation, markers, point and segment overrides, direct labels on both sides, date axes, log/manual domains, plain/stacked/normalized areas, fill opacity, axis-side/grid combinations, and multiline frame text.
 
 The semantic compiler records point placement, interpolation, missing-value policy, stroke/marker/fill intent, stable point IDs, and the precomputed category-label plan. The renderer dispatches on `plot.kind`; throwing-builder tests prove that migrated kinds cannot fall back to the legacy cartesian builder.
+
+## Specialized trend characterization coverage
+
+Deterministic fixtures in `src/test-fixtures/charts/specializedTrends.ts` cover positive/negative/zero/missing index bases, multiple series, duplicate rendered date labels, monthly aggregation, missing months, accent/muted presentation, explicit color precedence, per-series direct labels, axis-side geometry, and SVG/PNG exports.
+
+The transform pipelines are explicit and source-preserving:
+
+```text
+indexed: raw table → filtering/sorting/aggregation → percent/missing policy → index-to-base → semantic Line scene
+seasonal: raw dated rows → year/month buckets → monthly aggregation → missing policy → semantic Line scene
+```

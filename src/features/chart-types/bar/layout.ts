@@ -47,8 +47,9 @@ export function resolveNativeCartesianScene(scene: NativeChartScene): ResolvedSc
   const initial = resolveFrame({ canvas: scene.document.canvas, spacing: scene.document.composition })
   const categoryAxis = measuredAxis(scene, scene.plot.categoryAxis, initial.plot)
   let valueAxis = measuredAxis(scene, scene.plot.valueAxis, initial.plot)
-  if (orientation(scene) === 'horizontal' && config.showDirectLabels && valueAxis.placement.kind === 'side' && valueAxis.placement.side === 'top') {
-    const directHeight = Math.max(...scene.plot.series.map((item) => lineHeight(config.seriesStyles[item.name]?.directLabelText ?? config.directLabelText ?? config.legendText)))
+  const directGuide = scene.guides.find((guide) => guide.kind === 'direct-series')
+  if (orientation(scene) === 'horizontal' && directGuide?.visible && valueAxis.placement.kind === 'side' && valueAxis.placement.side === 'top') {
+    const directHeight = Math.max(...directGuide.items.filter((item) => item.visible).map((item) => lineHeight(item.style)))
     valueAxis = { ...valueAxis, labels: { ...valueAxis.labels, gap: valueAxis.labels.gap + directHeight + scene.document.composition.directLabelPlot } }
   }
   const reservations: LayoutReservation[] = []
@@ -73,15 +74,15 @@ export function resolveNativeCartesianScene(scene: NativeChartScene): ResolvedSc
       const reservation = guideReservation(guide, size, scene.document.composition.legendPlot, 20)
       if (reservation) reservations.push(reservation)
     } else if (guide.kind === 'direct-series') {
+      const items = guide.items.filter((item) => item.visible)
+      if (!items.length) continue
       if (orientation(scene) === 'horizontal') {
-        const height = Math.max(...scene.plot.series.map((item) => {
-          const style = config.seriesStyles[item.name]?.directLabelText ?? guide.style
-          const note = config.seriesStyles[item.name]?.legendNote?.trim()
-          return lineHeight(style) + (note ? Math.max(8, style.size - 2) * 1.25 + 3 : 0)
+        const height = Math.max(...items.map((item) => {
+          return lineHeight(item.style) + (item.note ? Math.max(8, item.style.size - 2) * 1.25 + 3 : 0)
         }))
         reservations.push({ id: `guide:${guide.id}`, side: 'top', size: Math.ceil(height), gap: scene.document.composition.directLabelPlot, mode: 'outside', priority: 60 })
       } else {
-        const width = Math.min(initial.content.width * .32, Math.max(80, ...scene.plot.series.map((item) => measureTextWidth(config.seriesStyles[item.name]?.legendLabel?.trim() || item.name, guide.style.size, guide.style.fontFamily, guide.style.weight))) + scene.document.composition.directLabelPlot)
+        const width = Math.min(initial.content.width * .32, Math.max(80, ...items.flatMap((item) => [item.label, item.note ?? ''].flatMap((text) => text.split('\n').map((line) => measureTextWidth(line, item.style.size, item.style.fontFamily, item.style.weight))))) + scene.document.composition.directLabelPlot)
         const reservation = guideReservation(guide, width, 0, 30)
         if (reservation) reservations.push(reservation)
       }
