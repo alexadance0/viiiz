@@ -1,6 +1,7 @@
 import { planCategoryDateLabels } from '../../../core/chartDateAxis'
 import { prepareVisibleChartData, niceNumericScale, orderedBounds } from '../../../core/chartScale'
 import { formatChartNumber } from '../../../core/numberFormat'
+import { seriesLegendItemId } from '../../../core/legend'
 import { formatTimeValue } from '../../../core/timeFrequency'
 import type { ChartConfig, ChartKind, DataTable, DataValue } from '../../../core/types'
 import { chartDocumentFromLegacy } from '../../../entities/chart/model/legacyChartConfigAdapter'
@@ -96,7 +97,7 @@ export function compileNativeBarScene(table: DataTable, sourceConfig: ChartConfi
   const categoryAxis = axis({ id: 'category', channel: 'category', orientation: orientation === 'vertical' ? 'horizontal' : 'vertical', placement: { kind: 'side', side: categorySide }, line: { visible: config.showXAxisLine }, ticks: { visible: config.showXTicks, length: config.tickLength }, labels: { visible: config.showXAxisLabels ?? true, size: 0, gap: config.xAxisLabelGap ?? 8, rotation: orientation === 'vertical' && typeof config.xAxisLabelRotate === 'number' ? config.xAxisLabelRotate : 0, style: categoryStyle }, title: { visible: config.showXAxisTitle, text: config.xAxisTitle, size: 0, gap: config.xAxisTitleGap, style: categoryTitleStyle } })
   const valueAxis = axis({ id: 'value', channel: 'value', orientation: orientation === 'vertical' ? 'vertical' : 'horizontal', placement: { kind: 'side', side: valueSide }, line: { visible: config.showYAxisLine }, ticks: { visible: config.showYTicks, length: config.tickLength }, labels: { visible: config.showYAxisLabels ?? true, size: 0, gap: config.yAxisLabelGap ?? 8, style: valueStyle }, title: { visible: config.showYAxisTitle, text: config.yAxisTitle, size: 0, gap: config.yAxisTitleGap, style: valueTitleStyle } })
   const guides: GuideSpec[] = [
-    { id: 'legend', kind: 'categorical-legend', visible: config.showLegend && !config.showDirectLabels, coordinateSpace: 'content', position: config.legendPosition ?? 'top', items: series.map((item) => ({ seriesId: item.id, label: config.seriesStyles[item.name]?.legendLabel?.trim() || item.name })) },
+    { id: 'legend', kind: 'categorical-legend', visible: config.showLegend && !config.showDirectLabels && series.some((item) => config.seriesStyles[item.name]?.showLegendItem !== false), coordinateSpace: 'content', position: config.legendPosition ?? 'top', items: series.map((item) => ({ id: seriesLegendItemId(item.id), label: config.seriesStyles[item.name]?.legendLabel?.trim() || item.name, visible: config.seriesStyles[item.name]?.showLegendItem ?? true, color: item.color, target: { kind: 'series' as const, seriesId: item.id } })) },
     { id: 'direct-series', kind: 'direct-series', visible: Boolean(config.showDirectLabels), coordinateSpace: 'plot', side: orientation === 'vertical' && config.yAxisPosition === 'right' ? 'left' : 'right', items: series.map((item) => {
       const style = config.seriesStyles[item.name]
       const directStyle = style?.directLabelText ?? config.directLabelText ?? config.legendText

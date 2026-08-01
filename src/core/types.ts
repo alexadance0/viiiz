@@ -82,6 +82,7 @@ export interface ChartSeriesStyle extends MarkerStyle {
   lineWidth?: number
   lineType?: 'solid' | 'dashed' | 'dotted'
   legendLabel?: string
+  showLegendItem?: boolean
   legendNote?: string
   showDirectLabel?: boolean
   directLabelText?: ChartTextStyle
@@ -96,6 +97,7 @@ export interface ChartSeriesStyle extends MarkerStyle {
   distributionSummaryWidth?: number
   distributionSummaryLength?: number
 }
+export interface LegendItemOverride { label?: string; visible?: boolean }
 export interface ChartElementSelection { key: string; seriesName: string; category: string; value: string; label?: string; color?: string; target?: 'element' | 'value-label' | 'category-label'; axis?: 'x' | 'y' }
 export interface ChartSeriesSelection { name: string; color: string }
 export interface AnnotationFragment { id: string; text: string; color: string; bold: boolean; italic: boolean; underline?: boolean; backgroundColor?: string }
@@ -414,6 +416,7 @@ export interface ChartConfig {
   axisTitleMode?: 'standard' | 'editorial'
   showLegend: boolean
   legendPosition?: 'top' | 'bottom' | 'left' | 'right'
+  legendItemOverrides?: Record<string, LegendItemOverride>
   showDirectLabels?: boolean
   directLabelText?: ChartTextStyle
   directLabelGap?: number

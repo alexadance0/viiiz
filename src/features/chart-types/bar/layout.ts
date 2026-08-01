@@ -66,7 +66,8 @@ export function resolveNativeCartesianScene(scene: NativeChartScene): ResolvedSc
   for (const guide of scene.guides) {
     if (guide.kind === 'categorical-legend') {
       const side = guide.position
-      const itemWidths = guide.items.map((item) => measureTextWidth(item.label, config.legendText.size, config.legendText.fontFamily, config.legendText.weight) + 38)
+      const itemWidths = guide.items.filter((item) => item.visible).map((item) => measureTextWidth(item.label, config.legendText.size, config.legendText.fontFamily, config.legendText.weight) + 38)
+      if (!itemWidths.length) continue
       const available = side === 'top' || side === 'bottom' ? initial.content.width : initial.content.height
       let rows = 1, occupied = 0
       itemWidths.forEach((width) => { if (occupied && occupied + width > available) { rows += 1; occupied = width } else occupied += width })

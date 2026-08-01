@@ -3,6 +3,13 @@ import type { CoordinateSpace } from '../geometry'
 import type { LayoutReservation } from '../reservations'
 
 interface GuideBase { id: string; visible: boolean; coordinateSpace: CoordinateSpace }
+export interface CategoricalLegendItem {
+  id: string
+  label: string
+  visible: boolean
+  color: string
+  target: { kind: 'series'; seriesId: string } | { kind: 'group'; seriesIds: string[] }
+}
 export interface DirectSeriesGuideItem {
   seriesId: string
   label: string
@@ -13,7 +20,7 @@ export interface DirectSeriesGuideItem {
   leaderLine: boolean
 }
 export type GuideSpec =
-  | GuideBase & { kind: 'categorical-legend'; position: 'top' | 'right' | 'bottom' | 'left'; items: Array<{ seriesId: string; label: string }> }
+  | GuideBase & { kind: 'categorical-legend'; position: 'top' | 'right' | 'bottom' | 'left'; items: CategoricalLegendItem[] }
   | GuideBase & { kind: 'direct-series'; side: 'left' | 'right'; items: DirectSeriesGuideItem[] }
   | GuideBase & { kind: 'color-scale'; position: 'top' | 'right' | 'bottom' | 'left'; minimum: number; maximum: number; colors: string[] }
   | GuideBase & { kind: 'size-scale'; position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'; minimum: number; maximum: number }

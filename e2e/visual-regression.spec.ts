@@ -34,6 +34,49 @@ const openSettings = async (page: Page, name: string) => {
   if (!(await summary.evaluate((element) => (element.parentElement as HTMLDetailsElement).open))) await summary.click()
 }
 
+test('Seasonal legend semantics stay visually stable', async ({ page }) => {
+  await page.goto('/editor')
+  await page.getByRole('button', { name: 'Временной ряд', exact: true }).click()
+  await page.getByRole('button', { name: /Выбрать график/ }).click()
+  await page.getByLabel('Период / ось X').selectOption('month')
+  await page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Сравнение по годам$/ }) }).click()
+  await waitForLayout(page)
+  await openDesign(page)
+  await openSettings(page, 'Легенда')
+
+  const canvas = page.locator('.chart-canvas-shell')
+  await page.getByText('Без легенды', { exact: true }).click()
+  await expect(canvas).toHaveScreenshot('seasonal-none-accent.png')
+
+  await page.getByText('Обычная', { exact: true }).click()
+  await expect(page.locator('.chart-canvas svg text').filter({ hasText: /^Остальные$/ })).toBeVisible()
+  await expect(canvas).toHaveScreenshot('seasonal-standard-one-accent.png')
+
+  await openSettings(page, 'Сравнение по годам')
+  await setCheckbox(page.locator('.line-variant-settings').getByRole('checkbox', { name: '2023', exact: true }), true)
+  await expect(canvas).toHaveScreenshot('seasonal-standard-two-accents.png')
+
+  await openSettings(page, 'Легенда')
+  const standardCards = page.locator('.legend-settings .legend-options:not(.direct-legend-options) .series-label-card')
+  await standardCards.last().getByLabel('Подпись').fill('Предыдущие периоды')
+  await expect(page.locator('.chart-canvas svg text').filter({ hasText: /^Предыдущие периоды$/ })).toBeVisible()
+  await expect(canvas).toHaveScreenshot('seasonal-standard-renamed-others.png')
+
+  await setCheckbox(standardCards.last().getByRole('checkbox'), false)
+  await expect(page.locator('.chart-canvas svg text').filter({ hasText: /^Предыдущие периоды$/ })).toHaveCount(0)
+  await expect(canvas).toHaveScreenshot('seasonal-standard-hidden-others.png')
+
+  await openSettings(page, 'Сравнение по годам')
+  await setCheckbox(page.locator('.line-variant-settings').getByRole('checkbox', { name: '2023', exact: true }), false)
+  await openSettings(page, 'Легенда')
+  await page.getByText('Справа у рядов', { exact: true }).click()
+  await expect(canvas).toHaveScreenshot('seasonal-direct-accent.png')
+
+  const directCards = page.locator('.direct-legend-options .series-label-card')
+  await setCheckbox(directCards.filter({ has: page.getByRole('checkbox', { name: '2023', exact: true }) }).getByRole('checkbox'), true)
+  await expect(canvas).toHaveScreenshot('seasonal-direct-custom-series.png')
+})
+
 test('critical chart-label layouts stay visually stable', async ({ page }) => {
   await openDemoChart(page, 'Топ стран', 'Столбцы')
   await setCheckbox(page.getByRole('checkbox', { name: 'place', exact: true }), true)

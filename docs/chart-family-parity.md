@@ -54,3 +54,7 @@ The transform pipelines are explicit and source-preserving:
 indexed: raw table → filtering/sorting/aggregation → percent/missing policy → index-to-base → semantic Line scene
 seasonal: raw dated rows → year/month buckets → monthly aggregation → missing policy → semantic Line scene
 ```
+
+Seasonal emphasis and identification are independent: `Seasonal accent ≠ legend mode`. With no legend, accent changes only stroke presentation. The standard Seasonal legend contains individual accent-year items plus one semantic `Остальные` group for ordinary muted non-accent years; a non-accent year with an explicit color remains an individual truthful item. Direct mode uses the shared direct-series guide, defaults accent years on and non-accent years off, and respects explicit per-series overrides.
+
+`Остальные` has a stable legend-item ID and computed year membership, but is never added to plot data as a fake series. Its label and visibility use the same persisted legend overrides, reset, undo/redo, preview, and SVG/PNG path as ordinary legend items.

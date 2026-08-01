@@ -2048,9 +2048,13 @@ describe('chart composition alignment', () => {
     const seasonalOption = getChartPlugin('seasonal-line').buildOption(seasonalTable, seasonalConfig) as { grid: { right: number }; series: Array<{ name: string; z?: number; lineStyle?: { color?: string; opacity?: number }; endLabel?: { show?: boolean; formatter?: string } }> }
     expect(seasonalOption.series.find((series) => series.name === '2023')!.lineStyle).toMatchObject({ color: '#d9d7df', opacity: .45 })
     expect(seasonalOption.series.find((series) => series.name === '2024')!.lineStyle).toMatchObject({ color: seasonalConfig.color, opacity: 1 })
-    expect(seasonalOption.series.find((series) => series.name === '2024')).toMatchObject({ z: 1001, endLabel: { show: true, formatter: '{name|2024}' } })
+    expect(seasonalOption.series.find((series) => series.name === '2024')).toMatchObject({ z: 1001 })
+    expect(seasonalOption.series.find((series) => series.name === '2024')!.endLabel).toBeUndefined()
     expect(seasonalOption.series.find((series) => series.name === '2023')!.endLabel).toBeUndefined()
-    expect(seasonalOption.grid.right).toBeGreaterThan(30)
+    const directOption = getChartPlugin('seasonal-line').buildOption(seasonalTable, { ...seasonalConfig, showDirectLabels: true }) as typeof seasonalOption
+    expect(directOption.series.find((series) => series.name === '2024')!.endLabel).toMatchObject({ show: true, formatter: '{name|2024}' })
+    expect(directOption.series.find((series) => series.name === '2023')!.endLabel).toBeUndefined()
+    expect(directOption.grid.right).toBeGreaterThan(seasonalOption.grid.right)
   })
 
   it('preserves specialized trend validation errors at the plugin boundary', () => {

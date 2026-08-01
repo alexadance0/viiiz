@@ -94,7 +94,7 @@ describe('native ECharts line and area adapter', () => {
   })
 
   it('renders Seasonal presentation and direct identification from semantic fields', () => {
-    const scene = getChartPlugin('seasonal-line').compile(seasonalTrendTable, seasonalTrendConfig)
+    const scene = getChartPlugin('seasonal-line').compile(seasonalTrendTable, { ...seasonalTrendConfig, showLegend: false, showDirectLabels: true })
     if (scene.migrationMode !== 'native') throw new Error('Expected native scene')
     const option = renderScene(scene) as { series: Array<{ name: string; z?: number; lineStyle?: { color?: string; opacity?: number }; endLabel?: { formatter?: string } }> }
     expect(option.series.find((series) => series.name === '2023')).toMatchObject({ lineStyle: { color: '#d9d7df', opacity: .45 } })
@@ -120,12 +120,31 @@ describe('native ECharts line and area adapter', () => {
     expect(option.legend.formatter('value')).toBe('Индекс')
   })
 
+  it('renders a generic categorical group item without a fake series or Seasonal config', () => {
+    const scene = getChartPlugin('indexed-line').compile(indexedTrendTable, { ...indexedTrendConfig, showLegend: true, showDirectLabels: false })
+    if (scene.migrationMode !== 'native') throw new Error('Expected native scene')
+    const guide = scene.guides.find((item) => item.kind === 'categorical-legend')!
+    guide.items = [{ id: 'legend:group:test', label: 'Группа', visible: true, color: '#778899', target: { kind: 'group', seriesIds: [scene.plot.series[0].id] } }]
+    const option = renderScene(scene) as { legend: { data: Array<{ name: string }> }; graphic: Array<{ id?: string; children?: Array<{ style?: { fill?: string; text?: string } }> }>; series: Array<{ name: string }> }
+    expect(option.legend.data).toEqual([])
+    expect(option.graphic).toContainEqual(expect.objectContaining({
+      id: 'categorical-legend:legend:group:test',
+      children: expect.arrayContaining([
+        expect.objectContaining({ style: expect.objectContaining({ stroke: '#778899' }) }),
+        expect.objectContaining({ style: expect.objectContaining({ text: 'Группа' }) }),
+      ]),
+    }))
+    expect(option.series.some((series) => series.name === 'Группа' || series.name === 'legend:group:test')).toBe(false)
+  })
+
   it('keeps semantic compilers free from renderer and ECharts imports', () => {
     const line = readFileSync(new URL('../../chart-types/line/compiler.ts', import.meta.url), 'utf8')
     const area = readFileSync(new URL('../../chart-types/area/compiler.ts', import.meta.url), 'utf8')
     expect(`${line}\n${area}`).not.toMatch(/echarts|renderLineAreaScene|buildOption/)
     const renderer = readFileSync(new URL('./renderLineAreaScene.ts', import.meta.url), 'utf8')
-    expect(renderer).not.toMatch(/compatibilityConfig\.kind/)
+    expect(renderer).not.toMatch(/compatibilityConfig\.kind|seasonalAccentYears|seasonal-line/)
+    const layout = readFileSync(new URL('../../chart-types/bar/layout.ts', import.meta.url), 'utf8')
+    expect(layout).not.toMatch(/seasonalAccentYears|seasonal-line/)
   })
 
   it('keeps specialized line-like families explicitly legacy', () => {

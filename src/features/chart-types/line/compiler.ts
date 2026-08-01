@@ -2,6 +2,7 @@ import { effectiveDateStepUnit, moveDateContextToVisibleLabels, planCategoryDate
 import type { PreparedChartData, PreparedSeries } from '../../../core/chartData'
 import { niceNumericScale, orderedBounds, prepareVisibleChartData } from '../../../core/chartScale'
 import { formatChartNumber } from '../../../core/numberFormat'
+import { SEASONAL_OTHERS_LEGEND_ITEM_ID, SEASONAL_OTHERS_LEGEND_LABEL, seriesLegendItemId } from '../../../core/legend'
 import { formatTimeValue } from '../../../core/timeFrequency'
 import { isoWeekParts } from '../../../core/timeFrequency'
 import type { ChartConfig, ChartKind, DataTable, DataValue } from '../../../core/types'
@@ -9,7 +10,7 @@ import { chartDocumentFromLegacy } from '../../../entities/chart/model/legacyCha
 import { aggregateDatumId, markElementId, rawDatumId, seriesId, syntheticDatumId, type ChartElement } from '../../../entities/chart/model/ChartElement'
 import type { AreaSeriesScene, CartesianAreaPlotScene, CartesianLinePlotScene, CartesianPointScene, LineSegmentScene, LineSeriesScene, NativeChartScene, NativeLineChartScene } from '../../../entities/chart/model/ChartScene'
 import type { AxisSpec } from '../../chart-layout/axisLayout'
-import type { GuideSpec } from '../../chart-layout/guides/types'
+import type { CategoricalLegendItem, GuideSpec } from '../../chart-layout/guides/types'
 
 export const NATIVE_LINE_KINDS = ['line', 'spline', 'step-line', 'indexed-line', 'seasonal-line'] as const
 export const NATIVE_AREA_KINDS = ['area', 'stacked-area', 'normalized-stacked-area'] as const
@@ -46,6 +47,7 @@ interface PreparedLinePolicy {
   directSide?: 'left' | 'right'
   directRequested?: boolean
   directVisible?: (series: PreparedSeries) => boolean
+  legendItems?: (series: Array<LineSeriesScene | AreaSeriesScene>) => CategoricalLegendItem[]
 }
 
 function categoryLabelPlan(values: DataValue[], labels: string[], config: ChartConfig) {
@@ -156,10 +158,11 @@ export function compilePreparedPointScene(table: DataTable, config: ChartConfig,
   const directItems = series.map((item, index) => {
     const style = config.seriesStyles[item.name]
     const directStyle = style?.directLabelText ?? config.directLabelText ?? config.legendText
-    return { seriesId: item.id, label: style?.legendLabel?.trim() || item.name, note: style?.legendNote?.trim() || undefined, visible: style?.showDirectLabel !== false && (policy.directVisible?.(prepared.series[index]) ?? Boolean(config.showDirectLabels)), style: { ...directStyle, color: style?.directLabelText?.color ?? item.color }, color: item.color, leaderLine: style?.showLegendLine ?? config.showDirectLabelLines ?? false }
+    return { seriesId: item.id, label: style?.legendLabel?.trim() || item.name, note: style?.legendNote?.trim() || undefined, visible: directRequested && (style?.showDirectLabel ?? policy.directVisible?.(prepared.series[index]) ?? true), style: { ...directStyle, color: style?.directLabelText?.color ?? item.color }, color: item.color, leaderLine: style?.showLegendLine ?? config.showDirectLabelLines ?? false }
   })
+  const legendItems = policy.legendItems?.(series) ?? series.map((item): CategoricalLegendItem => ({ id: seriesLegendItemId(item.id), label: config.seriesStyles[item.name]?.legendLabel?.trim() || item.name, visible: config.seriesStyles[item.name]?.showLegendItem ?? true, color: item.color, target: { kind: 'series', seriesId: item.id } }))
   const guides: GuideSpec[] = [
-    { id: 'legend', kind: 'categorical-legend', visible: config.showLegend && !directRequested, coordinateSpace: 'content', position: config.legendPosition ?? 'top', items: series.map((item) => ({ seriesId: item.id, label: config.seriesStyles[item.name]?.legendLabel?.trim() || item.name })) },
+    { id: 'legend', kind: 'categorical-legend', visible: Boolean(config.showLegend && !directRequested && legendItems.some((item) => item.visible)), coordinateSpace: 'content', position: config.legendPosition ?? 'top', items: legendItems },
     { id: 'direct-series', kind: 'direct-series', visible: directItems.some((item) => item.visible), coordinateSpace: 'plot', side: policy.directSide ?? (config.yAxisPosition === 'right' ? 'left' : 'right'), items: directItems },
   ]
   const elements: ChartElement[] = [
@@ -194,8 +197,18 @@ export function compileNativeLineScene(table: DataTable, config: ChartConfig): N
         ? { emphasis: 'accent', opacity: 1, layerPriority: index }
         : { emphasis: 'muted', opacity: config.seriesStyles[source.name]?.color == null ? config.seasonalMutedOpacity ?? .45 : 1 },
       directSide: 'right',
-      directRequested: Boolean(config.showDirectLabels) || accents.size > 0,
-      directVisible: (source) => Boolean(config.showDirectLabels) || accents.has(source.name),
+      directRequested: Boolean(config.showDirectLabels),
+      directVisible: (source) => accents.has(source.name),
+      legendItems: (compiledSeries) => {
+        const individual = [...compiledSeries.filter((item) => accents.has(item.name)), ...compiledSeries.filter((item) => !accents.has(item.name) && config.seriesStyles[item.name]?.color != null)]
+        const grouped = compiledSeries.filter((item) => !accents.has(item.name) && config.seriesStyles[item.name]?.color == null)
+        const items: CategoricalLegendItem[] = individual.map((item) => ({ id: seriesLegendItemId(item.id), label: config.seriesStyles[item.name]?.legendLabel?.trim() || item.name, visible: config.seriesStyles[item.name]?.showLegendItem ?? true, color: item.color, target: { kind: 'series', seriesId: item.id } }))
+        if (grouped.length) {
+          const override = config.legendItemOverrides?.[SEASONAL_OTHERS_LEGEND_ITEM_ID]
+          items.push({ id: SEASONAL_OTHERS_LEGEND_ITEM_ID, label: override?.label?.trim() || SEASONAL_OTHERS_LEGEND_LABEL, visible: override?.visible ?? true, color: grouped[0].color, target: { kind: 'group', seriesIds: grouped.map((item) => item.id) } })
+        }
+        return items
+      },
     }) as NativeLineChartScene
   }
   return compileNativePointScene(table, config, config.kind) as NativeLineChartScene

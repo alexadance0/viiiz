@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getChartPlugin } from '../../../core/chartRegistry'
 import { lineAreaFixtures } from '../../../test-fixtures/charts/lineArea'
 import { indexedTrendConfig, indexedTrendTable, seasonalTrendConfig, seasonalTrendTable } from '../../../test-fixtures/charts/specializedTrends'
+import { SEASONAL_OTHERS_LEGEND_ITEM_ID } from '../../../core/legend'
 import { resolveNativeCartesianScene } from '../bar/layout'
 import { compileNativeLineScene, NATIVE_LINE_KINDS } from './compiler'
 import { compileNativeAreaScene, NATIVE_AREA_KINDS } from '../area/compiler'
@@ -12,6 +13,7 @@ const specialized = (kind: 'indexed-line' | 'seasonal-line') => {
   const table = { ...source.table, rows: [...source.table.rows, ...source.table.rows.map((row) => ({ ...row, period: new Date((row.period as Date).getFullYear() + 1, (row.period as Date).getMonth(), 1) }))] }
   return { table, config: { ...source.config, kind, seasonalAccentYears: ['2026'] } }
 }
+const seasonalThreeYearTable = { ...seasonalTrendTable, rows: [{ date: new Date(2022, 0, 1), value: 8 }, { date: new Date(2022, 1, 1), value: 12 }, ...seasonalTrendTable.rows] }
 
 describe('native line and area compilers', () => {
   it.each(NATIVE_LINE_KINDS)('%s produces a semantic line plot', (kind) => {
@@ -74,6 +76,7 @@ describe('native line and area compilers', () => {
   it('compiles Seasonal into deterministic month/year Line semantics and presentation', () => {
     const scene = compileNativeLineScene(seasonalTrendTable, seasonalTrendConfig)
     const direct = scene.guides.find((guide) => guide.kind === 'direct-series')!
+    const legend = scene.guides.find((guide) => guide.kind === 'categorical-legend')!
     expect(scene.plot).toMatchObject({ kind: 'line', categoryPlacement: 'point' })
     expect(scene.plot.categories).toHaveLength(12)
     expect(scene.plot.categories.map((category) => category.id)).toEqual(scene.plot.categories.map((_, month) => `synthetic:month:number%3A${month}`))
@@ -81,17 +84,79 @@ describe('native line and area compilers', () => {
     expect(scene.plot.series[0].points.slice(0, 3).map((point) => point.value)).toEqual([15, null, 30])
     expect(scene.plot.series[0]).toMatchObject({ color: '#d9d7df', presentation: { emphasis: 'muted', opacity: .45 } })
     expect(scene.plot.series[1]).toMatchObject({ color: seasonalTrendConfig.color, presentation: { emphasis: 'accent', opacity: 1, layerPriority: 1 } })
-    expect(direct).toMatchObject({ visible: true, side: 'right', items: [{ label: '2023', visible: false }, { label: '2024', visible: true }] })
+    expect(direct).toMatchObject({ visible: false, side: 'right', items: [{ label: '2023', visible: false }, { label: '2024', visible: false }] })
+    expect(legend).toMatchObject({ visible: true, items: [
+      { label: '2024', color: seasonalTrendConfig.color, target: { kind: 'series' } },
+      { id: SEASONAL_OTHERS_LEGEND_ITEM_ID, label: 'Остальные', color: '#d9d7df', target: { kind: 'group', seriesIds: [scene.plot.series[0].id] } },
+    ] })
     expect(scene.plot.categories.map((category) => category.label).filter(Boolean)).toEqual(['янв.', 'февр.', 'мар.', 'апр.', 'май', 'июн.', 'июл.', 'авг.', 'сент.', 'окт.', 'нояб.', 'дек.'])
   })
 
   it('gives explicit seasonal colors precedence and measures only semantic direct items', () => {
-    const config = { ...seasonalTrendConfig, seriesStyles: { '2023': { color: '#123456' }, '2024': { legendLabel: 'Акцентный год', legendNote: 'Комментарий', directLabelText: { ...(seasonalTrendConfig.directLabelText ?? seasonalTrendConfig.legendText), size: 23 } } } }
+    const config = { ...seasonalTrendConfig, showLegend: false, showDirectLabels: true, seriesStyles: { '2023': { color: '#123456' }, '2024': { legendLabel: 'Акцентный год', legendNote: 'Комментарий', directLabelText: { ...(seasonalTrendConfig.directLabelText ?? seasonalTrendConfig.legendText), size: 23 } } } }
     const scene = compileNativeLineScene(seasonalTrendTable, config)
     expect(scene.plot.series[0]).toMatchObject({ color: '#123456', presentation: { opacity: 1 } })
     const direct = scene.guides.find((guide) => guide.kind === 'direct-series')!
     expect(direct.items.filter((item) => item.visible)).toMatchObject([{ label: 'Акцентный год', note: 'Комментарий', style: { size: 23 } }])
     expect(resolveNativeCartesianScene(scene).geometry.reservations['guide:direct-series']?.width).toBeGreaterThan(80)
+  })
+
+  it('keeps accent visual-only when legend mode is none', () => {
+    const none = { ...seasonalTrendConfig, showLegend: false, showDirectLabels: false }
+    const muted = compileNativeLineScene(seasonalTrendTable, { ...none, seasonalAccentYears: [] })
+    const accent = compileNativeLineScene(seasonalTrendTable, none)
+    expect(accent.guides.find((guide) => guide.kind === 'categorical-legend')?.visible).toBe(false)
+    expect(accent.guides.find((guide) => guide.kind === 'direct-series')?.visible).toBe(false)
+    expect(resolveNativeCartesianScene(accent).geometry.plot).toEqual(resolveNativeCartesianScene(muted).geometry.plot)
+    expect(accent.plot.series[1].presentation?.emphasis).toBe('accent')
+  })
+
+  it('builds deterministic Seasonal standard legend groups for one, many, all, or no accents', () => {
+    const labels = (seasonalAccentYears: string[]) => {
+      const scene = compileNativeLineScene(seasonalThreeYearTable, { ...seasonalTrendConfig, seasonalAccentYears })
+      return scene.guides.find((guide) => guide.kind === 'categorical-legend')!.items.map((item) => item.label)
+    }
+    expect(labels(['2024'])).toEqual(['2024', 'Остальные'])
+    expect(labels(['2023', '2024'])).toEqual(['2023', '2024', 'Остальные'])
+    expect(labels(['2022', '2023', '2024'])).toEqual(['2022', '2023', '2024'])
+    expect(labels([])).toEqual(['Остальные'])
+  })
+
+  it('persists stable ordinary legend edits without changing plot series', () => {
+    const config = { ...seasonalTrendConfig, legendItemOverrides: { [SEASONAL_OTHERS_LEGEND_ITEM_ID]: { label: 'Предыдущие годы', visible: false } }, seriesStyles: { '2024': { legendLabel: 'Текущий год', showLegendItem: false } } }
+    const first = compileNativeLineScene(seasonalThreeYearTable, config)
+    const changedAccent = compileNativeLineScene(seasonalThreeYearTable, { ...config, seasonalAccentYears: ['2023', '2024'] })
+    const replaced = compileNativeLineScene({ ...seasonalThreeYearTable, rows: seasonalThreeYearTable.rows.filter((row) => (row.date as Date).getFullYear() !== 2022).concat([{ date: new Date(2025, 0, 1), value: 50 }]) }, config)
+    for (const scene of [first, changedAccent, replaced]) {
+      const others = scene.guides.find((guide) => guide.kind === 'categorical-legend')!.items.find((item) => item.id === SEASONAL_OTHERS_LEGEND_ITEM_ID)
+      expect(others).toMatchObject({ id: SEASONAL_OTHERS_LEGEND_ITEM_ID, label: 'Предыдущие годы', visible: false, target: { kind: 'group' } })
+      expect(scene.plot.series.every((series) => series.name !== 'Остальные' && series.name !== 'Предыдущие годы')).toBe(true)
+    }
+    expect(first.guides.find((guide) => guide.kind === 'categorical-legend')!.items[0]).toMatchObject({ label: 'Текущий год', visible: false })
+  })
+
+  it('keeps custom non-accent identities truthful in the standard legend', () => {
+    const scene = compileNativeLineScene(seasonalThreeYearTable, { ...seasonalTrendConfig, seasonalMutedColor: '#bababa', seriesStyles: { '2022': { color: '#cc0000' } } })
+    const items = scene.guides.find((guide) => guide.kind === 'categorical-legend')!.items
+    expect(items.map((item) => [item.label, item.color])).toEqual([['2024', seasonalTrendConfig.color], ['2022', '#cc0000'], ['Остальные', '#bababa']])
+    expect(items.at(-1)?.target).toMatchObject({ kind: 'group', seriesIds: [scene.plot.series.find((series) => series.name === '2023')!.id] })
+  })
+
+  it('uses accent defaults and explicit overrides only when direct mode is selected', () => {
+    const direct = (seriesStyles: typeof seasonalTrendConfig.seriesStyles = {}) => compileNativeLineScene(seasonalThreeYearTable, { ...seasonalTrendConfig, showLegend: false, showDirectLabels: true, seriesStyles }).guides.find((guide) => guide.kind === 'direct-series')!
+    expect(direct().items.map((item) => [item.label, item.visible])).toEqual([['2022', false], ['2023', false], ['2024', true]])
+    expect(direct({ '2022': { showDirectLabel: true }, '2024': { showDirectLabel: false } }).items.map((item) => [item.label, item.visible])).toEqual([['2022', true], ['2023', false], ['2024', false]])
+    const noAccents = compileNativeLineScene(seasonalThreeYearTable, { ...seasonalTrendConfig, showLegend: false, showDirectLabels: true, seasonalAccentYears: [] }).guides.find((guide) => guide.kind === 'direct-series')!
+    expect(noAccents.visible).toBe(false)
+  })
+
+  it.each(['top', 'right', 'bottom', 'left'] as const)('measures visible standard legend items at %s without a direct rail', (legendPosition) => {
+    const scene = compileNativeLineScene(seasonalThreeYearTable, { ...seasonalTrendConfig, legendPosition, canvasWidth: 460, canvasHeight: 720, legendItemOverrides: { [SEASONAL_OTHERS_LEGEND_ITEM_ID]: { label: 'Очень длинная подпись предыдущих лет' } }, seriesStyles: { '2024': { legendLabel: 'Очень длинная подпись текущего года' } } })
+    const resolved = resolveNativeCartesianScene(scene)
+    expect(resolved.geometry.reservations['guide:legend']).toBeTruthy()
+    expect(resolved.geometry.reservations['guide:direct-series']).toBeUndefined()
+    expect(resolved.geometry.plot.width).toBeGreaterThan(0)
+    expect(resolved.geometry.plot.height).toBeGreaterThan(0)
   })
 
   it('keeps seasonal category and series IDs stable across presentation-only changes', () => {

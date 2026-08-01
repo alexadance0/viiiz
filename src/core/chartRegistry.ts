@@ -253,7 +253,7 @@ const commonOption = (table: DataTable, config: ChartConfig, prepared = prepareV
   const yAxisSpace = config.showYAxisTitle && config.yAxisTitle ? yAxisTitleHeight + config.yAxisTitleGap + (config.yAxisLabelGap ?? 0) : 0
   const legendPosition = config.legendPosition ?? 'top'
   const visibleDirectSeries = prepared.series.filter((series) => config.seriesStyles[series.name]?.showDirectLabel !== false)
-  const directLabels = config.kind !== 'scatter' && visibleDirectSeries.length > 0 && (Boolean(config.showDirectLabels) || config.kind === 'seasonal-line' && Boolean(config.seasonalAccentYears?.length))
+  const directLabels = config.kind !== 'scatter' && visibleDirectSeries.length > 0 && Boolean(config.showDirectLabels)
   const directLabelsLeft = directLabels && config.kind !== 'seasonal-line' && !isHorizontalBarChart(config.kind) && config.barOrientation !== 'horizontal' && config.yAxisPosition === 'right'
   const standardLegend = config.showLegend && !directLabels
   const sideLegend = standardLegend && (legendPosition === 'left' || legendPosition === 'right')
@@ -427,7 +427,7 @@ const cartesian = (id: Exclude<ChartConfig['kind'], 'scatter' | 'bubble' | 'dumb
     const prepared = id === 'butterfly' ? prepareButterflyChartData(table, config) : prepareVisibleChartData(table, config)
     const butterflyLeftFields = new Set(config.butterflyLeftFields?.length ? config.butterflyLeftFields : config.yFields.slice(0, 1))
     const displayValue = (value: number | null) => formatChartNumber(id === 'butterfly' && value != null ? Math.abs(value) : value, config)
-    const directLabels = Boolean(config.showDirectLabels) || id === 'seasonal-line' && Boolean(config.seasonalAccentYears?.length)
+    const directLabels = Boolean(config.showDirectLabels)
     const directLabelsLeft = directLabels && id !== 'seasonal-line' && config.barOrientation !== 'horizontal' && config.yAxisPosition === 'right'
     const directWidth = directLabelWidth(config, prepared.series)
     const hasLineOverrides = new Set(!isBarChart(id) && !area && id !== 'spline' ? prepared.series.flatMap((series) => prepared.categories.some((category) => {
@@ -439,7 +439,7 @@ const cartesian = (id: Exclude<ChartConfig['kind'], 'scatter' | 'bubble' | 'dumb
       const seasonal = id === 'seasonal-line'
       const accentYears = config.seasonalAccentYears ?? []
       const accented = accentYears.includes(series.name)
-      const showSeriesDirectLabel = style?.showDirectLabel !== false && (Boolean(config.showDirectLabels) || seasonal && accented)
+      const showSeriesDirectLabel = Boolean(config.showDirectLabels) && (style?.showDirectLabel ?? (!seasonal || accented))
       const color = getSeriesColor(config, series.name, seriesIndex)
       const lineOpacity = seasonal && !accented && style?.color == null ? config.seasonalMutedOpacity ?? .45 : 1
       const layerZ = seasonal && accented ? 1000 + seriesIndex : 30 + (prepared.series.length - seriesIndex) * 10

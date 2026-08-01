@@ -1122,7 +1122,9 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const plugin = getChartPlugin(config.kind)
       const validation = plugin.validate(table, renderConfig)
       if (!validation.ok) throw new Error(validation.errors.map((error) => error.message).join(' '))
-      const option = renderScene(plugin.compile(table, renderConfig)) as Record<string, unknown> & { graphic?: unknown[] }
+      const compiledScene = plugin.compile(table, renderConfig)
+      const rendererOwnsDirectLabels = compiledScene.migrationMode === 'native' && compiledScene.plot.kind !== 'bar'
+      const option = renderScene(compiledScene) as Record<string, unknown> & { graphic?: unknown[] }
       const nativeLayoutSnapshot = plugin.compilerMode === 'native' ? cloneChartOption({ grid: option.grid, xAxis: option.xAxis, yAxis: option.yAxis, legend: option.legend }) : null
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       const firstTreemapLayout = config.kind === 'treemap' && (treemapLayout.current?.table !== table || treemapLayout.current.config !== config)
@@ -1336,7 +1338,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         grid = option.grid as typeof grid
         physicalXAxisOption = option.xAxis as typeof physicalXAxisOption
       }
-      suppressBuiltInDirectLabels(option, config)
+      if (!rendererOwnsDirectLabels) suppressBuiltInDirectLabels(option, config)
       const cleanOption = cloneChartOption(option)
       applySeriesVisualState(option, table, config, selectedSeriesName, selectedElementKey, hoveredSeriesName)
       for (const axisKey of ['xAxis', 'yAxis'] as const) {
@@ -1602,7 +1604,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         cleanOption.graphic = [...withoutGeneratedGraphics(cleanOption.graphic), ...cleanEditorial]
       }
       if (exactBounds || barGrid.length || exactDisplayDecorations.length) instance.setOption({ graphic: option.graphic }, { replaceMerge: ['graphic'] })
-      if (config.showDirectLabels) {
+      if (config.showDirectLabels && !rendererOwnsDirectLabels) {
         const displayDirect = directLegendGraphics(instance, table, config, onSettingsFocus, selectedSettingsSection === 'legend')
         const cleanDirect = directLegendGraphics(instance, table, config)
         option.graphic = [...(Array.isArray(option.graphic) ? option.graphic : []), ...displayDirect]

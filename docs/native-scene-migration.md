@@ -36,6 +36,7 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 - Existing `seriesStyles`, `elementStyles`, and category override keys remain unchanged and map onto stable native IDs.
 - Existing callback DTOs, rich HTML storage/overlays, annotations/decorations, and export commands remain unchanged.
 - Direct-series guides now carry resolved per-series inclusion, labels, notes, text style, color, side, and leader-line policy. The shared renderer no longer derives direct-label inclusion from the legacy product kind. Wide line hit areas retain their ECharts compatibility representation.
+- Categorical guides carry typed series and group items with stable IDs. Seasonal decides semantic membership only: `Seasonal accent ≠ legend mode`; its standard legend is accent series plus the non-accent `Остальные` group. Generic layout and rendering measure and draw that group without Seasonal branches or a fake plot series.
 - `buildOption` remains on the plugin interface for unmigrated callers. For ordinary bars its implementation is a native compile/layout/render compatibility facade, not the legacy cartesian builder.
 - Waterfall, butterfly, lollipop, dumbbell, slope, interval lines, smoothing, scatter/bubble, distribution, heatmap, and treemap retain their legacy compilers.
 
@@ -44,6 +45,7 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 - 25 reusable ordinary-bar, 18 reusable basic-line/area, and deterministic indexed/seasonal characterization fixtures.
 - compiler-mode, semantics, stable-ID, classification, layout rail, renderer translation, import guard, and throwing-builder tests.
 - Existing unit and Playwright coverage continues to cover interaction, undo/redo, category multiline editing, horizontal bars, legends/direct labels, and SVG/PNG export.
+- Focused Seasonal coverage separates none/standard/direct modes, group edits and visibility, explicit non-accent colors, persistence/reset/history, native/legacy family transitions, SVG/PNG parity, and seven visual baselines.
 
 ## Known debt and next removable legacy code
 

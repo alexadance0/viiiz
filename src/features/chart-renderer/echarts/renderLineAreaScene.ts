@@ -3,6 +3,8 @@ import { measureTextWidth } from '../../../core/textMetrics'
 import type { ChartTextStyle } from '../../../core/types'
 import type { CartesianAreaPlotScene, CartesianLinePlotScene, NativeChartScene, ResolvedSceneGeometry } from '../../../entities/chart/model/ChartScene'
 import type { ResolvedReservation } from '../../chart-layout/reservations'
+import type { Rect } from '../../chart-layout/geometry'
+import type { CategoricalLegendItem } from '../../chart-layout/guides/types'
 
 type PointPlot = CartesianLinePlotScene | CartesianAreaPlotScene
 export type ResolvedPointScene = NativeChartScene & { plot: PointPlot; geometry: ResolvedSceneGeometry; resolvedReservations: ResolvedReservation[] }
@@ -11,6 +13,34 @@ const graphicTextStyle = (style: ChartTextStyle) => { const { color, ...rest } =
 const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!)
 const stacking = (plot: PointPlot) => plot.kind === 'area' ? plot.stacking : 'none'
 const interpolationOption = (value: PointPlot['series'][number]['interpolation']) => ({ smooth: value === 'spline' ? .45 : false, smoothMonotone: value === 'spline' ? 'x' : undefined, step: value === 'step-start' ? 'start' : value === 'step-end' ? 'end' : undefined })
+
+function legendGroupGraphics(items: CategoricalLegendItem[], rail: Rect | undefined, config: ResolvedPointScene['compatibilityConfig']) {
+  if (!rail) return []
+  const visible = items.filter((item) => item.visible)
+  const horizontal = config.legendPosition === 'top' || config.legendPosition === 'bottom'
+  const marker = config.legendMarker ?? 'auto', markerWidth = 24, gap = 18
+  const lineHeight = Math.round(config.legendText.size * config.legendText.lineHeight / 100)
+  let x = rail.x, y = rail.y
+  return visible.flatMap((item) => {
+    const width = markerWidth + 10 + measureTextWidth(item.label, config.legendText.size, config.legendText.fontFamily, config.legendText.weight)
+    if (horizontal && x > rail.x && x + width > rail.x + rail.width) { x = rail.x; y += lineHeight + 7 }
+    const currentX = x, currentY = y
+    if (horizontal) x += width + gap
+    else y += lineHeight + gap
+    if (item.target.kind !== 'group') return []
+    const center = lineHeight / 2
+    const markerGraphic = marker === 'circle'
+      ? { type: 'circle', shape: { cx: markerWidth / 2, cy: center, r: 5 }, style: { fill: item.color } }
+      : marker === 'diamond'
+      ? { type: 'polygon', shape: { points: [[markerWidth / 2, center - 6], [markerWidth / 2 + 6, center], [markerWidth / 2, center + 6], [markerWidth / 2 - 6, center]] }, style: { fill: item.color } }
+      : marker === 'triangle'
+      ? { type: 'polygon', shape: { points: [[markerWidth / 2, center - 6], [markerWidth / 2 + 7, center + 6], [markerWidth / 2 - 7, center + 6]] }, style: { fill: item.color } }
+      : marker === 'square'
+      ? { type: 'rect', shape: { x: markerWidth / 2 - 5, y: center - 5, width: 10, height: 10 }, style: { fill: item.color } }
+      : { type: 'line', shape: { x1: 0, y1: center, x2: markerWidth, y2: center }, style: { stroke: item.color, lineWidth: 3 } }
+    return [{ id: `categorical-legend:${item.id}`, type: 'group', x: currentX, y: currentY, silent: true, children: [markerGraphic, { type: 'text', x: markerWidth + 10, y: center, style: { text: item.label, ...graphicTextStyle(config.legendText), align: 'left', verticalAlign: 'middle' } }] }]
+  })
+}
 
 function categoryAxis(scene: ResolvedPointScene) {
   const config = scene.compatibilityConfig, axis = scene.plot.categoryAxis
@@ -92,7 +122,8 @@ export function renderNativePointScene(scene: ResolvedPointScene): Record<string
   const directGuide = scene.guides.find((guide) => guide.kind === 'direct-series')
   const directItems = new Map(directGuide?.items.map((item) => [item.seriesId, item]) ?? [])
   const seriesNames = new Map(scene.plot.series.map((item) => [item.id, item.name]))
-  const legendLabels = new Map(legendGuide?.items.map((item) => [seriesNames.get(item.seriesId) ?? item.seriesId, item.label]) ?? [])
+  const legendItems = legendGuide?.items.flatMap((item) => item.visible && item.target.kind === 'series' ? [{ ...item, rendererName: seriesNames.get(item.target.seriesId) ?? item.target.seriesId }] : []) ?? []
+  const legendLabels = new Map(legendItems.map((item) => [item.rendererName, item.label]))
   const legendRail = scene.geometry.reservations['guide:legend']
   const directLeft = directGuide?.side === 'left'
   const series = scene.plot.series.map((item, seriesIndex) => {
@@ -129,12 +160,13 @@ export function renderNativePointScene(scene: ResolvedPointScene): Record<string
   const title = scene.frameElements.find((item) => item.role === 'title'), subtitle = scene.frameElements.find((item) => item.role === 'subtitle')
   const footer = scene.frameElements.filter((item) => item.role === 'note' || item.role === 'source').map((item, index, items) => ({ id: `chart-${item.role}`, type: 'text', left: scene.geometry.content.x, bottom: canvas.height - scene.geometry.content.y - scene.geometry.content.height + (items.length - index - 1) * (Math.round(item.style.size * item.style.lineHeight / 100) + scene.document.composition.noteSource), style: { text: item.text, width: scene.geometry.content.width, overflow: 'break', ...graphicTextStyle(item.style) } }))
   const verticalTitle = scene.plot.valueAxis.title?.visible && scene.plot.valueAxis.title.text ? [{ id: 'chart-y-axis-title', type: 'text', left: config.yAxisPosition === 'left' ? scene.geometry.content.x : undefined, right: config.yAxisPosition === 'right' ? canvas.width - scene.geometry.content.x - scene.geometry.content.width : undefined, top: 'middle', rotation: config.yAxisPosition === 'right' ? -Math.PI / 2 : Math.PI / 2, style: { text: scene.plot.valueAxis.title.text, ...graphicTextStyle(scene.plot.valueAxis.title.style), align: 'center', verticalAlign: 'middle' } }] : []
+  const legendGroups = legendGuide ? legendGroupGraphics(legendGuide.items, legendRail, config) : []
   return {
     animation: true, backgroundColor: scene.document.canvas.background, color: scene.plot.series.map((item) => item.color), textStyle: { fontFamily: scene.document.theme.fontFamily },
     title: { text: title?.text ?? '', subtext: subtitle?.text ?? '', left: scene.geometry.content.x, top: Math.max(0, scene.geometry.content.y - 8), textStyle: title ? textStyle(title.style) : undefined, subtextStyle: subtitle ? textStyle(subtitle.style) : undefined, itemGap: scene.document.composition.titleSubtitle, triggerEvent: true },
     tooltip: { trigger: 'axis', formatter: (input: unknown) => { const items = (Array.isArray(input) ? input : [input]) as Array<{ dataIndex?: number; seriesName?: string; value?: unknown; data?: { displayValue?: string; displayCategory?: string } }>; const visible = items.filter((entry) => entry.seriesName && !entry.seriesName.startsWith('__')); const index = visible[0]?.dataIndex ?? 0; return [`<b>${escapeHtml(visible[0]?.data?.displayCategory ?? scene.plot.series[0]?.points[index]?.displayCategory ?? '')}</b>`, ...visible.map((entry) => `${escapeHtml(entry.seriesName)}: <b>${escapeHtml(entry.data?.displayValue ?? formatYAxisNumber(entry.value as number, config))}</b>`)].join('<br/>') } },
-    legend: { show: legendGuide?.visible ?? false, data: scene.plot.series.map((item) => ({ name: item.name, icon: config.legendMarker === 'circle' ? 'circle' : config.legendMarker === 'diamond' ? 'diamond' : config.legendMarker === 'triangle' ? 'triangle' : config.legendMarker === 'square' ? 'rect' : 'path://M0 4H24V7H0Z', itemStyle: { color: item.color, borderWidth: 0 } })), formatter: (name: string) => legendLabels.get(name) ?? name, orient: legendGuide?.kind === 'categorical-legend' && (legendGuide.position === 'left' || legendGuide.position === 'right') ? 'vertical' : 'horizontal', left: legendRail?.x ?? scene.geometry.content.x, top: legendRail?.y, right: legendGuide?.kind === 'categorical-legend' && legendGuide.position === 'right' ? canvas.width - (legendRail?.x ?? 0) - (legendRail?.width ?? 0) : undefined, itemWidth: 24, itemHeight: 10, itemGap: 18, textStyle: textStyle(config.legendText) },
+    legend: { show: Boolean(legendGuide?.visible && legendItems.length), data: legendItems.map((item) => ({ name: item.rendererName, icon: config.legendMarker === 'circle' ? 'circle' : config.legendMarker === 'diamond' ? 'diamond' : config.legendMarker === 'triangle' ? 'triangle' : config.legendMarker === 'square' ? 'rect' : 'path://M0 4H24V7H0Z', itemStyle: { color: item.color, borderWidth: 0 } })), formatter: (name: string) => legendLabels.get(name) ?? name, orient: legendGuide?.kind === 'categorical-legend' && (legendGuide.position === 'left' || legendGuide.position === 'right') ? 'vertical' : 'horizontal', left: legendRail?.x ?? scene.geometry.content.x, top: legendRail?.y, right: legendGuide?.kind === 'categorical-legend' && legendGuide.position === 'right' ? canvas.width - (legendRail?.x ?? 0) - (legendRail?.width ?? 0) : undefined, itemWidth: 24, itemHeight: 10, itemGap: 18, textStyle: textStyle(config.legendText) },
     grid: { left: plot.x, top: plot.y, right: canvas.width - plot.x - plot.width, bottom: canvas.height - plot.y - plot.height, containLabel: false },
-    xAxis: categoryAxis(scene), yAxis: valueAxis(scene), series: [...series, ...segmentSeries(scene), ...hits, ...axisAffixSeries(scene)], graphic: [...verticalTitle, ...footer],
+    xAxis: categoryAxis(scene), yAxis: valueAxis(scene), series: [...series, ...segmentSeries(scene), ...hits, ...axisAffixSeries(scene)], graphic: [...verticalTitle, ...legendGroups, ...footer],
   }
 }
