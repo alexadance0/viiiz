@@ -40,7 +40,7 @@ Specialized interval charts, waterfall, butterfly, lollipop, dumbbell, scatter/b
 ## Phase 6 checkpoint — native smoothing
 
 Phase 6 implementation baseline: `2924c29243a2fedefb5e6f6b270279ea9c70fa3b`.
-Completion commit: pending at documentation time.
+Implementation completed in: `f43d45c`.
 
 `moving-average-line` and `moving-average-scatter` now compile a dedicated `plot.kind = 'smoothing'`. Each source series owns stable raw and moving-average layer IDs; derived point IDs are based on the average layer and source datum identity, never on a calculated value. A pure trailing transform runs after shared visible-data preparation and emits a value only for a complete finite window.
 
