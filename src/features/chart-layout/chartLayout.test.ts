@@ -108,6 +108,6 @@ describe('legacy document and compiler adapters', () => {
     expect(scene.document.chart.family).toBe('bar')
     expect(scene.elements.some((element) => element.role === 'mark' && element.id.startsWith('mark:'))).toBe(true)
     expect(scene.migrationMode).toBe('native')
-    if (scene.migrationMode === 'native') expect(scene.plot.series).toHaveLength(1)
+    if (scene.migrationMode === 'native' && scene.plot.kind === 'bar') expect(scene.plot.series).toHaveLength(1)
   })
 })

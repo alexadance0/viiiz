@@ -1,4 +1,6 @@
 import type { ChartTextStyle } from '../../../core/types'
+import type { LayerId } from '../../../entities/chart/model/ChartScene'
+import type { SeriesId } from '../../../entities/chart/model/ChartElement'
 import type { CoordinateSpace } from '../geometry'
 import type { LayoutReservation } from '../reservations'
 
@@ -8,10 +10,13 @@ export interface CategoricalLegendItem {
   label: string
   visible: boolean
   color: string
-  target: { kind: 'series'; seriesId: string } | { kind: 'group'; seriesIds: string[] }
+  marker?: { kind: 'line' | 'point'; opacity?: number }
+  target: { kind: 'series'; seriesId: string } | { kind: 'group'; seriesIds: string[] } | { kind: 'layer'; layerId: LayerId; sourceSeriesId: SeriesId; role: 'raw' | 'average' }
 }
 export interface DirectSeriesGuideItem {
   seriesId: string
+  layerId?: LayerId
+  sourceSeriesId?: SeriesId
   label: string
   note?: string
   visible: boolean

@@ -123,6 +123,7 @@ describe('native ECharts line and area adapter', () => {
   it('renders a generic categorical group item without a fake series or Seasonal config', () => {
     const scene = getChartPlugin('indexed-line').compile(indexedTrendTable, { ...indexedTrendConfig, showLegend: true, showDirectLabels: false })
     if (scene.migrationMode !== 'native') throw new Error('Expected native scene')
+    if (scene.plot.kind !== 'line') throw new Error('Expected native line plot')
     const guide = scene.guides.find((item) => item.kind === 'categorical-legend')!
     guide.items = [{ id: 'legend:group:test', label: 'Группа', visible: true, color: '#778899', target: { kind: 'group', seriesIds: [scene.plot.series[0].id] } }]
     const option = renderScene(scene) as { legend: { data: Array<{ name: string }> }; graphic: Array<{ id?: string; children?: Array<{ style?: { fill?: string; text?: string } }> }>; series: Array<{ name: string }> }
@@ -149,6 +150,6 @@ describe('native ECharts line and area adapter', () => {
 
   it('keeps the remaining specialized line-like families explicitly legacy', () => {
     expect(getChartPlugin('slope').compilerMode).toBe('native')
-    for (const kind of ['range-line', 'step-range-line', 'confidence-line', 'moving-average-line', 'moving-average-scatter', 'scatter', 'waterfall'] as const) expect(getChartPlugin(kind).compilerMode).toBe('legacy')
+    for (const kind of ['range-line', 'step-range-line', 'confidence-line', 'scatter', 'waterfall'] as const) expect(getChartPlugin(kind).compilerMode).toBe('legacy')
   })
 })

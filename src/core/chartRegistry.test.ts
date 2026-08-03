@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as echarts from 'echarts'
-import { chartElementColor, chartRegistry, chartValueLabelSelections, fitSwarmClouds, fitSwarmOffsets, formatWaterfallChange, getChartPlugin, hyphenateTreemapText, movingAverage, packSwarmOffsets, prepareVisibleChartData, treemapAdaptiveFontSize, waterfallElementColor, waterfallLabelPlacement, waterfallSteps, waterfallValueLabel } from './chartRegistry'
+import { chartElementColor, chartRegistry, chartValueLabelSelections, fitSwarmClouds, fitSwarmOffsets, formatWaterfallChange, getChartPlugin, hyphenateTreemapText, packSwarmOffsets, prepareVisibleChartData, treemapAdaptiveFontSize, waterfallElementColor, waterfallLabelPlacement, waterfallSteps, waterfallValueLabel } from './chartRegistry'
+import { movingAverage } from '../features/chart-types/smoothing/movingAverage'
 import { absorbedBarLabelPlacement } from './chartLabels'
 import { isoWeekParts } from './timeFrequency'
 import { entrepreneurshipDifficultiesDemoTable } from './demoData'

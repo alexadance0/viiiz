@@ -1,6 +1,6 @@
 # Chart family parity matrix
 
-Phase 5 implementation baseline: `91c8ca96f345db2adda6bb3c49eb40c8c87982da`.
+Phase 6 implementation baseline: `2924c29243a2fedefb5e6f6b270279ea9c70fa3b`.
 
 | Kind | Family | Compiler | Layout | Interaction | Export | Legacy `buildOption` reachable? |
 |---|---|---|---|---|---|---|
@@ -24,7 +24,7 @@ Phase 5 implementation baseline: `91c8ca96f345db2adda6bb3c49eb40c8c87982da`.
 | lollipop / horizontal-lollipop | lollipop | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | dumbbell | dumbbell | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | range-line / step-range-line / confidence-line | interval | legacy | legacy/hybrid | legacy | existing legacy path | yes |
-| moving-average-line / moving-average-scatter | smoothing | legacy | legacy/hybrid | legacy | existing legacy path | yes |
+| moving-average-line / moving-average-scatter | smoothing transform | native | shared native Cartesian frame/axes | raw native point metadata; derived layer non-editable | shared SVG/PNG boundary | no |
 | scatter / bubble / distribution | corresponding semantic family | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | heatmap / treemap | matrix / hierarchy | legacy | specialized hybrid | legacy/specialized | existing legacy path | yes |
 
@@ -66,3 +66,15 @@ Deterministic fixtures in `src/test-fixtures/charts/slope.ts` and focused compil
 Slope now has its own semantic `plot.kind = 'slope'`, compiler, layout, and renderer. The shared frame still owns title/subtitle/note/source anchors; the Slope layout owns the 25%/75% comparison positions, guide extents, endpoint rails, internal Y-scale rail, exact multiline endpoint boxes, collision displacement, leaders, and change-label geometry. ECharts point-label collision is disabled: layout is the single owner, so an isolated endpoint remains exactly on its data anchor and only displaced labels receive leaders. Values and names follow the preserved matrix: left value only; right value plus series name; values-only on both sides; names-only on the right.
 
 Horizontal/vertical guides, the internal comparison scale, endpoint labels, leaders, and optional change labels are semantic Slope fields and render as local graphics. Change descriptors use the renderer-neutral shared direction/absolute/percent contract also used by Dumbbell; a zero base formats as `н/д`. Direction coloring is opt-in and temporarily resolves connector, markers, endpoint/change labels, and leaders without overwriting stored series colors. X labels stay centered on their 25%/75% ticks for bottom/top, multiline, and rotated modes. No fake guide/change series exists in the scene or renderer output. Standard and direct legend settings remain persisted but are intentionally ignored while Slope is active.
+
+## Smoothing characterization coverage
+
+The transform order is explicit:
+
+```text
+raw table → filtering/sorting/aggregation → percent/missing policy → trailing inclusive moving average → semantic smoothing layers
+```
+
+The window is rounded with a minimum of two and is not upper-clamped by the compiler. A derived value exists only when the entire trailing window contains finite values; otherwise it is `null`. Both raw and derived values participate in the declared value domain, with manual/log domains and zero-line settings retained by the shared Cartesian contract.
+
+Every source group has stable `raw` and `moving-average` layer identities. Line mode renders a thin faded raw line; scatter mode renders faded borderless raw points; both render the average as the full source-styled line. Raw value labels and direct labels are suppressed. Derived value labels follow the chart setting, while direct identification targets only average layers and retains source legend labels, notes, text styles, and leader settings. The standard legend has typed layer targets and semantic line/point/opacity markers.

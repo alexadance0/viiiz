@@ -126,7 +126,7 @@ describe('native ECharts Slope adapter', () => {
     expect(source).toMatchObject({ showLegend: true, showDirectLabels: true })
   })
 
-  it.each(['moving-average-line', 'range-line', 'scatter'] as const)('supports slope → legacy %s → slope', (kind) => {
+  it.each(['range-line', 'scatter'] as const)('supports slope → legacy %s → slope', (kind) => {
     const legacyConfig = slopeConfig({ kind, rangeLowerField: 'actual', rangeUpperField: 'plan' })
     const first = nativeSlope(), legacy = getChartPlugin(kind).compile(slopeTable, legacyConfig), last = nativeSlope()
     expect([first.migrationMode, legacy.migrationMode, last.migrationMode]).toEqual(['native', 'legacy', 'native'])

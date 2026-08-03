@@ -1,6 +1,6 @@
 import { formatXAxisNumber, formatYAxisNumber } from '../../../core/numberFormat'
 import { measureTextWidth } from '../../../core/textMetrics'
-import type { CartesianAreaPlotScene, CartesianBarPlotScene, CartesianLinePlotScene, NativeChartScene, ResolvedScene } from '../../../entities/chart/model/ChartScene'
+import type { CartesianAreaPlotScene, CartesianBarPlotScene, CartesianLinePlotScene, CartesianSmoothingPlotScene, NativeChartScene, ResolvedScene } from '../../../entities/chart/model/ChartScene'
 import { axisReservation, type AxisSpec } from '../../chart-layout/axisLayout'
 import { resolveFrame } from '../../chart-layout/frameLayout'
 import type { Rect } from '../../chart-layout/geometry'
@@ -8,7 +8,7 @@ import { guideReservation } from '../../chart-layout/guides/types'
 import type { LayoutReservation } from '../../chart-layout/reservations'
 import { layoutText, plainTextDocument } from '../../chart-layout/textLayout'
 
-type NativeCartesianScene = NativeChartScene & { plot: CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene }
+type NativeCartesianScene = NativeChartScene & { plot: CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSmoothingPlotScene }
 const lineHeight = (style: AxisSpec['labels']['style']) => Math.round(style.size * style.lineHeight / 100)
 const orientation = (scene: NativeCartesianScene) => scene.plot.kind === 'bar' ? scene.plot.orientation : 'vertical'
 const railRect = (plot: Rect, side: 'top' | 'right' | 'bottom' | 'left'): Rect => side === 'top'
@@ -113,7 +113,7 @@ export function resolveNativeCartesianScene(sourceScene: NativeChartScene): Reso
     reservations.push({ id: 'axis:value-edge-top', side: 'top', size: Math.ceil(lineHeight(valueAxis.labels.style) / 2), gap: 0, mode: 'outside', priority: 55 })
   }
   if (orientation(scene) === 'horizontal' && valueAxis.labels.visible) {
-    const formatter = scene.plot.kind !== 'line' && scene.plot.stacking === 'normalized' ? formatYAxisNumber : formatXAxisNumber
+    const formatter = scene.plot.kind === 'area' && scene.plot.stacking === 'normalized' ? formatYAxisNumber : formatXAxisNumber
     const edge = Math.ceil(Math.max(...[scene.plot.valueDomain.min, scene.plot.valueDomain.max].map((value) => measureTextWidth(formatter(value, config), valueAxis.labels.style.size, valueAxis.labels.style.fontFamily, valueAxis.labels.style.weight))) / 2) + 10
     reservations.push({ id: 'axis:value-edge-left', side: 'left', size: edge, gap: 0, mode: 'outside', priority: 55 })
     reservations.push({ id: 'axis:value-edge-right', side: 'right', size: edge, gap: 0, mode: 'outside', priority: 55 })

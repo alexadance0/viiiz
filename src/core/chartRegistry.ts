@@ -18,6 +18,7 @@ import { compileNativeBarScene, isNativeBarKind } from '../features/chart-types/
 import { compileNativeLineScene, isNativeLineKind } from '../features/chart-types/line/compiler'
 import { compileNativeAreaScene, isNativeAreaKind } from '../features/chart-types/area/compiler'
 import { compileNativeSlopeScene } from '../features/chart-types/slope/compiler'
+import { compileNativeSmoothingScene, isNativeSmoothingKind } from '../features/chart-types/smoothing/compiler'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 import { nativeMarkSelections } from '../entities/chart/model/sceneVisitors'
 import { repeatedChartCategories } from './chartData'
@@ -109,12 +110,6 @@ const niceLegendValue = (value: number) => {
   const candidates = [1, 2, 3, 5, 7, 10].map((factor) => factor * power)
   return candidates.reduce((best, candidate) => candidate <= value && candidate > best ? candidate : best, candidates[0])
 }
-export const movingAverage = (values: Array<number | null>, window: number) => values.map((_, index) => {
-  const sample = values.slice(index - window + 1, index + 1)
-  return sample.length === window && sample.every((value): value is number => value != null && Number.isFinite(value))
-    ? sample.reduce((sum, value) => sum + value, 0) / window
-    : null
-})
 const CONTENT_LEFT = 32
 const axisTickPosition = (value: number, minimum: number, maximum: number): AxisTickPosition => {
   const tolerance = Math.max(1, Math.abs(maximum - minimum)) * 1e-9
@@ -418,7 +413,7 @@ const cartesian = (id: Exclude<ChartConfig['kind'], 'scatter' | 'bubble' | 'dumb
   settings: {
     sections: ['series', 'annotations', 'grid', 'text', 'headings', 'axes', 'legend-values', 'credits'],
     series: isBarChart(id) || isAreaChart(id) ? ['color'] : ['color', 'line', 'markers'],
-    features: { directLabels: true, barLayout: isBarChart(id), dataPreparation: false, normalizedStack: isNormalizedStackedChart(id), areaLayout: isAreaChart(id), scatterLayout: false, distributionLayout: false, lineVariant: id === 'step-line' || id === 'moving-average-line' || id === 'moving-average-scatter' },
+    features: { directLabels: true, barLayout: isBarChart(id), dataPreparation: false, normalizedStack: isNormalizedStackedChart(id), areaLayout: isAreaChart(id), scatterLayout: false, distributionLayout: false, lineVariant: id === 'step-line' || category === 'smoothing' },
   },
   buildOption(table, sourceConfig) {
     const config = isHorizontalBarChart(id) ? { ...sourceConfig, barOrientation: 'horizontal' as const }
@@ -533,26 +528,6 @@ const cartesian = (id: Exclude<ChartConfig['kind'], 'scatter' | 'bubble' | 'dumb
         }
       }),
     }})
-    const smoothing = id === 'moving-average-line' || id === 'moving-average-scatter'
-    const smoothingWindow = Math.max(2, Math.round(config.movingAverageWindow ?? 12))
-    const renderedBaseSeries = smoothing ? baseSeries.flatMap((series, seriesIndex) => {
-      const source = prepared.series[seriesIndex], color = getSeriesColor(config, source.name, seriesIndex)
-      const rawPoints = id === 'moving-average-scatter'
-      const raw = {
-        ...series, name: `${source.name} · исходные ${rawPoints ? 'значения' : 'данные'}`, type: rawPoints ? 'scatter' : 'line',
-        showSymbol: rawPoints, symbolSize: rawPoints ? config.seriesStyles[source.name]?.markerSize ?? 7 : 0,
-        data: rawPoints ? (series.data as Array<Record<string, unknown>>).map((point) => ({ ...point, symbolSize: config.seriesStyles[source.name]?.markerSize ?? 7, itemStyle: { color, borderWidth: 0, opacity: config.movingAverageRawOpacity ?? .22 } })) : series.data,
-        lineStyle: rawPoints ? { opacity: 0 } : { ...(series.lineStyle as object), color, width: Math.max(1, Number((series.lineStyle as { width?: number })?.width ?? 3) * .55), opacity: config.movingAverageRawOpacity ?? .22 },
-        itemStyle: { color, borderWidth: 0, opacity: config.movingAverageRawOpacity ?? .22 }, endLabel: undefined, labelLine: undefined, label: { show: false }, z: 10 + seriesIndex,
-      }
-      const averages = movingAverage(source.data, smoothingWindow)
-      const smoothed = {
-        ...series, name: `${source.name} · среднее (${smoothingWindow})`, showSymbol: false,
-        data: (series.data as Array<Record<string, unknown>>).map((point, index) => ({ ...point, value: averages[index], displayValue: averages[index] == null ? 'пропуск' : formatChartNumber(averages[index], config) })),
-        lineStyle: { ...(series.lineStyle as object), color, opacity: 1 }, itemStyle: { color, borderColor: color, borderWidth: 0 }, z: 100 + seriesIndex,
-      }
-      return [raw, smoothed]
-    }) : baseSeries
     const individualBarSeries = isBarChart(id) ? prepared.series.flatMap((series, seriesIndex) => series.data.flatMap((value, dataIndex) => {
       if (value == null) return []
       const category = prepared.categories[dataIndex], element = config.elementStyles[elementKey(series.name, category)], seriesStyle = config.seriesStyles[series.name]
@@ -699,8 +674,7 @@ const cartesian = (id: Exclude<ChartConfig['kind'], 'scatter' | 'bubble' | 'dumb
     const common = commonOption(table, config, prepared)
     const numericCategories = prepared.categories.flatMap((value, index) => typeof value === 'number' ? [{ value, coordinate: `${index}:${String(value)}` }] : [])
     const categoryEdges = numericCategories.length ? [{ ...numericCategories[0], cross: common.yAxis.min, position: 'first' as const }, { ...numericCategories.at(-1)!, cross: common.yAxis.min, position: 'last' as const }] : []
-    const option = { ...common, series: [...renderedBaseSeries, ...individualBarSeries, ...absorbedLabelSeries, ...segmentSeries, ...hitSeries, ...(!isHorizontalBarChart(id) ? [...yAxisEdgeAffixSeries(config, Number(common.yAxis.min), Number(common.yAxis.max)), ...xAxisEdgeAffixSeries(config, categoryEdges)] : [])] }
-    if (smoothing) option.legend = { ...option.legend, data: renderedBaseSeries.map((series, index) => ({ name: series.name, icon: series.type === 'scatter' ? 'circle' : 'path://M0 4H24V7H0Z', itemStyle: { color: (series.lineStyle as { color?: string })?.color ?? (series.itemStyle as { color?: string })?.color ?? getSeriesColor(config, prepared.series[Math.floor(index / 2)].name, Math.floor(index / 2)), borderWidth: 0 } })) }
+    const option = { ...common, series: [...baseSeries, ...individualBarSeries, ...absorbedLabelSeries, ...segmentSeries, ...hitSeries, ...(!isHorizontalBarChart(id) ? [...yAxisEdgeAffixSeries(config, Number(common.yAxis.min), Number(common.yAxis.max)), ...xAxisEdgeAffixSeries(config, categoryEdges)] : [])] }
     if (isBarChart(id) && config.barOrientation === 'horizontal') {
       const mutable = option as unknown as { xAxis: Record<string, unknown>; yAxis: Record<string, unknown>; grid: { top: number; bottom: number; left: number; right: number; containLabel?: boolean }; legend: Record<string, unknown>; graphic: Array<Record<string, unknown>>; series: Array<Record<string, unknown>> }
       const categoryAxis = mutable.xAxis, valueAxis = mutable.yAxis
@@ -2435,11 +2409,17 @@ const nativeSlopeCapabilities: ChartPlugin['capabilities'] = {
   guides: [], valueLabels: true, markers: true, endpointLabels: true,
 }
 
+const nativeSmoothingCapabilities: ChartPlugin['capabilities'] = {
+  coordinateSystem: 'cartesian',
+  axes: { category: { placements: ['side'] }, value: { scaleTypes: ['linear', 'log'] } },
+  guides: ['legend', 'direct-series'], valueLabels: true, markers: true,
+}
+
 export const chartRegistry: ChartPlugin[] = legacyChartRegistry.map((plugin) => {
-  const compiler = isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : undefined
+  const compiler = isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : isNativeSmoothingKind(plugin.id) ? compileNativeSmoothingScene : undefined
   if (compiler) return {
     ...plugin, compilerMode: 'native' as const,
-    capabilities: isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : nativeSlopeCapabilities,
+    capabilities: isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : nativeSmoothingCapabilities,
     compile: compiler,
     buildOption: (table: DataTable, config: ChartConfig) => renderScene(compiler(table, config)),
   }

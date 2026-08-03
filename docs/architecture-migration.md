@@ -35,4 +35,13 @@ Phase 3 baseline: `ab264f5d7a69a466935b25873d68c8e1379a7113`.
 
 `NativeChartScene.plot` is now a discriminated bar/line/area union. Basic line, spline, step-line, area, stacked-area, and normalized-stacked-area compile semantic points, interpolation, missing-value policy, stroke/marker/fill intent, stable identities, and category-label plans. They share the native Cartesian frame/axis/text layout and render through plot-kind dispatch without reaching the legacy option builder.
 
-Specialized line-like charts, intervals, smoothing, waterfall, butterfly, lollipop, dumbbell, scatter/bubble, distribution, heatmap, and treemap remain explicitly legacy.
+Specialized interval charts, waterfall, butterfly, lollipop, dumbbell, scatter/bubble, distribution, heatmap, and treemap remain explicitly legacy.
+
+## Phase 6 checkpoint — native smoothing
+
+Phase 6 implementation baseline: `2924c29243a2fedefb5e6f6b270279ea9c70fa3b`.
+Completion commit: pending at documentation time.
+
+`moving-average-line` and `moving-average-scatter` now compile a dedicated `plot.kind = 'smoothing'`. Each source series owns stable raw and moving-average layer IDs; derived point IDs are based on the average layer and source datum identity, never on a calculated value. A pure trailing transform runs after shared visible-data preparation and emits a value only for a complete finite window.
+
+Smoothing reuses the native point-scale Cartesian axes and frame, while its renderer consumes semantic layer roles and render modes. Raw marks remain the only source-editable points, moving-average labels/direct identification belong only to the derived layer, and the categorical legend targets typed layers. The old moving-average transform and smoothing option branch were removed from `chartRegistry.ts`.

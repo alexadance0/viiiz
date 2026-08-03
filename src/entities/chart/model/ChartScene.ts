@@ -108,6 +108,45 @@ interface CartesianPointPlotScene {
   valueDomain: { min: number; max: number; step: number }
 }
 
+declare const layerIdBrand: unique symbol
+export type LayerId = string & { readonly [layerIdBrand]: 'LayerId' }
+
+export interface SmoothingPointScene extends CartesianPointScene {
+  layerId: LayerId
+  role: 'observed' | 'derived'
+  editable: boolean
+  provenance: {
+    transform: 'moving-average'
+    sourceSeriesId: SeriesId
+    sourceDatumId: DatumId
+    window: number
+  }
+}
+
+export interface SmoothingLayerScene extends Omit<LineSeriesScene, 'id' | 'points'> {
+  id: LayerId
+  sourceSeriesId: SeriesId
+  role: 'raw' | 'average'
+  renderMode: 'line' | 'points'
+  points: SmoothingPointScene[]
+}
+
+export interface SmoothingSourceGroupScene {
+  sourceSeriesId: SeriesId
+  sourceName: string
+  color: string
+  rawLayerId: LayerId
+  averageLayerId: LayerId
+}
+
+export interface CartesianSmoothingPlotScene extends CartesianPointPlotScene {
+  kind: 'smoothing'
+  variant: 'moving-average-line' | 'moving-average-scatter'
+  window: number
+  sourceGroups: SmoothingSourceGroupScene[]
+  layers: SmoothingLayerScene[]
+}
+
 export interface CartesianLinePlotScene extends CartesianPointPlotScene {
   kind: 'line'
   series: LineSeriesScene[]
@@ -176,7 +215,7 @@ export interface CartesianSlopePlotScene {
   endpointLabels: { distance: number; collision: 'shift-y'; hideOverlap: false; items: SlopeEndpointLabelScene[] }
 }
 
-export type NativePlotScene = CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene
+export type NativePlotScene = CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene
 
 export interface NativeChartScene extends ChartSceneBase {
   migrationMode: 'native'
@@ -191,6 +230,7 @@ export type NativeBarChartScene = NativeChartScene & { plot: CartesianBarPlotSce
 export type NativeLineChartScene = NativeChartScene & { plot: CartesianLinePlotScene }
 export type NativeAreaChartScene = NativeChartScene & { plot: CartesianAreaPlotScene }
 export type NativeSlopeChartScene = NativeChartScene & { plot: CartesianSlopePlotScene }
+export type NativeSmoothingChartScene = NativeChartScene & { plot: CartesianSmoothingPlotScene }
 
 export type ChartScene = LegacyChartScene | NativeChartScene
 

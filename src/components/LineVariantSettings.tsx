@@ -1,5 +1,6 @@
 import type { ChartConfig, DataTable } from '../core/types'
 import { NumberInput } from './NumberInput'
+import { normalizeMovingAverageWindow } from '../features/chart-types/smoothing/movingAverage'
 import { ColorControl } from './PickerControls'
 import { SettingsCheckbox } from './SettingsCheckbox'
 import { chartDataValueKey } from '../core/chartData'
@@ -9,7 +10,7 @@ interface Props { config: ChartConfig; numericColumns?: string[]; table: DataTab
 export function LineVariantSettings({ config, numericColumns = config.yFields, table, onChange }: Props) {
   const patch = (values: Partial<ChartConfig>) => onChange({ ...config, ...values })
   if (config.kind === 'moving-average-line' || config.kind === 'moving-average-scatter') return <details className="settings-group line-variant-settings"><summary>Скользящее среднее</summary><div>
-    <label>Период сглаживания<NumberInput min="2" max="365" value={config.movingAverageWindow ?? 12} onValueChange={(movingAverageWindow) => patch({ movingAverageWindow: Math.max(2, Math.round(movingAverageWindow)) })}/></label>
+    <label>Период сглаживания<NumberInput min="2" max="365" value={config.movingAverageWindow ?? 12} onValueChange={(movingAverageWindow) => patch({ movingAverageWindow: normalizeMovingAverageWindow(movingAverageWindow) })}/></label>
     <label>Прозрачность исходных данных, %<NumberInput min="5" max="80" value={Math.round((config.movingAverageRawOpacity ?? .22) * 100)} onValueChange={(value) => patch({ movingAverageRawOpacity: value / 100 })}/></label>
     <small className="settings-note">Среднее рассчитывается отдельно для каждого выбранного ряда по предыдущим N наблюдениям.</small>
   </div></details>

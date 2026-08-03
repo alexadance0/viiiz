@@ -627,14 +627,14 @@ test('every chart type in the picker renders without runtime errors', async ({ p
   assertNoErrors()
 })
 
-test('native line, area, indexed and seasonal kinds transition across native and legacy charts', async ({ page }) => {
+test('native line, area, indexed, seasonal and smoothing kinds transition across native and legacy charts', async ({ page }) => {
   test.setTimeout(90_000)
   await page.route('https://fonts.googleapis.com/**', (route) => route.fulfill({ contentType: 'text/css', body: '' }))
   const assertNoErrors = await failOnRuntimeErrors(page)
   await loadDemo(page)
   await page.getByLabel('Период / ось X').selectOption('month')
   await expect(page.getByLabel('Период / ось X')).toHaveValue('month')
-  for (const name of ['Линия', 'Сравнение по годам', 'Линия', 'Индекс к дате', 'Столбцы', 'Индекс к дате', 'Область', 'Сравнение по годам', 'Наклонный график', 'Сравнение по годам']) {
+  for (const name of ['Линия', 'Сравнение по годам', 'Линия + среднее', 'Точки + среднее', 'Линия', 'Индекс к дате', 'Столбцы', 'Индекс к дате', 'Область', 'Сравнение по годам', 'Наклонный график', 'Точки + среднее', 'Сравнение по годам']) {
     const svg = page.locator('.canvas-paper svg').first()
     const previousSvg = await svg.innerHTML().catch(() => '')
     const button = page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: new RegExp(`^${escaped(name)}$`) }) })
@@ -674,6 +674,42 @@ test('native line, area, indexed and seasonal kinds transition across native and
   const indexedPng = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Скачать PNG' }).click()
   await expect((await indexedPng).suggestedFilename()).toMatch(/\.png$/)
+  assertNoErrors()
+})
+
+test('native smoothing keeps settings history and exports the resolved preview to SVG and PNG', async ({ page }) => {
+  test.setTimeout(90_000)
+  const assertNoErrors = await failOnRuntimeErrors(page)
+  await page.route('https://fonts.googleapis.com/**', (route) => route.fulfill({ contentType: 'text/css', body: '' }))
+  await loadDemo(page)
+  await page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Линия \+ среднее$/ }) }).click()
+  await expectRenderedChart(page)
+  await page.getByRole('button', { name: /Настроить оформление/ }).click()
+  await page.locator('summary').filter({ hasText: /^Скользящее среднее$/ }).click()
+  const window = page.getByLabel('Период сглаживания')
+  await expect(window).toHaveValue('12')
+  await window.fill('4')
+  await window.blur()
+  await expect(window).toHaveValue('4')
+  await page.waitForTimeout(400)
+  const undo = page.locator('.canvas-floating-menu').getByRole('button', { name: 'Отменить', exact: true })
+  const redo = page.locator('.canvas-floating-menu').getByRole('button', { name: 'Повторить', exact: true })
+  let undoCount = 0
+  while (await window.inputValue() !== '12' && undoCount < 3) { await undo.click(); undoCount += 1 }
+  await expect(window).toHaveValue('12')
+  for (let index = 0; index < undoCount; index += 1) await redo.click()
+  await expect(window).toHaveValue('4')
+  await expectRenderedChart(page)
+
+  await openExport(page)
+  const svgDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Скачать SVG' }).click()
+  const svg = await readFile(await (await svgDownload).path()!, 'utf8')
+  expect(svg).toContain('<svg')
+  expect(svg).not.toContain('__hit__')
+  const pngDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Скачать PNG' }).click()
+  expect((await readFile(await (await pngDownload).path()!)).byteLength).toBeGreaterThan(1000)
   assertNoErrors()
 })
 

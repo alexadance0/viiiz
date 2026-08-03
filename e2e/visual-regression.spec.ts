@@ -34,6 +34,48 @@ const openSettings = async (page: Page, name: string) => {
   if (!(await summary.evaluate((element) => (element.parentElement as HTMLDetailsElement).open))) await summary.click()
 }
 
+test('native smoothing semantics stay visually stable', async ({ page }) => {
+  test.setTimeout(90_000)
+  await openDemoChart(page, 'Временной ряд', 'Линия + среднее')
+  const canvas = page.locator('.chart-canvas-shell')
+  await expect(canvas).toHaveScreenshot('moving-average-line-default.png')
+
+  await page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Точки \+ среднее$/ }) }).click()
+  await waitForLayout(page)
+  await expect(canvas).toHaveScreenshot('moving-average-scatter-default.png')
+
+  await setCheckbox(page.getByRole('checkbox', { name: 'orders', exact: true }), true)
+  await page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Линия \+ среднее$/ }) }).click()
+  await waitForLayout(page)
+  await expect(canvas).toHaveScreenshot('moving-average-multiple-series.png')
+
+  await openDesign(page)
+  await openSettings(page, 'Легенда')
+  await page.getByText('Обычная', { exact: true }).click()
+  await expect(canvas).toHaveScreenshot('moving-average-long-legend.png')
+
+  await page.getByText('Справа у рядов', { exact: true }).click()
+  await expect(canvas).toHaveScreenshot('moving-average-direct-labels.png')
+
+  await openSettings(page, 'Скользящее среднее')
+  await page.getByLabel('Период сглаживания').fill('365')
+  await expect(canvas).toHaveScreenshot('moving-average-missing-window.png')
+  await page.getByLabel('Период сглаживания').fill('4')
+
+  await openSettings(page, 'Ряды данных')
+  await page.locator('.series-settings .series-name-button').first().click()
+  const editor = page.locator('.series-editor')
+  await editor.getByLabel('Толщина линии, px').fill('6')
+  await editor.getByLabel('Тип линии').selectOption('dashed')
+  await page.getByRole('button', { name: 'Снять выделение' }).click()
+  await expect(canvas).toHaveScreenshot('moving-average-custom-styles.png')
+
+  await openSettings(page, 'Оси, шкалы и подписи')
+  await page.getByLabel('Положение оси X').selectOption('top')
+  await page.getByLabel('Положение оси Y').selectOption('right')
+  await expect(canvas).toHaveScreenshot('moving-average-axis-top-right.png')
+})
+
 test('Seasonal legend semantics stay visually stable', async ({ page }) => {
   await page.goto('/editor')
   await page.getByRole('button', { name: 'Временной ряд', exact: true }).click()
