@@ -23,12 +23,11 @@ const applyCategoryRange = (prepared: ReturnType<typeof prepareChartData>, confi
     dateAxis ? dateValue(config.xAxisMin) : axisValue(config.xAxisMin),
     dateAxis ? dateValue(config.xAxisMax) : axisValue(config.xAxisMax),
   )
-  const selectedSlopePositions = config.kind === 'slope' && config.slopeXValues?.length === 2 ? new Set(config.slopeXValues) : null
-  if (min == null && max == null && !selectedSlopePositions) return prepared
+  if (min == null && max == null) return prepared
   const indices = prepared.categories.flatMap((value, index) => {
     const numeric = value instanceof Date ? value.getTime() : typeof value === 'number' ? value : Number(value)
     const inRange = min == null && max == null || Number.isFinite(numeric) && (min == null || numeric >= min) && (max == null || numeric <= max)
-    return inRange && (!selectedSlopePositions || selectedSlopePositions.has(slopePositionKey(value))) ? [index] : []
+    return inRange ? [index] : []
   })
   return {
     categories: indices.map((index) => prepared.categories[index]),

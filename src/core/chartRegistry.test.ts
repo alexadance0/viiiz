@@ -2004,16 +2004,16 @@ describe('chart composition alignment', () => {
     const series = option.series.find((item) => item.type === 'line')!
     expect(series).toMatchObject({ showSymbol: true, symbolSize: 11 })
     expect(series.data.map((point) => point.label?.position)).toEqual(['left', 'right'])
-    expect(series.data.map((point) => point.label?.formatter)).toEqual(['10', '{value|18} {name|value}'])
+    expect(series.data.map((point) => point.label?.formatter)).toEqual(['10', '18 value'])
     expect(series.data.map((point) => point.itemStyle?.color)).toEqual([config.color, config.color])
     expect(option.legend.show).toBe(false)
     expect(option.yAxis.axisLabel.show).toBe(false)
     expect(option.xAxis.boundaryGap).toBe(true)
     expect(option.xAxis.axisLine.show).toBe(false)
     expect(option.xAxis.splitLine.show).toBe(false)
-    expect(option.series.some((series) => series.name === '__slope-guides__')).toBe(true)
+    expect(option.series.some((series) => series.name === '__slope-guides__')).toBe(false)
     const namesOnly = getChartPlugin('slope').buildOption(slopeTable, { ...config, slopeShowValues: false }) as { series: Array<{ type: string; data: Array<{ label?: { show?: boolean; formatter?: string } }> }> }
-    expect(namesOnly.series.find((item) => item.type === 'line')?.data.map((point) => point.label?.formatter)).toEqual([undefined, '{name|value}'])
+    expect(namesOnly.series.find((item) => item.type === 'line')?.data.map((point) => point.label?.formatter)).toEqual([undefined, 'value'])
     const hidden = getChartPlugin('slope').buildOption(slopeTable, { ...config, slopeShowValues: false, slopeShowSeriesNames: false }) as { series: Array<{ type: string; data: Array<{ label?: { show?: boolean } }> }> }
     expect(hidden.series.find((item) => item.type === 'line')?.data.every((point) => point.label?.show === false)).toBe(true)
   })

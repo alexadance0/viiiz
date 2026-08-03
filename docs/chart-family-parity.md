@@ -1,6 +1,6 @@
 # Chart family parity matrix
 
-Phase 4 implementation baseline: `ee59a994f4bac379129487214e744ad198e999b9`.
+Phase 5 implementation baseline: `91c8ca96f345db2adda6bb3c49eb40c8c87982da`.
 
 | Kind | Family | Compiler | Layout | Interaction | Export | Legacy `buildOption` reachable? |
 |---|---|---|---|---|---|---|
@@ -18,11 +18,11 @@ Phase 4 implementation baseline: `ee59a994f4bac379129487214e744ad198e999b9`.
 | area | area | native | shared native Cartesian frame/axes | native point metadata → callback adapter | existing SVG/PNG boundary | no |
 | stacked-area | area | native | shared native Cartesian frame/axes | native point metadata → callback adapter | existing SVG/PNG boundary | no |
 | normalized-stacked-area | area | native | shared native Cartesian frame/axes | native point metadata → callback adapter | existing SVG/PNG boundary | no |
+| slope | specialized comparison | native | dedicated native Slope layout inside shared frame | native endpoint metadata → callback adapter | shared SVG/PNG boundary | no |
 | waterfall | waterfall | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | butterfly | butterfly | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | lollipop / horizontal-lollipop | lollipop | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | dumbbell | dumbbell | legacy | legacy/hybrid | legacy | existing legacy path | yes |
-| slope | specialized line | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | range-line / step-range-line / confidence-line | interval | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | moving-average-line / moving-average-scatter | smoothing | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | scatter / bubble / distribution | corresponding semantic family | legacy | legacy/hybrid | legacy | existing legacy path | yes |
@@ -58,3 +58,11 @@ seasonal: raw dated rows → year/month buckets → monthly aggregation → miss
 Seasonal emphasis and identification are independent: `Seasonal accent ≠ legend mode`. With no legend, accent changes only stroke presentation. The standard Seasonal legend contains individual accent-year items plus one semantic `Остальные` group for ordinary muted non-accent years; a non-accent year with an explicit color remains an individual truthful item. Direct mode uses the shared direct-series guide, defaults accent years on and non-accent years off, and respects explicit per-series overrides.
 
 `Остальные` has a stable legend-item ID and computed year membership, but is never added to plot data as a fake series. Its label and visibility use the same persisted legend overrides, reset, undo/redo, preview, and SVG/PNG path as ordinary legend items.
+
+## Slope characterization coverage
+
+Deterministic fixtures in `src/test-fixtures/charts/slope.ts` and focused compiler/renderer tests cover natural and explicit two-position selection, typed date/string/number identity, prepared-order retention, aggregation, percent and missing values, mixed signs, manual/log domains, both axis sides, number formatting, series styles, stable IDs, and source immutability.
+
+Slope now has its own semantic `plot.kind = 'slope'`, compiler, layout, and renderer. The shared frame still owns title/subtitle/note/source anchors; the Slope layout owns the 25%/75% comparison positions, guide extents, endpoint rails, internal Y-scale rail, and bounded vertical collision offsets. Values and names follow the preserved matrix: left value only; right value plus series name; values-only on both sides; names-only on the right.
+
+Horizontal/vertical guides and the internal comparison scale are semantic Slope fields and render as local graphics. No fake `__slope-guides__` series exists in the scene or renderer output. Standard and direct legend settings remain persisted but are intentionally ignored while Slope is active. Seven reviewed visual baselines cover default, values-only, names-only, internal Y scale, crowded endpoints, top date axis, and custom series styles.

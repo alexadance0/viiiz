@@ -1,6 +1,6 @@
 import { formatXAxisNumber, formatYAxisNumber } from '../../../core/numberFormat'
 import { measureTextWidth } from '../../../core/textMetrics'
-import type { NativeChartScene, ResolvedScene } from '../../../entities/chart/model/ChartScene'
+import type { CartesianAreaPlotScene, CartesianBarPlotScene, CartesianLinePlotScene, NativeChartScene, ResolvedScene } from '../../../entities/chart/model/ChartScene'
 import { axisReservation, type AxisSpec } from '../../chart-layout/axisLayout'
 import { resolveFrame } from '../../chart-layout/frameLayout'
 import type { Rect } from '../../chart-layout/geometry'
@@ -8,15 +8,16 @@ import { guideReservation } from '../../chart-layout/guides/types'
 import type { LayoutReservation } from '../../chart-layout/reservations'
 import { layoutText, plainTextDocument } from '../../chart-layout/textLayout'
 
+type NativeCartesianScene = NativeChartScene & { plot: CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene }
 const lineHeight = (style: AxisSpec['labels']['style']) => Math.round(style.size * style.lineHeight / 100)
-const orientation = (scene: NativeChartScene) => scene.plot.kind === 'bar' ? scene.plot.orientation : 'vertical'
+const orientation = (scene: NativeCartesianScene) => scene.plot.kind === 'bar' ? scene.plot.orientation : 'vertical'
 const railRect = (plot: Rect, side: 'top' | 'right' | 'bottom' | 'left'): Rect => side === 'top'
   ? { x: plot.x, y: plot.y, width: plot.width, height: 0 }
   : side === 'bottom' ? { x: plot.x, y: plot.y + plot.height, width: plot.width, height: 0 }
     : side === 'left' ? { x: plot.x, y: plot.y, width: 0, height: plot.height }
       : { x: plot.x + plot.width, y: plot.y, width: 0, height: plot.height }
 
-function measuredAxis(scene: NativeChartScene, source: AxisSpec, estimatedPlot: Rect): AxisSpec {
+function measuredAxis(scene: NativeCartesianScene, source: AxisSpec, estimatedPlot: Rect): AxisSpec {
   const config = scene.compatibilityConfig
   if (source.channel === 'category') {
     const slot = (source.orientation === 'horizontal' ? estimatedPlot.width : estimatedPlot.height) / Math.max(1, scene.plot.categories.length)
@@ -42,7 +43,9 @@ function measuredAxis(scene: NativeChartScene, source: AxisSpec, estimatedPlot: 
   return { ...source, labels: { ...source.labels, size }, title }
 }
 
-export function resolveNativeCartesianScene(scene: NativeChartScene): ResolvedScene & NativeChartScene {
+export function resolveNativeCartesianScene(sourceScene: NativeChartScene): ResolvedScene & NativeCartesianScene {
+  if (sourceScene.plot.kind === 'slope') throw new Error('Slope requires its dedicated layout.')
+  const scene = sourceScene as NativeCartesianScene
   const config = scene.compatibilityConfig
   const initial = resolveFrame({ canvas: scene.document.canvas, spacing: scene.document.composition })
   const categoryAxis = measuredAxis(scene, scene.plot.categoryAxis, initial.plot)

@@ -118,7 +118,54 @@ export interface CartesianAreaPlotScene extends CartesianPointPlotScene {
   series: AreaSeriesScene[]
 }
 
-export type NativePlotScene = CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene
+export interface SlopePositionScene {
+  id: DatumId
+  value: DataValue
+  label: string
+  coordinate: string
+  ordinal: 'start' | 'end'
+}
+
+export interface SlopeSeriesScene {
+  id: SeriesId
+  name: string
+  color: string
+  visible: boolean
+  stroke: { color: string; width: number; type: 'solid' | 'dashed' | 'dotted'; opacity: number }
+  marker: { visible: true; shape: 'circle' | 'rect' | 'roundRect' | 'triangle' | 'diamond'; size: number; fill: string; stroke: string; strokeWidth: number }
+  points: [CartesianPointScene, CartesianPointScene]
+}
+
+export interface SlopeEndpointLabelScene {
+  id: ElementId
+  pointId: ElementId
+  seriesId: SeriesId
+  side: 'left' | 'right'
+  valueText?: string
+  seriesText?: string
+  color: string
+  style: ChartTextStyle
+}
+
+export interface CartesianSlopePlotScene {
+  kind: 'slope'
+  positions: [SlopePositionScene, SlopePositionScene]
+  series: SlopeSeriesScene[]
+  valueDomain: { min: number; max: number; step: number }
+  categoryAxis: AxisSpec
+  valueAxis: AxisSpec
+  guides: {
+    horizontal: boolean
+    vertical: boolean
+    xAxisLine: boolean
+    internalValueLabels: boolean
+    grid: { color: string; width: number; type: 'solid' | 'dashed' | 'dotted' }
+    axisLine: { color: string; width: number; type: 'solid' | 'dashed' | 'dotted' }
+  }
+  endpointLabels: { distance: number; collision: 'shift-y'; hideOverlap: false; items: SlopeEndpointLabelScene[] }
+}
+
+export type NativePlotScene = CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene
 
 export interface NativeChartScene extends ChartSceneBase {
   migrationMode: 'native'
@@ -132,6 +179,7 @@ export interface NativeChartScene extends ChartSceneBase {
 export type NativeBarChartScene = NativeChartScene & { plot: CartesianBarPlotScene }
 export type NativeLineChartScene = NativeChartScene & { plot: CartesianLinePlotScene }
 export type NativeAreaChartScene = NativeChartScene & { plot: CartesianAreaPlotScene }
+export type NativeSlopeChartScene = NativeChartScene & { plot: CartesianSlopePlotScene }
 
 export type ChartScene = LegacyChartScene | NativeChartScene
 
@@ -142,6 +190,18 @@ export interface ResolvedSceneGeometry {
   reservations: Record<string, Rect>
   axes: Record<string, Rect>
   elements: Record<ElementId, Rect>
+}
+
+export interface ResolvedSlopeGeometry {
+  firstX: number
+  lastX: number
+  guideLeft: number
+  guideRight: number
+  axisY: number
+  leftEndpointLabelRail?: Rect
+  rightEndpointLabelRail?: Rect
+  valueScaleLabelRail?: Rect
+  endpointLabelOffsets: Record<ElementId, number>
 }
 
 export type ResolvedScene =

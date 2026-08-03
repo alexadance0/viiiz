@@ -465,6 +465,7 @@ export interface ChartCapabilities {
   coordinateSystem: 'cartesian' | 'hierarchy' | 'matrix' | 'custom'
   axes: false | { category?: { placements: Array<'side' | 'internal'> }; value?: { scaleTypes: Array<'linear' | 'log' | 'date'> } }
   guides: Array<'legend' | 'direct-series' | 'color-scale' | 'size-scale'>
+  endpointLabels?: boolean
   valueLabels?: boolean
   markers?: boolean
   orientation?: Array<'vertical' | 'horizontal'>

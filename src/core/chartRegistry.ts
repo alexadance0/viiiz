@@ -17,6 +17,7 @@ import { compileLegacyScene } from '../features/chart-renderer/legacyCompiler'
 import { compileNativeBarScene, isNativeBarKind } from '../features/chart-types/bar/compiler'
 import { compileNativeLineScene, isNativeLineKind } from '../features/chart-types/line/compiler'
 import { compileNativeAreaScene, isNativeAreaKind } from '../features/chart-types/area/compiler'
+import { compileNativeSlopeScene } from '../features/chart-types/slope/compiler'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 import { nativeMarkSelections } from '../entities/chart/model/sceneVisitors'
 import { repeatedChartCategories } from './chartData'
@@ -1015,6 +1016,7 @@ export function waterfallElementColor(table: DataTable, config: ChartConfig, key
 export function chartElementColor(table: DataTable, config: ChartConfig, key: string) {
   const plugin = getChartPlugin(config.kind)
   if (plugin.compilerMode === 'native') {
+    if (!plugin.validate(table, config).ok) return undefined
     const scene = plugin.compile(table, config)
     if (scene.migrationMode !== 'native') throw new Error(`Native plugin ${plugin.id} returned a legacy scene.`)
     return nativeMarkSelections(scene).find((mark) => mark.legacyKey === key)?.color
@@ -2431,11 +2433,17 @@ const nativeAreaCapabilities: ChartPlugin['capabilities'] = {
   ...nativeLineCapabilities, stacking: ['none', 'stacked', 'normalized'],
 }
 
+const nativeSlopeCapabilities: ChartPlugin['capabilities'] = {
+  coordinateSystem: 'cartesian',
+  axes: { category: { placements: ['side'] }, value: { scaleTypes: ['linear', 'log'] } },
+  guides: [], valueLabels: true, markers: true, endpointLabels: true,
+}
+
 export const chartRegistry: ChartPlugin[] = legacyChartRegistry.map((plugin) => {
-  const compiler = isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : undefined
+  const compiler = isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : undefined
   if (compiler) return {
     ...plugin, compilerMode: 'native' as const,
-    capabilities: isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : nativeAreaCapabilities,
+    capabilities: isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : nativeSlopeCapabilities,
     compile: compiler,
     buildOption: (table: DataTable, config: ChartConfig) => renderScene(compiler(table, config)),
   }
@@ -2450,6 +2458,7 @@ export function chartValueLabelSelections(table: DataTable, config: ChartConfig)
   const listingConfig = isDistributionChart(config.kind) ? { ...config, distributionShowAllPoints: true, distributionShowPoints: true } : config
   const plugin = getChartPlugin(config.kind)
   if (plugin.compilerMode === 'native') {
+    if (!plugin.validate(table, listingConfig).ok) return []
     const scene = plugin.compile(table, listingConfig)
     if (scene.migrationMode !== 'native') throw new Error(`Native plugin ${plugin.id} returned a legacy scene.`)
     return nativeMarkSelections(scene).filter((mark) => mark.value != null).map((mark) => ({ key: mark.legacyKey, seriesName: mark.seriesName, category: mark.displayCategory, value: mark.displayValue, label: listingConfig.elementStyles[mark.legacyKey]?.label, color: listingConfig.elementStyles[mark.legacyKey]?.color, target: 'value-label' as const }))
