@@ -38,7 +38,7 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 - Direct-series guides now carry resolved per-series inclusion, labels, notes, text style, color, side, and leader-line policy. The shared renderer no longer derives direct-label inclusion from the legacy product kind. Wide line hit areas retain their ECharts compatibility representation.
 - Categorical guides carry typed series and group items with stable IDs. Seasonal decides semantic membership only: `Seasonal accent ≠ legend mode`; its standard legend is accent series plus the non-accent `Остальные` group. Generic layout and rendering measure and draw that group without Seasonal branches or a fake plot series.
 - `buildOption` remains on the plugin interface for unmigrated callers. For ordinary bars its implementation is a native compile/layout/render compatibility facade, not the legacy cartesian builder.
-- Slope keeps persisted `slopeXValues`, family flags, legend/direct settings, series styles, callback keys, annotations, and decorations. It does not expose ordinary legend/direct guides, and its local guide graphics never create a fake semantic or renderer `__slope-guides__` series.
+- Slope keeps persisted `slopeXValues`, family flags, change-label/direction-color settings, legend/direct settings, series styles, callback keys, annotations, and decorations. Old documents omit the new optional fields and retain the previous appearance because change labels and direction colors default off. It does not expose ordinary legend/direct guides, and its local guide/label graphics never create fake semantic or renderer series.
 - Waterfall, butterfly, lollipop, dumbbell, interval lines, smoothing, scatter/bubble, distribution, heatmap, and treemap retain their legacy compilers.
 
 ## Tests added
@@ -47,7 +47,7 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 - compiler-mode, semantics, stable-ID, classification, layout rail, renderer translation, import guard, and throwing-builder tests.
 - Existing unit and Playwright coverage continues to cover interaction, undo/redo, category multiline editing, horizontal bars, legends/direct labels, and SVG/PNG export.
 - Focused Seasonal coverage separates none/standard/direct modes, group edits and visibility, explicit non-accent colors, persistence/reset/history, native/legacy family transitions, SVG/PNG parity, and seven visual baselines.
-- Focused Slope coverage verifies typed two-position preparation, endpoint-label semantics, local collision layout, internal guides, native/legacy transitions, history, preview/SVG/PNG parity, a throwing legacy-builder guard, and seven reviewed visual baselines.
+- Focused Slope coverage verifies typed two-position preparation, endpoint-label ownership and leaders, centered X labels, shared change semantics, local change-label placement, direction colors, missing/log cases, native/legacy transitions, history, preview/SVG/PNG parity, and a throwing legacy-builder guard.
 
 ## Known debt and next removable legacy code
 

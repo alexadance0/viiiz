@@ -21,6 +21,7 @@ import { compileNativeSlopeScene } from '../features/chart-types/slope/compiler'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 import { nativeMarkSelections } from '../entities/chart/model/sceneVisitors'
 import { repeatedChartCategories } from './chartData'
+import { changeColor as semanticChangeColor, describeChange, formatChange } from './changeSemantics'
 import { absorbedBarLabelPlacement, barSeriesGeometry, denseValueLabelStride, isInsideValueLabel, showDenseValueLabel, valueLabelPosition } from './chartLabels'
 import { hyphenateSync as hyphenateRussian } from 'hyphen/ru'
 
@@ -945,15 +946,10 @@ const dumbbell: LegacyChartPlugin = {
       label: { show: config.showValues && (field === startField ? config.dumbbellShowStartValue ?? true : config.dumbbellShowEndValue ?? true), position: orientation === 'horizontal' ? lower ? 'left' : 'right' : lower ? 'bottom' : 'top', formatter: formatChartNumber(value, config), ...text(config.valueText) },
     }
     }
-    const changeLabel = (item: typeof items[number]) => {
-      const difference = item.end - item.start
-      const absolute = `${difference > 0 ? '+' : ''}${formatChartNumber(difference, config)}`
-      if ((config.dumbbellDifferenceFormat ?? 'absolute') === 'absolute') return absolute
-      return item.start === 0 ? 'н/д' : `${difference > 0 ? '+' : ''}${formatChartNumber(difference / Math.abs(item.start) * 100, { ...config, valueMode: 'absolute', numberOperation: 'none', numberFactor: 1, numberDecimals: config.dumbbellPercentDecimals ?? 0, valueLabelAffixesLinked: false, valueLabelPrefix: '', valueLabelSuffix: '' })}%`
-    }
+    const changeLabel = (item: typeof items[number]) => formatChange(describeChange(item.start, item.end), config.dumbbellDifferenceFormat ?? 'absolute', config, config.dumbbellPercentDecimals ?? 0)
     const changeColor = (item: typeof items[number]) => !config.dumbbellColorByChange
       ? config.dumbbellConnectorColor ?? config.gridColor
-      : item.end > item.start ? config.dumbbellIncreaseColor ?? '#168a72' : item.end < item.start ? config.dumbbellDecreaseColor ?? '#db5a5a' : config.dumbbellNeutralColor ?? '#777580'
+      : semanticChangeColor(describeChange(item.start, item.end), config.dumbbellIncreaseColor ?? '#168a72', config.dumbbellDecreaseColor ?? '#db5a5a', config.dumbbellNeutralColor ?? '#777580')
     option.series = [
       {
         name: '__dumbbell-connectors', type: 'custom', silent: true, tooltip: { show: false }, z: 0, zlevel: 0,
@@ -986,7 +982,7 @@ const dumbbell: LegacyChartPlugin = {
     option.tooltip = { trigger: 'axis', formatter: (input: unknown) => {
       const entries = (Array.isArray(input) ? input : [input]) as Array<{ dataIndex?: number }>
       const item = items[entries[0]?.dataIndex ?? 0]
-      return item ? `<b>${escapeHtml(item.label)}</b><br/>${escapeHtml(startField)}: <b>${escapeHtml(formatChartNumber(item.start, config))}</b><br/>${escapeHtml(endField)}: <b>${escapeHtml(formatChartNumber(item.end, config))}</b><br/>Изменение: <b>${escapeHtml(formatChartNumber(item.end - item.start, config))}</b>` : ''
+      return item ? `<b>${escapeHtml(item.label)}</b><br/>${escapeHtml(startField)}: <b>${escapeHtml(formatChartNumber(item.start, config))}</b><br/>${escapeHtml(endField)}: <b>${escapeHtml(formatChartNumber(item.end, config))}</b><br/>Изменение: <b>${escapeHtml(changeLabel(item))}</b>` : ''
     } }
     return option
   },

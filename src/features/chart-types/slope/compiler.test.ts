@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { slopePositionKey } from '../../../core/chartScale'
 import type { ChartConfig, DataTable } from '../../../core/types'
-import { slopeConfig, slopeTable } from '../../../test-fixtures/charts/slope'
+import { slopeConfig, slopeDetachedLabelRegressionTable, slopeTable } from '../../../test-fixtures/charts/slope'
 import { nativeMarkSelections } from '../../../entities/chart/model/sceneVisitors'
 import { resolveNativeSlopeScene } from './layout'
 import { compileNativeSlopeScene, prepareSlopeComparison } from './compiler'
@@ -130,8 +130,111 @@ describe('native Slope compiler', () => {
     ] }
     const scene = compileNativeSlopeScene(crowded, slopeConfig({ yFields: ['one', 'two', 'three'] }))
     const resolved = resolveNativeSlopeScene(scene)
-    const rightOffsets = scene.plot.endpointLabels.items.filter((item) => item.side === 'right').map((item) => resolved.slopeGeometry.endpointLabelOffsets[item.id])
-    expect(new Set(rightOffsets).size).toBe(3)
+    const rightY = scene.plot.endpointLabels.items.filter((item) => item.side === 'right').map((item) => resolved.slopeGeometry.endpointLabels[item.id].y)
+    expect(new Set(rightY).size).toBe(3)
     expect(resolveNativeSlopeScene(compileNativeSlopeScene(crowded, slopeConfig({ yFields: ['one'] }))).geometry.content).toEqual(resolved.geometry.content)
+  })
+
+  it('keeps non-colliding endpoint labels at their point anchors and owns every collision in layout', () => {
+    const resolved = resolveNativeSlopeScene(compileNativeSlopeScene(slopeTable, slopeConfig()))
+    const placements = Object.values(resolved.slopeGeometry.endpointLabels)
+    expect(placements.filter((item) => !item.leaderRequired).every((item) => item.displacementY === 0)).toBe(true)
+    expect(placements.every((item) => item.y - item.height / 2 >= resolved.geometry.plot.y && item.y + item.height / 2 <= resolved.geometry.plot.y + resolved.geometry.plot.height)).toBe(true)
+  })
+
+  it('keeps the observed Север/Центр endpoint labels attached to their own widely separated markers', () => {
+    const scene = compileNativeSlopeScene(slopeDetachedLabelRegressionTable, slopeConfig({ xField: 'position', yField: 'before', yFields: ['before', 'after'] }))
+    const resolved = resolveNativeSlopeScene(scene)
+    const points = new Map(scene.plot.series.flatMap((series) => series.points.map((point) => [point.id, { point, series }]))), placements = Object.values(resolved.slopeGeometry.endpointLabels)
+    expect(placements).toHaveLength(4)
+    for (const placement of placements) {
+      const owner = points.get(placement.pointId)!
+      expect(placement.seriesId).toBe(owner.series.id)
+      expect(placement.displacementY).toBe(0)
+      expect(placement.leaderRequired).toBe(false)
+      expect(placement.y).toBe(placement.anchorY)
+    }
+    expect(scene.plot.positions.map((position) => position.label)).toEqual(['Север', 'Центр'])
+    expect(resolved.geometry.elements[`category-label:${scene.plot.positions[0].id}`].x + resolved.geometry.elements[`category-label:${scene.plot.positions[0].id}`].width / 2).toBeCloseTo(resolved.slopeGeometry.firstX)
+    expect(resolved.geometry.elements[`category-label:${scene.plot.positions[1].id}`].x + resolved.geometry.elements[`category-label:${scene.plot.positions[1].id}`].width / 2).toBeCloseTo(resolved.slopeGeometry.lastX)
+  })
+
+  it('measures multiline endpoint text and creates symmetric leaders only for displaced labels', () => {
+    const crowded: DataTable = { name: 'crowded', columns: ['period', 'group', 'value'], rows: [
+      { period: 'A', group: 'Север\nрегион', value: 10 }, { period: 'A', group: 'Центр\nрегион', value: 10 },
+      { period: 'B', group: 'Север\nрегион', value: 20 }, { period: 'B', group: 'Центр\nрегион', value: 20 },
+    ] }
+    const resolved = resolveNativeSlopeScene(compileNativeSlopeScene(crowded, slopeConfig({ xField: 'period', yField: 'value', yFields: ['value'], seriesField: 'group' })))
+    const left = Object.values(resolved.slopeGeometry.endpointLabels).filter((item) => item.side === 'left')
+    const right = Object.values(resolved.slopeGeometry.endpointLabels).filter((item) => item.side === 'right')
+    expect(left.some((item) => item.leaderRequired)).toBe(true)
+    expect(right.some((item) => item.leaderRequired)).toBe(true)
+    expect(Math.max(...right.map((item) => item.height))).toBeGreaterThan(slopeConfig().valueText.size)
+  })
+
+  it('models renderer-neutral change labels, missing endpoints, positions, and direction colors', () => {
+    const scene = compileNativeSlopeScene(slopeTable, slopeConfig({ slopeShowChange: true, slopeChangeFormat: 'percent', slopeChangePercentDecimals: 1, slopeChangePosition: 'end', slopeColorByChange: true, slopeIncreaseColor: '#008800', slopeDecreaseColor: '#cc0000' }))
+    expect(scene.plot.series.map((series) => [series.name, series.change?.descriptor.direction, series.change?.label, series.change?.labelPosition, series.stroke.color])).toEqual([
+      ['actual', 'increase', '+100,0%', 'end', '#008800'],
+      ['plan', 'decrease', '−16,7%', 'end', '#cc0000'],
+      ['risk', 'increase', '+250,0%', 'end', '#008800'],
+    ])
+    const missing: DataTable = { name: 'missing', columns: ['period', 'value'], rows: [{ period: 'A', value: null }, { period: 'B', value: 2 }] }
+    expect(compileNativeSlopeScene(missing, slopeConfig({ yFields: ['value'], yField: 'value', slopeShowChange: true, slopeColorByChange: true })).plot.series[0].change).toBeUndefined()
+  })
+
+  it('loads old optional-field configs with change encoding disabled and stored series colors intact', () => {
+    const config = slopeConfig({ yFields: ['actual'], seriesStyles: { actual: { color: '#6956e8' } } })
+    delete config.slopeShowChange
+    delete config.slopeColorByChange
+    delete config.slopeChangeFormat
+    const series = compileNativeSlopeScene(slopeTable, config).plot.series[0]
+    expect(series).toMatchObject({ color: '#6956e8', stroke: { color: '#6956e8' }, change: { showLabel: false, colorByDirection: false, resolvedColor: '#6956e8' } })
+  })
+
+  it.each(['start', 'middle', 'end'] as const)('places %s change labels along the rendered segment inside plot bounds', (position) => {
+    const resolved = resolveNativeSlopeScene(compileNativeSlopeScene(slopeTable, slopeConfig({ yFields: ['actual'], slopeShowChange: true, slopeChangePosition: position })))
+    const placement = Object.values(resolved.slopeGeometry.changeLabels)[0]
+    const expectedT = position === 'start' ? .25 : position === 'end' ? .75 : .5
+    expect(placement.anchorX).toBeCloseTo(resolved.slopeGeometry.firstX + (resolved.slopeGeometry.lastX - resolved.slopeGeometry.firstX) * expectedT)
+    expect(placement.x).toBeGreaterThanOrEqual(resolved.geometry.plot.x)
+    expect(placement.x + placement.width).toBeLessThanOrEqual(resolved.geometry.plot.x + resolved.geometry.plot.width)
+    expect(placement.y).toBeGreaterThanOrEqual(resolved.geometry.plot.y)
+    expect(placement.y + placement.height).toBeLessThanOrEqual(resolved.geometry.plot.y + resolved.geometry.plot.height)
+  })
+
+  it.each([['bottom', 0], ['top', 30], ['bottom', 45]] as const)('centers multiline/rotated X labels on the exact comparison ticks (%s, %s°)', (side, rotation) => {
+    const resolved = resolveNativeSlopeScene(compileNativeSlopeScene(slopeTable, slopeConfig({ xAxisPosition: side, xAxisLabelRotate: rotation, categoryLabelOverrides: { x: { '0:Было': 'Длинная\nпервая подпись', '1:Стало': 'Длинная\nпоследняя подпись' } } })))
+    const boxes = resolved.plot.positions.map((position) => resolved.geometry.elements[`category-label:${position.id}`])
+    expect(boxes[0].x + boxes[0].width / 2).toBeCloseTo(resolved.slopeGeometry.firstX)
+    expect(boxes[1].x + boxes[1].width / 2).toBeCloseTo(resolved.slopeGeometry.lastX)
+  })
+
+  it('keeps endpoint ownership and X ticks stable when category labels become long', () => {
+    const short = resolveNativeSlopeScene(compileNativeSlopeScene(slopeTable, slopeConfig()))
+    const long = resolveNativeSlopeScene(compileNativeSlopeScene(slopeTable, slopeConfig({ categoryLabelOverrides: { x: { '0:Было': 'Очень длинная первая подпись', '1:Стало': 'Очень длинная последняя подпись' } } })))
+    expect([long.slopeGeometry.firstX, long.slopeGeometry.lastX]).toEqual([short.slopeGeometry.firstX, short.slopeGeometry.lastX])
+    expect(Object.values(long.slopeGeometry.endpointLabels).map((item) => item.anchorX)).toEqual(Object.values(short.slopeGeometry.endpointLabels).map((item) => item.anchorX))
+  })
+
+  it('keeps dense labels visible and bounded while reducing only their local spacing', () => {
+    const columns = ['position', ...Array.from({ length: 18 }, (_, index) => `series-${index}`)]
+    const table: DataTable = { name: 'dense', columns, rows: ['A', 'B'].map((position) => Object.fromEntries(columns.map((column, index) => [column, column === 'position' ? position : 50 + index / 100]))) }
+    const scene = compileNativeSlopeScene(table, slopeConfig({ canvasHeight: 420, xField: 'position', yField: columns[1], yFields: columns.slice(1) }))
+    const resolved = resolveNativeSlopeScene(scene), placements = Object.values(resolved.slopeGeometry.endpointLabels)
+    expect(placements).toHaveLength(scene.plot.endpointLabels.items.length)
+    expect(placements.every((item) => item.y - item.height / 2 >= resolved.geometry.plot.y && item.y + item.height / 2 <= resolved.geometry.plot.y + resolved.geometry.plot.height)).toBe(true)
+  })
+
+  it('places change labels deterministically for crossing and log-scale segments and omits invalid log endpoints', () => {
+    const crossing: DataTable = { name: 'crossing', columns: ['position', 'up', 'down'], rows: [{ position: 'A', up: 10, down: 90 }, { position: 'B', up: 90, down: 10 }] }
+    const first = resolveNativeSlopeScene(compileNativeSlopeScene(crossing, slopeConfig({ xField: 'position', yField: 'up', yFields: ['up', 'down'], slopeShowChange: true })))
+    const second = resolveNativeSlopeScene(compileNativeSlopeScene(crossing, slopeConfig({ xField: 'position', yField: 'up', yFields: ['up', 'down'], slopeShowChange: true })))
+    expect(first.slopeGeometry.changeLabels).toEqual(second.slopeGeometry.changeLabels)
+    expect(Object.values(first.slopeGeometry.changeLabels)).toHaveLength(2)
+    const logarithmic = resolveNativeSlopeScene(compileNativeSlopeScene(crossing, slopeConfig({ xField: 'position', yField: 'up', yFields: ['up', 'down'], slopeShowChange: true, yAxisScaleType: 'log', yAxisMin: 1, yAxisMax: 100 })))
+    expect(Object.values(logarithmic.slopeGeometry.changeLabels).every((item) => [item.x, item.y].every(Number.isFinite))).toBe(true)
+    const invalid: DataTable = { name: 'invalid-log', columns: ['position', 'value'], rows: [{ position: 'A', value: -1 }, { position: 'B', value: 10 }] }
+    expect(Object.values(resolveNativeSlopeScene(compileNativeSlopeScene(invalid, slopeConfig({ xField: 'position', yField: 'value', yFields: ['value'], slopeShowChange: true, yAxisScaleType: 'log' }))).slopeGeometry.changeLabels)).toHaveLength(0)
   })
 })

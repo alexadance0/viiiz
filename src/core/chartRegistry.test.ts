@@ -2000,11 +2000,11 @@ describe('chart composition alignment', () => {
     const slopeTable: DataTable = { name: 'slope', columns: ['period', 'value'], rows: [{ period: 'Было', value: 10 }, { period: 'Стало', value: 18 }] }
     const config = { ...base('slope'), xField: 'period', yField: 'value', yFields: ['value'], showValues: false }
     expect(getChartPlugin('slope').validate(slopeTable, config).ok).toBe(true)
-    const option = getChartPlugin('slope').buildOption(slopeTable, { ...config, showVerticalGrid: true }) as { legend: { show: boolean }; xAxis: { boundaryGap: boolean; axisLine: { show: boolean }; splitLine: { show: boolean } }; yAxis: { axisLabel: { show: boolean } }; series: Array<{ name?: string; type: string; showSymbol: boolean; symbolSize: number; data: Array<{ itemStyle?: { color?: string }; label?: { position?: string; formatter?: string } }> }> }
+    const option = getChartPlugin('slope').buildOption(slopeTable, { ...config, showVerticalGrid: true }) as { legend: { show: boolean }; graphic: Array<{ id?: string; style?: { text?: string } }>; xAxis: { boundaryGap: boolean; axisLine: { show: boolean }; splitLine: { show: boolean } }; yAxis: { axisLabel: { show: boolean } }; series: Array<{ name?: string; type: string; showSymbol: boolean; symbolSize: number; data: Array<{ itemStyle?: { color?: string }; label?: { show?: boolean } }> }> }
     const series = option.series.find((item) => item.type === 'line')!
     expect(series).toMatchObject({ showSymbol: true, symbolSize: 11 })
-    expect(series.data.map((point) => point.label?.position)).toEqual(['left', 'right'])
-    expect(series.data.map((point) => point.label?.formatter)).toEqual(['10', '18 value'])
+    expect(series.data.every((point) => point.label?.show === false)).toBe(true)
+    expect(option.graphic.filter((item) => item.id?.startsWith('slope-label:')).map((item) => item.style?.text)).toEqual(['10', '18 value'])
     expect(series.data.map((point) => point.itemStyle?.color)).toEqual([config.color, config.color])
     expect(option.legend.show).toBe(false)
     expect(option.yAxis.axisLabel.show).toBe(false)
@@ -2012,10 +2012,10 @@ describe('chart composition alignment', () => {
     expect(option.xAxis.axisLine.show).toBe(false)
     expect(option.xAxis.splitLine.show).toBe(false)
     expect(option.series.some((series) => series.name === '__slope-guides__')).toBe(false)
-    const namesOnly = getChartPlugin('slope').buildOption(slopeTable, { ...config, slopeShowValues: false }) as { series: Array<{ type: string; data: Array<{ label?: { show?: boolean; formatter?: string } }> }> }
-    expect(namesOnly.series.find((item) => item.type === 'line')?.data.map((point) => point.label?.formatter)).toEqual([undefined, 'value'])
-    const hidden = getChartPlugin('slope').buildOption(slopeTable, { ...config, slopeShowValues: false, slopeShowSeriesNames: false }) as { series: Array<{ type: string; data: Array<{ label?: { show?: boolean } }> }> }
-    expect(hidden.series.find((item) => item.type === 'line')?.data.every((point) => point.label?.show === false)).toBe(true)
+    const namesOnly = getChartPlugin('slope').buildOption(slopeTable, { ...config, slopeShowValues: false }) as { graphic: Array<{ id?: string; style?: { text?: string } }> }
+    expect(namesOnly.graphic.filter((item) => item.id?.startsWith('slope-label:')).map((item) => item.style?.text)).toEqual(['value'])
+    const hidden = getChartPlugin('slope').buildOption(slopeTable, { ...config, slopeShowValues: false, slopeShowSeriesNames: false }) as { graphic: Array<{ id?: string }> }
+    expect(hidden.graphic.some((item) => item.id?.startsWith('slope-label:'))).toBe(false)
   })
 
   it('builds a slope chart from two selected X positions', () => {

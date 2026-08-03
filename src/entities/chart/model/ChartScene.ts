@@ -1,4 +1,5 @@
 import type { ChartConfig, ChartTextStyle, DataValue } from '../../../core/types'
+import type { ChangeDescriptor } from '../../../core/changeSemantics'
 import type { AxisSpec } from '../../../features/chart-layout/axisLayout'
 import type { Rect } from '../../../features/chart-layout/geometry'
 import type { GuideSpec } from '../../../features/chart-layout/guides/types'
@@ -126,6 +127,15 @@ export interface SlopePositionScene {
   ordinal: 'start' | 'end'
 }
 
+export interface SlopeChangeScene {
+  descriptor: ChangeDescriptor
+  showLabel: boolean
+  label: string
+  labelPosition: 'start' | 'middle' | 'end'
+  colorByDirection: boolean
+  resolvedColor: string
+}
+
 export interface SlopeSeriesScene {
   id: SeriesId
   name: string
@@ -134,6 +144,7 @@ export interface SlopeSeriesScene {
   stroke: { color: string; width: number; type: 'solid' | 'dashed' | 'dotted'; opacity: number }
   marker: { visible: true; shape: 'circle' | 'rect' | 'roundRect' | 'triangle' | 'diamond'; size: number; fill: string; stroke: string; strokeWidth: number }
   points: [CartesianPointScene, CartesianPointScene]
+  change?: SlopeChangeScene
 }
 
 export interface SlopeEndpointLabelScene {
@@ -201,7 +212,35 @@ export interface ResolvedSlopeGeometry {
   leftEndpointLabelRail?: Rect
   rightEndpointLabelRail?: Rect
   valueScaleLabelRail?: Rect
-  endpointLabelOffsets: Record<ElementId, number>
+  endpointLabels: Record<ElementId, ResolvedSlopeEndpointLabelPlacement>
+  changeLabels: Record<SeriesId, ResolvedSlopeChangeLabelPlacement>
+}
+
+export interface ResolvedSlopeEndpointLabelPlacement {
+  id: ElementId
+  pointId: ElementId
+  seriesId: SeriesId
+  side: 'left' | 'right'
+  anchorX: number
+  anchorY: number
+  x: number
+  y: number
+  width: number
+  height: number
+  displacementY: number
+  leaderRequired: boolean
+}
+
+export interface ResolvedSlopeChangeLabelPlacement {
+  seriesId: SeriesId
+  anchorX: number
+  anchorY: number
+  x: number
+  y: number
+  width: number
+  height: number
+  color: string
+  text: string
 }
 
 export type ResolvedScene =

@@ -309,6 +309,14 @@ export interface ChartConfig {
   slopeShowValues?: boolean
   slopeShowSeriesNames?: boolean
   slopeShowYAxis?: boolean
+  slopeShowChange?: boolean
+  slopeChangeFormat?: 'absolute' | 'percent'
+  slopeChangePosition?: 'start' | 'middle' | 'end'
+  slopeChangePercentDecimals?: number
+  slopeColorByChange?: boolean
+  slopeIncreaseColor?: string
+  slopeDecreaseColor?: string
+  slopeNeutralColor?: string
   indexBaseXValue?: string
   seasonalAccentYears?: string[]
   seasonalMutedColor?: string

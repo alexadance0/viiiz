@@ -10,6 +10,9 @@ import { layoutText, plainTextDocument } from '../../chart-layout/textLayout'
 
 const lineHeight = (style: ChartTextStyle) => Math.round(style.size * style.lineHeight / 100)
 const tickPosition = (value: number, min: number, max: number) => Math.abs(value - min) < 1e-9 ? 'first' as const : Math.abs(value - max) < 1e-9 ? 'last' as const : 'middle' as const
+const endpointText = (valueText?: string, seriesText?: string) => [valueText, seriesText].filter(Boolean).join(' ')
+const overlapArea = (left: Rect, right: Rect) => Math.max(0, Math.min(left.x + left.width, right.x + right.width) - Math.max(left.x, right.x)) * Math.max(0, Math.min(left.y + left.height, right.y + right.height) - Math.max(left.y, right.y))
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
 export const slopeGuideValues = (scene: NativeSlopeChartScene) => {
   if (scene.compatibilityConfig.yAxisScaleType === 'log') return []
@@ -65,8 +68,9 @@ export function resolveNativeSlopeScene(scene: NativeSlopeChartScene): ResolvedS
   if (valueReservation) reservations.push(valueReservation)
 
   const labels = scene.plot.endpointLabels.items
-  const leftWidth = Math.ceil(Math.max(0, ...labels.filter((item) => item.side === 'left').map((item) => measureTextWidth(item.valueText ?? '', item.style.size, item.style.fontFamily, item.style.weight))))
-  const rightWidth = Math.ceil(Math.max(0, ...labels.filter((item) => item.side === 'right').map((item) => measureTextWidth([item.valueText, item.seriesText].filter(Boolean).join(' '), item.style.size, item.style.fontFamily, item.style.weight))))
+  const endpointLayouts = new Map(labels.map((item) => [item.id, layoutText({ document: plainTextDocument(endpointText(item.valueText, item.seriesText), item.style), maxWidth: Math.max(1, initial.content.width / 2) })]))
+  const leftWidth = Math.ceil(Math.max(0, ...labels.filter((item) => item.side === 'left').map((item) => endpointLayouts.get(item.id)!.size.width)))
+  const rightWidth = Math.ceil(Math.max(0, ...labels.filter((item) => item.side === 'right').map((item) => endpointLayouts.get(item.id)!.size.width)))
   const valueStyle = scene.plot.valueAxis.labels.style
   const scaleWidth = scene.plot.guides.internalValueLabels ? Math.ceil(Math.max(0, ...slopeGuideValues(scene).map((value) => measureTextWidth(formatYAxisNumber(value, scene.compatibilityConfig, tickPosition(value, scene.plot.valueDomain.min, scene.plot.valueDomain.max)), valueStyle.size, valueStyle.fontFamily, valueStyle.weight)))) : 0
   if (scaleWidth) reservations.push({ id: 'slope:value-scale-labels', side: 'left', size: scaleWidth, gap: scene.plot.valueAxis.labels.gap, mode: 'outside', priority: 60 })
@@ -91,18 +95,62 @@ export function resolveNativeSlopeScene(scene: NativeSlopeChartScene): ResolvedS
       : (value - min) / Math.max(Number.EPSILON, max - min)
     return plot.y + plot.height * (1 - ratio)
   }
-  const endpointLabelOffsets: ResolvedSlopeGeometry['endpointLabelOffsets'] = {}
+  const endpointLabels: ResolvedSlopeGeometry['endpointLabels'] = {}
   for (const side of ['left', 'right'] as const) {
     const entries = labels.flatMap((item) => {
       const value = pointValues.get(item.pointId)
-      return value == null || !Number.isFinite(value) || scene.compatibilityConfig.yAxisScaleType === 'log' && value <= 0 ? [] : [{ item, desired: valueY(value), height: lineHeight(item.style) }]
-    }).filter(({ item }) => item.side === side).sort((left, right) => left.desired - right.desired)
-    entries.forEach((entry, index) => { entry.desired = Math.max(plot.y + entry.height / 2, index ? entries[index - 1].desired + Math.max(entry.height, entries[index - 1].height) + 2 : entry.desired) })
+      const layout = endpointLayouts.get(item.id)!
+      return value == null || !Number.isFinite(value) || scene.compatibilityConfig.yAxisScaleType === 'log' && value <= 0 ? [] : [{ item, anchor: valueY(value), y: valueY(value), width: layout.size.width, height: layout.size.height }]
+    }).filter(({ item }) => item.side === side).sort((left, right) => left.anchor - right.anchor || left.item.seriesId.localeCompare(right.item.seriesId))
+    const totalHeight = entries.reduce((sum, entry) => sum + entry.height, 0)
+    const gap = entries.length > 1 ? Math.max(0, Math.min(2, (plot.height - totalHeight) / (entries.length - 1))) : 0
+    entries.forEach((entry, index) => {
+      const top = plot.y + entry.height / 2
+      const afterPrevious = index ? entries[index - 1].y + (entries[index - 1].height + entry.height) / 2 + gap : top
+      entry.y = Math.max(entry.anchor, top, afterPrevious)
+    })
     for (let index = entries.length - 1; index >= 0; index--) {
-      const entry = entries[index], maximum = index === entries.length - 1 ? plot.y + plot.height - entry.height / 2 : entries[index + 1].desired - Math.max(entry.height, entries[index + 1].height) - 2
-      entry.desired = Math.min(entry.desired, maximum)
+      const entry = entries[index]
+      const maximum = index === entries.length - 1 ? plot.y + plot.height - entry.height / 2 : entries[index + 1].y - (entry.height + entries[index + 1].height) / 2 - gap
+      entry.y = Math.max(plot.y + entry.height / 2, Math.min(entry.y, maximum))
     }
-    for (const entry of entries) endpointLabelOffsets[entry.item.id] = entry.desired - valueY(pointValues.get(entry.item.pointId)!)
+    for (const entry of entries) {
+      const rail = side === 'left' ? leftEndpointLabelRail! : rightEndpointLabelRail!
+      const x = side === 'left' ? rail.x + rail.width : rail.x
+      endpointLabels[entry.item.id] = {
+        id: entry.item.id, pointId: entry.item.pointId, seriesId: entry.item.seriesId, side,
+        anchorX: side === 'left' ? firstX : lastX, anchorY: entry.anchor,
+        x, y: entry.y, width: entry.width, height: entry.height,
+        displacementY: entry.y - entry.anchor, leaderRequired: Math.abs(entry.y - entry.anchor) > 3,
+      }
+    }
+  }
+  const changeLabels: ResolvedSlopeGeometry['changeLabels'] = {}
+  const occupied: Rect[] = [
+    ...Object.values(endpointLabels).map(({ side, x, y, width, height }) => ({ x: side === 'left' ? x - width : x, y: y - height / 2, width, height })),
+    ...scene.plot.series.flatMap((series) => series.points.flatMap((point, index) => point.value == null || !Number.isFinite(point.value) || scene.compatibilityConfig.yAxisScaleType === 'log' && point.value <= 0 ? [] : [{ x: (index ? lastX : firstX) - series.marker.size / 2, y: valueY(point.value) - series.marker.size / 2, width: series.marker.size, height: series.marker.size }])),
+  ]
+  for (const series of scene.plot.series) {
+    if (!series.change?.showLabel || series.points.some((point) => point.value == null || !Number.isFinite(point.value) || scene.compatibilityConfig.yAxisScaleType === 'log' && point.value <= 0)) continue
+    const startY = valueY(series.points[0].value!), endY = valueY(series.points[1].value!)
+    const dx = lastX - firstX, dy = endY - startY, length = Math.max(Number.EPSILON, Math.hypot(dx, dy))
+    let normalX = -dy / length, normalY = dx / length
+    if (normalY > 0) { normalX *= -1; normalY *= -1 }
+    const layout = layoutText({ document: plainTextDocument(series.change.label, scene.compatibilityConfig.valueText), maxWidth: Math.max(1, plot.width / 2) })
+    const width = Math.ceil(layout.size.width) + 8, height = Math.ceil(layout.size.height) + 4, offset = height / 2 + 9
+    const baseT = series.change.labelPosition === 'start' ? .25 : series.change.labelPosition === 'end' ? .75 : .5
+    const candidates = [[baseT, 1], [baseT, -1], [clamp(baseT - .1, .15, .85), 1], [clamp(baseT + .1, .15, .85), 1], [clamp(baseT - .1, .15, .85), -1], [clamp(baseT + .1, .15, .85), -1]] as const
+    const resolved = candidates.map(([t, side], index) => {
+      const anchorX = firstX + dx * t, anchorY = startY + dy * t
+      const x = clamp(anchorX + normalX * offset * side - width / 2, plot.x, plot.x + plot.width - width)
+      const y = clamp(anchorY + normalY * offset * side - height / 2, plot.y, plot.y + plot.height - height)
+      const box = { x, y, width, height }
+      const score = occupied.reduce((sum, item) => sum + overlapArea(box, item), 0) * 1000 + Math.abs(t - baseT) * 100 + index
+      return { anchorX, anchorY, x, y, width, height, score }
+    }).sort((left, right) => left.score - right.score)[0]
+    const placement = { seriesId: series.id, anchorX: resolved.anchorX, anchorY: resolved.anchorY, x: resolved.x, y: resolved.y, width, height, color: series.change.colorByDirection ? series.change.resolvedColor : scene.compatibilityConfig.valueText.color, text: series.change.label }
+    changeLabels[series.id] = placement
+    occupied.push(placement)
   }
   const reservationGeometry = Object.fromEntries(frame.resolvedReservations.map(({ reservation, bounds }) => [reservation.id, bounds]))
   const rail = (side: 'top' | 'right' | 'bottom' | 'left'): Rect => side === 'top' ? { x: plot.x, y: plot.y, width: plot.width, height: 0 } : side === 'bottom' ? { x: plot.x, y: plot.y + plot.height, width: plot.width, height: 0 } : side === 'left' ? { x: plot.x, y: plot.y, width: 0, height: plot.height } : { x: plot.x + plot.width, y: plot.y, width: 0, height: plot.height }
@@ -119,6 +167,6 @@ export function resolveNativeSlopeScene(scene: NativeSlopeChartScene): ResolvedS
   return {
     ...scene, plot: { ...scene.plot, categoryAxis, valueAxis }, resolvedReservations: frame.resolvedReservations,
     geometry: { canvas: frame.canvas, content: frame.content, plot, reservations: reservationGeometry, axes, elements },
-    slopeGeometry: { firstX, lastX, guideLeft, guideRight, axisY, leftEndpointLabelRail, rightEndpointLabelRail, valueScaleLabelRail, endpointLabelOffsets },
+    slopeGeometry: { firstX, lastX, guideLeft, guideRight, axisY, leftEndpointLabelRail, rightEndpointLabelRail, valueScaleLabelRail, endpointLabels, changeLabels },
   }
 }

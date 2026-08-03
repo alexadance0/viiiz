@@ -8,6 +8,13 @@ export const slopeTable: DataTable = {
   ],
 }
 
+export const slopeDetachedLabelRegressionTable: DataTable = {
+  name: 'slope-detached-label-regression', columns: ['position', 'before', 'after'], rows: [
+    { position: 'Север', before: 42, after: 54 },
+    { position: 'Центр', before: 54, after: 68 },
+  ],
+}
+
 export const slopeConfig = (overrides: Partial<ChartConfig> = {}): ChartConfig => ({
   ...createDefaultChartConfig(), kind: 'slope', title: '', subtitle: '', note: '', source: '',
   showTitle: false, showSubtitle: false, showNote: false, showSource: false,

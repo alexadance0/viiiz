@@ -1,5 +1,6 @@
 import { planCategoryDateLabels } from '../../../core/chartDateAxis'
 import type { PreparedChartData } from '../../../core/chartData'
+import { changeColor, describeChange, formatChange } from '../../../core/changeSemantics'
 import { niceNumericScale, orderedBounds, prepareVisibleChartData, slopePositionKey } from '../../../core/chartScale'
 import { formatChartNumber } from '../../../core/numberFormat'
 import { formatTimeValue } from '../../../core/timeFrequency'
@@ -64,7 +65,25 @@ export function compileNativeSlopeScene(table: DataTable, config: ChartConfig): 
         label: { visible: false, text: value == null ? '' : formatChartNumber(value, config), style: config.valueText, position: 'auto' },
       }
     }) as [CartesianPointScene, CartesianPointScene]
-    return { id, name: source.name, color, visible: true, stroke: { color, width: style?.lineWidth ?? 2.5, type: style?.lineType ?? 'solid', opacity: 1 }, marker, points }
+    const start = points[0].value, end = points[1].value
+    const descriptor = start == null || end == null ? undefined : describeChange(start, end)
+    const resolvedColor = descriptor && config.slopeColorByChange
+      ? changeColor(descriptor, config.slopeIncreaseColor ?? '#168a72', config.slopeDecreaseColor ?? '#db5a5a', config.slopeNeutralColor ?? '#777580')
+      : color
+    return {
+      id, name: source.name, color, visible: true,
+      stroke: { color: resolvedColor, width: style?.lineWidth ?? 2.5, type: style?.lineType ?? 'solid', opacity: 1 },
+      marker: config.slopeColorByChange && descriptor ? { ...marker, fill: resolvedColor, stroke: resolvedColor } : marker,
+      points,
+      change: descriptor ? {
+        descriptor,
+        showLabel: config.slopeShowChange ?? false,
+        label: formatChange(descriptor, config.slopeChangeFormat ?? 'absolute', config, config.slopeChangePercentDecimals ?? 0),
+        labelPosition: config.slopeChangePosition ?? 'middle',
+        colorByDirection: config.slopeColorByChange ?? false,
+        resolvedColor,
+      } : undefined,
+    }
   })
   const values = series.flatMap((item) => item.points.map((point) => point.value))
   const automatic = niceNumericScale(values)
@@ -83,7 +102,8 @@ export function compileNativeSlopeScene(table: DataTable, config: ChartConfig): 
   const endpointItems: SlopeEndpointLabelScene[] = []
   series.forEach((item) => item.points.forEach((point, index) => {
     if (point.value == null || index === 0 && !showValues || index === 1 && !showValues && !showNames) return
-    endpointItems.push({ id: `slope-label:${point.id}`, pointId: point.id, seriesId: item.id, side: index === 0 ? 'left' : 'right', valueText: showValues ? point.displayValue : undefined, seriesText: index === 1 && showNames ? config.seriesStyles[item.name]?.legendLabel?.trim() || item.name : undefined, color: item.color, style: { ...config.valueText, color: item.color } })
+    const color = item.change?.colorByDirection ? item.change.resolvedColor : item.color
+    endpointItems.push({ id: `slope-label:${point.id}`, pointId: point.id, seriesId: item.id, side: index === 0 ? 'left' : 'right', valueText: showValues ? point.displayValue : undefined, seriesText: index === 1 && showNames ? config.seriesStyles[item.name]?.legendLabel?.trim() || item.name : undefined, color, style: { ...config.valueText, color } })
   }))
   const plot: CartesianSlopePlotScene = {
     kind: 'slope', positions, series, valueDomain, categoryAxis, valueAxis,

@@ -11,8 +11,8 @@ import { renderScene } from './renderScene'
 type RenderedSlope = {
   grid: { left: number; top: number; right: number; bottom: number; containLabel: boolean }
   legend: { show: boolean }
-  graphic: Array<{ id?: string; type?: string; style?: { text?: string } }>
-  xAxis: { position: string; boundaryGap: boolean; data: string[] }
+  graphic: Array<{ id?: string; type?: string; style?: { text?: string; align?: string; fill?: string } }>
+  xAxis: { position: string; boundaryGap: boolean; data: string[]; axisLabel?: { align?: string } }
   yAxis: { position: string; axisLabel: { show: boolean } }
   series: Array<{ name: string; type: string; data: Array<{ label?: { show?: boolean; formatter?: string; position?: string } }> }>
   tooltip: { formatter: (input: unknown) => string }
@@ -49,7 +49,8 @@ describe('native ECharts Slope adapter', () => {
     expect(option.graphic.some((item) => item.id?.startsWith('slope-guide:v:'))).toBe(true)
     expect(option.graphic.some((item) => item.id === 'slope-axis:x')).toBe(true)
     expect(option.graphic.some((item) => item.id?.startsWith('slope-scale:'))).toBe(true)
-    expect(option.series.find((series) => series.name === 'actual')?.data.map((point) => point.label?.formatter)).toEqual(['12', '24 actual'])
+    expect(option.series.find((series) => series.name === 'actual')?.data.every((point) => point.label?.show === false)).toBe(true)
+    expect(option.graphic.filter((item) => item.id?.startsWith('slope-label:')).map((item) => item.style?.text)).toEqual(expect.arrayContaining(['12', '24 actual']))
   })
 
   it('keeps internal scale affixes scoped to the configured edges', () => {
@@ -65,9 +66,9 @@ describe('native ECharts Slope adapter', () => {
     const config = slopeConfig({ yFields: ['start', 'end', 'both'] })
     const scene = getChartPlugin('slope').compile(table, config)
     const option = renderScene(scene) as unknown as RenderedSlope
-    expect(option.series.find((series) => series.name === 'start')?.data.map((point) => point.label?.show)).toEqual([false, true])
-    expect(option.series.find((series) => series.name === 'end')?.data.map((point) => point.label?.show)).toEqual([true, false])
-    expect(option.series.find((series) => series.name === 'both')?.data.map((point) => point.label?.show)).toEqual([false, false])
+    const texts = option.graphic.filter((item) => item.id?.startsWith('slope-label:')).map((item) => item.style?.text)
+    expect(texts).toEqual(expect.arrayContaining(['2', '1 start']))
+    expect(texts).not.toContain('both')
   })
 
   it('keeps fake hit targets out of tooltip output', () => {
@@ -76,7 +77,20 @@ describe('native ECharts Slope adapter', () => {
     expect(formatter([
       { seriesName: 'actual', data: { displayCategory: '<A>', displayValue: '<12&' } },
       { seriesName: '__hit__:actual', data: { displayCategory: '<A>', displayValue: '<12&' } },
-    ])).toBe('<b>&lt;A&gt;</b><br/>actual: <b>&lt;12&amp;</b>')
+    ])).toBe('<b>&lt;A&gt;</b><br/>actual: <b>&lt;12&amp;</b><br/>Изменение: <b>+&lt;12&amp;</b>')
+  })
+
+  it('renders endpoint ownership, leaders, change labels, and centered category labels as semantic graphics', () => {
+    const crowded: DataTable = { name: 'crowded', columns: ['period', 'one', 'two'], rows: [
+      { period: 'A', one: 10, two: 10 }, { period: 'B', one: 20, two: 20 },
+    ] }
+    const scene = getChartPlugin('slope').compile(crowded, slopeConfig({ yFields: ['one', 'two'], slopeShowChange: true, slopeColorByChange: true }))
+    const option = renderScene(scene) as unknown as RenderedSlope
+    expect(option.series.filter((item) => !item.name.startsWith('__')).every((item) => !('labelLayout' in item))).toBe(true)
+    expect(option.series.filter((item) => !item.name.startsWith('__')).every((item) => item.data.every((point) => point.label?.show === false))).toBe(true)
+    expect(option.graphic.some((item) => item.id?.startsWith('slope-label-leader:'))).toBe(true)
+    expect(option.graphic.filter((item) => item.id?.startsWith('slope-change:'))).toHaveLength(2)
+    expect(option.xAxis.axisLabel?.align).toBe('center')
   })
 
   it('never reaches the legacy Slope builder through compile, render, visitors, or compatibility helpers', () => {
@@ -101,12 +115,13 @@ describe('native ECharts Slope adapter', () => {
     const table: DataTable = { name: 'native-transition', columns: ['period', 'actual'], rows: [
       { period: new Date(2025, 0, 1), actual: 10 }, { period: new Date(2025, 1, 1), actual: 20 },
     ] }
-    const source = slopeConfig({ kind, xField: 'period', yField: 'actual', yFields: ['actual'], showLegend: true, showDirectLabels: true, ...extra } as Partial<ChartConfig>)
+    const source = slopeConfig({ kind, xField: 'period', yField: 'actual', yFields: ['actual'], showLegend: true, showDirectLabels: true, slopeShowChange: true, slopeColorByChange: true, ...extra } as Partial<ChartConfig>)
     const before = getChartPlugin(kind).compile(table, source)
     const middle = getChartPlugin('slope').compile(table, { ...source, kind: 'slope' })
     const after = getChartPlugin(kind).compile(table, source)
     expect([before.migrationMode, middle.migrationMode, after.migrationMode]).toEqual(['native', 'native', 'native'])
     expect(middle.migrationMode === 'native' && middle.plot.kind).toBe('slope')
+    expect(middle.migrationMode === 'native' && middle.plot.kind === 'slope' && middle.plot.series[0].change).toMatchObject({ showLabel: true, colorByDirection: true })
     expect(after.migrationMode === 'native' && after.plot.kind).not.toBe('slope')
     expect(source).toMatchObject({ showLegend: true, showDirectLabels: true })
   })
@@ -128,6 +143,7 @@ describe('native ECharts Slope adapter', () => {
     expect(`${compiler}\n${layout}`).not.toMatch(/echarts|zrender|EChartsOption|renderItem|boundaryGap|labelLayout|symbolSize|itemStyle|lineStyle|zlevel/)
     expect(compiler).not.toMatch(/renderSlopeScene|buildOption/)
     expect(renderer).not.toMatch(/prepareSlopeComparison|slopeXValues/)
+    expect(renderer).not.toMatch(/labelLayout|moveOverlap/)
     expect(lineRenderer).not.toMatch(/plot\.kind === ['"]slope|compatibilityConfig\.kind === ['"]slope/)
     expect(canvas).not.toMatch(/kind === ['"]slope|kind !== ['"]slope/)
   })
