@@ -49,6 +49,7 @@ Smoothing reuses the native point-scale Cartesian axes and frame, while its rend
 ## Phase 7 checkpoint — native interval charts
 
 Phase 7 implementation baseline: `595385b73040b26095928d553ae27084b27003d4`.
+Implementation completed in: `d939955`.
 
 `range-line`, `step-range-line`, and `confidence-line` now compile `plot.kind = 'interval'`. Actual main/lower/upper fields remain unique source `SeriesId` lines; deterministic `IntervalGroupId` relationships reference them, while each non-editable band owns a derived `LayerId` and renderer-neutral cells. Linear Range cells split at data-space crossings and resolve the visually top boundary color per part. Step Range cells use the same start/end ownership as their source lines. Confidence cells require finite adjacent `lower <= main <= upper` triples and never bridge an invalid or missing point.
 

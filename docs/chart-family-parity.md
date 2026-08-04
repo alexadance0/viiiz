@@ -1,6 +1,7 @@
 # Chart family parity matrix
 
 Phase 7 implementation baseline: `595385b73040b26095928d553ae27084b27003d4`.
+Phase 7 implementation completed in: `d939955`.
 
 | Kind | Family | Compiler | Layout | Interaction | Export | Legacy `buildOption` reachable? |
 |---|---|---|---|---|---|---|

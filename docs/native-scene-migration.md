@@ -3,6 +3,7 @@
 ## Checkpoint
 
 Phase 7 implementation baseline SHA: `595385b73040b26095928d553ae27084b27003d4`.
+Phase 7 implementation completed in: `d939955`.
 
 Migrated kinds: the six ordinary bar kinds plus `line`, `spline`, `step-line`, `indexed-line`, `seasonal-line`, `area`, `stacked-area`, `normalized-stacked-area`, `slope`, `moving-average-line`, `moving-average-scatter`, `range-line`, `step-range-line`, and `confidence-line`.
 
