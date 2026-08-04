@@ -1462,64 +1462,6 @@ describe('chart composition alignment', () => {
     expect(points.markArea?.data.map((area) => area[0].label?.formatter)).toEqual(['A', 'B', 'C', 'D'])
   })
 
-  it('builds step, range and confidence-interval line variants', () => {
-    const intervalTable: DataTable = { name: 'interval', columns: ['month', 'main', 'low', 'high', 'main2', 'low2', 'high2'], rows: [{ month: 'Янв', main: 10, low: 8, high: 12, main2: 5, low2: -1, high2: 9 }, { month: 'Фев', main: 14, low: 11, high: 18, main2: 7, low2: 0, high2: 20 }, { month: 'Мар', main: 13, low: 18, high: 11, main2: 8, low2: 2, high2: 30 }] }
-    const stepConfig = base('step-line'); stepConfig.stepPosition = 'start'
-    const stepOption = getChartPlugin('step-line').buildOption(table, stepConfig) as { series: Array<{ step?: string }> }
-    expect(stepOption.series[0].step).toBe('start')
-
-    const rangeConfig = base('range-line'); rangeConfig.yFields = ['main']; rangeConfig.rangeLowerField = 'low'; rangeConfig.rangeUpperField = 'high'
-    const rangeOption = getChartPlugin('range-line').buildOption(intervalTable, rangeConfig) as { xAxis: { data: string[]; axisLabel: { formatter(value: string, index: number): string } }; series: Array<{ name: string; type?: string; data?: Array<{ value: unknown; itemStyle: { color?: string; opacity: number } }> }> }
-    const rangeBand = rangeOption.series.find((series) => series.name === '__range-line-band')
-    expect(rangeBand?.type).toBe('custom')
-    expect(rangeBand?.data?.[0]).toEqual({ value: [0, 8, 12, 1, 11, 18, 0, 1], itemStyle: { color: '#168a72', opacity: .18 } })
-    expect(rangeBand?.data?.[1]).toEqual({ value: [1, 11, 18, 2, 14.5, 14.5, 0, .5], itemStyle: { color: '#168a72', opacity: .18 } })
-    expect(rangeBand?.data?.[2]).toEqual({ value: [1, 14.5, 14.5, 2, 11, 18, .5, 1], itemStyle: { color: '#6956e8', opacity: .18 } })
-    const firstRangeValues = rangeBand?.data?.[0]?.value as number[] | undefined
-    const renderedBand = (rangeBand as unknown as { renderItem?: (params: { dataIndex: number }, api: { value(index: number): number; coord(value: number[]): number[] }) => { style?: unknown } })?.renderItem?.({ dataIndex: 0 }, { value: (index: number) => firstRangeValues?.[index] ?? 0, coord: ([x, y]: number[]) => [x, y] })
-    expect(renderedBand?.style).toMatchObject({ fill: '#168a72', opacity: .18 })
-    expect(rangeOption.series.find((series) => series.name === 'low')?.data).toHaveLength(3)
-    expect(rangeOption.series.find((series) => series.name === '__hit__:low')?.data).toHaveLength(3)
-    expect(rangeOption.xAxis.data).toEqual(['0:Янв', '1:Фев', '2:Мар'])
-    expect(rangeOption.xAxis.axisLabel.formatter('2:Мар', 2)).toBe('Мар')
-    const customRangeOption = getChartPlugin('range-line').buildOption(intervalTable, { ...rangeConfig, intervalFillMode: 'custom', intervalFillColor: '#db5a5a' }) as { series: Array<{ name: string; data?: Array<{ itemStyle: { color?: string } }> }> }
-    expect(customRangeOption.series.find((series) => series.name === '__range-line-band')?.data?.every((segment) => segment.itemStyle.color === '#db5a5a')).toBe(true)
-
-    const stepRangeConfig = base('step-range-line'); stepRangeConfig.rangeLowerField = 'low'; stepRangeConfig.rangeUpperField = 'high'; stepRangeConfig.stepPosition = 'end'
-    const stepRangeOption = getChartPlugin('step-range-line').buildOption(intervalTable, stepRangeConfig) as { xAxis: { data: string[] }; series: Array<{ name: string; step?: string; data?: Array<{ value: unknown[]; itemStyle: { color?: string } }> }> }
-    expect(stepRangeOption.xAxis.data).toEqual(['0:Янв', '1:Фев', '2:Мар'])
-    expect(stepRangeOption.series.find((series) => series.name === 'low')?.step).toBe('end')
-    expect(stepRangeOption.series.find((series) => series.name === '__step-range-line-band')?.data?.[0]).toEqual({ value: [0, 8, 12, 1, 8, 12, 0, 1], itemStyle: { color: '#168a72', opacity: .18 } })
-
-    const confidenceConfig = base('confidence-line'); confidenceConfig.yFields = ['main', 'low', 'high', 'main2', 'low2', 'high2']; confidenceConfig.intervalFillOpacity = .3; confidenceConfig.showDirectLabels = true
-    const confidenceOption = getChartPlugin('confidence-line').buildOption(intervalTable, confidenceConfig) as { yAxis: { min: number; max: number }; series: Array<{ name: string; silent?: boolean; endLabel?: { show: boolean }; areaStyle?: { opacity: number }; data?: unknown[] }> }
-    expect(confidenceOption.yAxis.min).toBeLessThanOrEqual(-1)
-    expect(confidenceOption.yAxis.max).toBeGreaterThanOrEqual(30)
-    expect(confidenceOption.series.find((series) => series.name === '__confidence-line-band-0-fill')?.areaStyle?.opacity).toBe(.3)
-    expect(confidenceOption.series.find((series) => series.name === '__confidence-line-band-1-fill')?.areaStyle?.opacity).toBe(.3)
-    expect(confidenceOption.series.find((series) => series.name === '__confidence-line-band-0-fill')?.data?.[2]).toBeNull()
-    expect(confidenceOption.series.some((series) => series.name === 'low')).toBe(false)
-    expect(confidenceOption.series.find((series) => series.name === 'main')?.endLabel?.show).toBe(true)
-    expect(confidenceOption.series.some((series) => series.name === '__confidence-line-bound:low')).toBe(false)
-    const customConfidenceOption = getChartPlugin('confidence-line').buildOption(intervalTable, { ...confidenceConfig, intervalFillMode: 'custom', intervalFillColor: '#db5a5a' }) as { series: Array<{ name: string; areaStyle?: { color?: string }; lineStyle?: { color?: string } }> }
-    expect(customConfidenceOption.series.find((series) => series.name === '__confidence-line-band-0-fill')?.areaStyle?.color).toBe('#db5a5a')
-
-    const labelledConfig = { ...confidenceConfig, intervalGroups: [{ main: 'main', lower: 'low', upper: 'high', showBounds: true }] }
-    const labelledOption = getChartPlugin('confidence-line').buildOption(intervalTable, labelledConfig) as { series: Array<{ name: string; endLabel?: { show: boolean }; lineStyle?: { color?: string } }> }
-    expect(labelledOption.series.find((series) => series.name === 'low')?.endLabel?.show).toBe(true)
-    expect(labelledOption.series.find((series) => series.name === 'high')?.endLabel?.show).toBe(true)
-    expect(labelledOption.series.find((series) => series.name === 'low')?.lineStyle?.color).toBe('#6956e8')
-
-    const incomplete = base('confidence-line')
-    incomplete.yFields = ['main']
-    expect((getChartPlugin('confidence-line').buildOption(intervalTable, incomplete) as { series: unknown[] }).series).toEqual([])
-
-    const unconfiguredRange = base('range-line')
-    expect((getChartPlugin('range-line').buildOption(intervalTable, unconfiguredRange) as { series: unknown[] }).series).toEqual([])
-    expect(getChartPlugin('range-line').validate(intervalTable, { ...rangeConfig, rangeUpperField: 'low' }).ok).toBe(false)
-    expect(getChartPlugin('confidence-line').validate(intervalTable, { ...confidenceConfig, yFields: ['main'], intervalGroups: [{ main: 'main', lower: 'low', upper: 'low' }] }).ok).toBe(false)
-  })
-
   it('builds a sorted dumbbell chart from two explicitly selected measures', () => {
     const dumbbellTable: DataTable = {
       name: 'dumbbell',
@@ -1762,7 +1704,7 @@ describe('chart composition alignment', () => {
 
   it('keeps native point-label edges local while preserving other cartesian reservations', () => {
     const dated: DataTable = { name: 'dated', columns: ['date', 'value'], rows: [{ date: new Date(2025, 0, 1), value: 1 }, { date: new Date(2025, 11, 31), value: 2 }] }
-    const nativePointKinds = new Set(['line', 'spline', 'step-line', 'area', 'stacked-area', 'normalized-stacked-area'])
+    const nativePointKinds = new Set(['line', 'spline', 'step-line', 'range-line', 'step-range-line', 'confidence-line', 'area', 'stacked-area', 'normalized-stacked-area'])
     for (const kind of ['line', 'spline', 'step-line', 'range-line', 'step-range-line', 'confidence-line', 'area', 'stacked-area', 'normalized-stacked-area', 'bar', 'stacked-bar', 'normalized-stacked-bar', 'horizontal-bar', 'horizontal-stacked-bar', 'horizontal-normalized-stacked-bar', 'dumbbell', 'scatter', 'bubble'] as const) {
       const config = base(kind); config.xField = 'date'; config.dateLabelFormat = 'date-dmy-en'
       const option = getChartPlugin(kind).buildOption(dated, config) as { grid: { right: number } }

@@ -1,6 +1,6 @@
 import { formatXAxisNumber, formatYAxisNumber } from '../../../core/numberFormat'
 import { measureTextWidth } from '../../../core/textMetrics'
-import type { CartesianAreaPlotScene, CartesianBarPlotScene, CartesianLinePlotScene, CartesianSmoothingPlotScene, NativeChartScene, ResolvedScene } from '../../../entities/chart/model/ChartScene'
+import type { CartesianAreaPlotScene, CartesianBarPlotScene, CartesianIntervalPlotScene, CartesianLinePlotScene, CartesianSmoothingPlotScene, NativeChartScene, ResolvedScene } from '../../../entities/chart/model/ChartScene'
 import { axisReservation, type AxisSpec } from '../../chart-layout/axisLayout'
 import { resolveFrame } from '../../chart-layout/frameLayout'
 import type { Rect } from '../../chart-layout/geometry'
@@ -8,7 +8,7 @@ import { guideReservation } from '../../chart-layout/guides/types'
 import type { LayoutReservation } from '../../chart-layout/reservations'
 import { layoutText, plainTextDocument } from '../../chart-layout/textLayout'
 
-type NativeCartesianScene = NativeChartScene & { plot: CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSmoothingPlotScene }
+type NativeCartesianScene = NativeChartScene & { plot: CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene }
 const lineHeight = (style: AxisSpec['labels']['style']) => Math.round(style.size * style.lineHeight / 100)
 const orientation = (scene: NativeCartesianScene) => scene.plot.kind === 'bar' ? scene.plot.orientation : 'vertical'
 const railRect = (plot: Rect, side: 'top' | 'right' | 'bottom' | 'left'): Rect => side === 'top'

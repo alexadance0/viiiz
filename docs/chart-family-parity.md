@@ -1,6 +1,6 @@
 # Chart family parity matrix
 
-Phase 6 implementation baseline: `2924c29243a2fedefb5e6f6b270279ea9c70fa3b`.
+Phase 7 implementation baseline: `595385b73040b26095928d553ae27084b27003d4`.
 
 | Kind | Family | Compiler | Layout | Interaction | Export | Legacy `buildOption` reachable? |
 |---|---|---|---|---|---|---|
@@ -23,7 +23,7 @@ Phase 6 implementation baseline: `2924c29243a2fedefb5e6f6b270279ea9c70fa3b`.
 | butterfly | butterfly | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | lollipop / horizontal-lollipop | lollipop | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | dumbbell | dumbbell | legacy | legacy/hybrid | legacy | existing legacy path | yes |
-| range-line / step-range-line / confidence-line | interval | legacy | legacy/hybrid | legacy | existing legacy path | yes |
+| range-line / step-range-line / confidence-line | interval | native | shared native Cartesian frame/axes | visible source point metadata; derived bands excluded | shared SVG/PNG boundary | no |
 | moving-average-line / moving-average-scatter | smoothing transform | native | shared native Cartesian frame/axes | raw native point metadata; derived layer non-editable | shared SVG/PNG boundary | no |
 | scatter / bubble / distribution | corresponding semantic family | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | heatmap / treemap | matrix / hierarchy | legacy | specialized hybrid | legacy/specialized | existing legacy path | yes |
@@ -78,3 +78,15 @@ raw table → filtering/sorting/aggregation → percent/missing policy → trail
 The window is rounded with a minimum of two and is not upper-clamped by the compiler. A derived value exists only when the entire trailing window contains finite values; otherwise it is `null`. Both raw and derived values participate in the declared value domain, with manual/log domains and zero-line settings retained by the shared Cartesian contract.
 
 Every source group has stable `raw` and `moving-average` layer identities. Line mode renders a thin faded raw line; scatter mode renders faded borderless raw points; both render the average as the full source-styled line. Raw value labels and direct labels are suppressed. Derived value labels follow the chart setting, while direct identification targets only average layers and retains source legend labels, notes, text styles, and leader settings. The standard legend has typed layer targets and semantic line/point/opacity markers.
+
+## Interval characterization coverage
+
+The shared transform order is:
+
+```text
+raw table → filtering/sorting/aggregation → percent/missing policy → interval validation/cells → semantic interval scene
+```
+
+Range and Step Range prepare exactly the selected lower/upper fields and ignore `seriesField`. Linear cells split deterministic data-space crossings; `by-bound` fill follows the visually top real source series on each part. Step cells and both source lines share exact `start`/`end` ownership. Confidence prepares unique fields referenced by explicit groups, or complete automatic `yFields` triples, and creates cells only across adjacent finite ordered triples. Hidden bounds remain real source series in the domain and band relationship but do not leak into guides, labels, tooltip, selection, or callbacks.
+
+Stable `IntervalGroupId` values derive from participating `SeriesId` values and stable band-cell IDs derive from the band plus adjacent category identities and part number. Bands contain no renderer vocabulary, source identity, or editability. The interval ECharts adapter renders clipped silent polygons below visible real lines and dispatches only on `plot.kind = 'interval'`.

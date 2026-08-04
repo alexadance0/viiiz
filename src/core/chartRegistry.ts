@@ -19,6 +19,7 @@ import { compileNativeLineScene, isNativeLineKind } from '../features/chart-type
 import { compileNativeAreaScene, isNativeAreaKind } from '../features/chart-types/area/compiler'
 import { compileNativeSlopeScene } from '../features/chart-types/slope/compiler'
 import { compileNativeSmoothingScene, isNativeSmoothingKind } from '../features/chart-types/smoothing/compiler'
+import { compileNativeIntervalScene, isNativeIntervalKind } from '../features/chart-types/interval/compiler'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 import { nativeMarkSelections } from '../entities/chart/model/sceneVisitors'
 import { repeatedChartCategories } from './chartData'
@@ -748,123 +749,9 @@ const cartesian = (id: Exclude<ChartConfig['kind'], 'scatter' | 'bubble' | 'dumb
   },
 })
 
-const intervalLine = (id: 'range-line' | 'step-range-line' | 'confidence-line', label: string): LegacyChartPlugin => {
+const nativeIntervalPlugin = (id: 'range-line' | 'step-range-line' | 'confidence-line', label: string): LegacyChartPlugin => {
   const base = cartesian(id === 'step-range-line' ? 'step-line' : 'line', label, 'trend')
-  const autoGroups = (config: ChartConfig) => config.yFields.slice(0, Math.floor(config.yFields.length / 3) * 3).reduce<Array<{ main: string; lower: string; upper: string; showBounds?: boolean }>>((groups, field, index, fields) => {
-    if (index % 3 === 0 && fields[index + 1] && fields[index + 2]) groups.push({ main: field, lower: fields[index + 1], upper: fields[index + 2] })
-    return groups
-  }, [])
-  return {
-    ...base, ...pluginModel(id), id, label,
-    settings: { ...base.settings, features: { ...base.settings.features, lineVariant: true } },
-    buildOption(table, config) {
-      if (id === 'confidence-line') {
-        const groups = (config.intervalGroups?.length ? config.intervalGroups : autoGroups(config)).filter((group) => group.main && group.lower && group.upper && new Set([group.main, group.lower, group.upper]).size === 3 && [group.main, group.lower, group.upper].every((field) => table.columns.includes(field)))
-        const scaleFields = [...new Set(groups.flatMap((group) => [group.main, group.lower, group.upper]))]
-        if (!groups.length || scaleFields.length < 3) {
-          const empty = base.buildOption(table, { ...config, seriesField: '', yFields: [config.yField] }) as { series: Array<Record<string, unknown>> }
-          empty.series = []
-          return empty
-        }
-        const option = base.buildOption(table, { ...config, seriesField: '', yFields: scaleFields, yField: scaleFields[0] }) as { series: Array<Record<string, unknown>>; legend?: { data?: unknown[] } }
-        const prepared = prepareVisibleChartData(table, { ...config, seriesField: '', yFields: scaleFields, yField: scaleFields[0] })
-        const seriesByName = new Map(prepared.series.map((series) => [series.name, series]))
-        const visibleNames = new Set(groups.flatMap((group) => [group.main, ...(group.showBounds ? [group.lower, group.upper] : [])]))
-        const kept = option.series.filter((series) => {
-          const name = String(series.name ?? '')
-          if (name === '__x-axis-edge-affixes' || name === '__y-axis-edge-affixes') return true
-          const owner = String(series.segmentOf ?? name).replace(/^__hit__:/, '')
-          return visibleNames.has(owner)
-        })
-        groups.forEach((group, groupIndex) => {
-          const main = seriesByName.get(group.main), lower = seriesByName.get(group.lower), upper = seriesByName.get(group.upper)
-          if (!main || !lower || !upper) return
-          const lineColor = getSeriesColor(config, main.name, Math.max(0, scaleFields.indexOf(main.name)))
-          const bandColor = config.intervalFillMode === 'custom' ? config.intervalFillColor ?? config.color : lineColor
-          const stack = `__confidence-line-band-${groupIndex}`
-          const bounds = upper.data.map((value, index) => {
-            const low = lower.data[index], center = main.data[index]
-            return value == null || low == null || center == null || low > center || center > value ? null : { base: low, span: value - low }
-          })
-          kept.unshift(
-            { name: `${stack}-base`, type: 'line', data: bounds.map((point) => point?.base ?? null), stack, symbol: 'none', silent: true, tooltip: { show: false }, lineStyle: { opacity: 0 }, areaStyle: { opacity: 0 }, z: 0 },
-            { name: `${stack}-fill`, type: 'line', data: bounds.map((point) => point?.span ?? null), stack, symbol: 'none', silent: true, tooltip: { show: false }, lineStyle: { opacity: 0 }, areaStyle: { color: bandColor, opacity: config.intervalFillOpacity ?? .18 }, z: 0 },
-          )
-          ;[lower, upper].forEach((series) => {
-            const normal = kept.find((item) => item.name === series.name)
-            if (normal) {
-              const boundaryStyle = config.seriesStyles[series.name]
-              normal.symbol = 'none'
-              normal.lineStyle = {
-                ...(normal.lineStyle as object),
-                color: lineColor,
-                width: boundaryStyle?.lineWidth ?? 1.25,
-                type: boundaryStyle?.lineType ?? 'dashed',
-                opacity: boundaryStyle?.fillOpacity ?? .58,
-              }
-              return
-            }
-          })
-        })
-        option.series = kept
-        if (option.legend && Array.isArray(option.legend.data)) option.legend.data = option.legend.data.filter((item) => visibleNames.has(typeof item === 'string' ? item : String((item as { name?: string }).name ?? '')))
-        return option
-      }
-      const visibleFields = [config.rangeLowerField, config.rangeUpperField].filter((field): field is string => Boolean(field))
-      const scopedConfig = { ...config, seriesField: '', yFields: visibleFields.length === 2 ? visibleFields : [config.yField], yField: visibleFields[0] ?? config.yField }
-      const option = base.buildOption(table, scopedConfig) as { series: Array<Record<string, unknown>>; legend?: { data?: unknown[] }; xAxis?: unknown }
-      if (visibleFields.length !== 2 || visibleFields[0] === visibleFields[1]) {
-        option.series = []
-        return option
-      }
-      const prepared = prepareVisibleChartData(table, { ...config, yFields: visibleFields, yField: visibleFields[0] ?? config.yField })
-      const fields = prepared.series
-      const lowerIndex = 0, upperIndex = 1
-      const lower = fields[lowerIndex], upper = fields[upperIndex]
-      if (!lower || !upper) return option
-      const lowerColor = getSeriesColor(config, lower.name, lowerIndex)
-      const upperColor = getSeriesColor(config, upper.name, upperIndex)
-      const fillColor = (boundaryColor: string) => config.intervalFillMode === 'custom' ? config.intervalFillColor ?? config.color : boundaryColor
-      const bandData = prepared.categories.slice(0, -1).flatMap((_category, index) => {
-        const firstLow = lower.data[index], firstHigh = upper.data[index], nextLow = lower.data[index + 1], nextHigh = upper.data[index + 1]
-        if (firstLow == null || firstHigh == null || nextLow == null || nextHigh == null) return []
-        const firstDelta = firstHigh - firstLow, nextDelta = nextHigh - nextLow
-        const segment = (from: number, to: number, startLow: number, startHigh: number, endLow: number, endHigh: number, color: string) => ({
-          value: [index, Math.min(startLow, startHigh), Math.max(startLow, startHigh), index + 1, Math.min(endLow, endHigh), Math.max(endLow, endHigh), from, to],
-          itemStyle: { color, opacity: config.intervalFillOpacity ?? .18 },
-        })
-        if (id === 'step-range-line') {
-          const useNext = (config.stepPosition ?? 'end') === 'start'
-          const stepLow = useNext ? nextLow : firstLow, stepHigh = useNext ? nextHigh : firstHigh
-          return [segment(0, 1, stepLow, stepHigh, stepLow, stepHigh, fillColor(stepHigh >= stepLow ? upperColor : lowerColor))]
-        }
-        if (firstDelta * nextDelta < 0) {
-          const ratio = Math.abs(firstDelta) / (Math.abs(firstDelta) + Math.abs(nextDelta))
-          const crossing = firstLow + (nextLow - firstLow) * ratio
-          return [
-            segment(0, ratio, firstLow, firstHigh, crossing, crossing, fillColor(firstDelta > 0 ? upperColor : lowerColor)),
-            segment(ratio, 1, crossing, crossing, nextLow, nextHigh, fillColor(nextDelta > 0 ? upperColor : lowerColor)),
-          ]
-        }
-        return [segment(0, 1, firstLow, firstHigh, nextLow, nextHigh, fillColor((firstDelta || nextDelta) >= 0 ? upperColor : lowerColor))]
-      })
-      option.series = [{
-        name: `__${id}-band`, type: 'custom', data: bandData, silent: true, tooltip: { show: false }, z: 0,
-        renderItem: (params: { dataIndex: number }, api: { value(index: number): unknown; coord(value: unknown[]): number[] }) => {
-          const left = api.coord([api.value(0), api.value(1)]), right = api.coord([api.value(3), api.value(4)])
-          const startX = left[0] + (right[0] - left[0]) * Number(api.value(6))
-          const endX = left[0] + (right[0] - left[0]) * Number(api.value(7))
-          const topLeft = [startX, api.coord([api.value(0), api.value(2)])[1]]
-          const topRight = [endX, api.coord([api.value(3), api.value(5)])[1]]
-          const bottomRight = [endX, right[1]]
-          const bottomLeft = [startX, left[1]]
-          const itemStyle = bandData[params.dataIndex]?.itemStyle
-          return { type: 'polygon', shape: { points: [topLeft, topRight, bottomRight, bottomLeft] }, style: { fill: itemStyle?.color, opacity: itemStyle?.opacity } }
-        },
-      }, ...option.series]
-      return option
-    },
-  }
+  return { ...base, ...pluginModel(id), id, label, settings: { ...base.settings, features: { ...base.settings.features, lineVariant: true } } }
 }
 
 const dumbbellBase = cartesian('bar', 'Гантельная', 'comparison')
@@ -2374,7 +2261,7 @@ const legacyChartRegistry = [
   seasonalLine,
   slope,
   ...smoothingChartDefinitions.map(([id, label]) => cartesian(id, label, 'smoothing')),
-  ...intervalChartDefinitions.map(([id, label]) => intervalLine(id, label)),
+  ...intervalChartDefinitions.map(([id, label]) => nativeIntervalPlugin(id, label)),
   ...areaChartDefinitions.map(([id, label]) => cartesian(id, label, 'area')),
   scatter,
   bubble,
@@ -2415,11 +2302,17 @@ const nativeSmoothingCapabilities: ChartPlugin['capabilities'] = {
   guides: ['legend', 'direct-series'], valueLabels: true, markers: true,
 }
 
+const nativeIntervalCapabilities: ChartPlugin['capabilities'] = {
+  coordinateSystem: 'cartesian',
+  axes: { category: { placements: ['side'] }, value: { scaleTypes: ['linear', 'log'] } },
+  guides: ['legend', 'direct-series'], valueLabels: true, markers: true,
+}
+
 export const chartRegistry: ChartPlugin[] = legacyChartRegistry.map((plugin) => {
-  const compiler = isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : isNativeSmoothingKind(plugin.id) ? compileNativeSmoothingScene : undefined
+  const compiler = isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : isNativeSmoothingKind(plugin.id) ? compileNativeSmoothingScene : isNativeIntervalKind(plugin.id) ? compileNativeIntervalScene : undefined
   if (compiler) return {
     ...plugin, compilerMode: 'native' as const,
-    capabilities: isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : nativeSmoothingCapabilities,
+    capabilities: isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : isNativeSmoothingKind(plugin.id) ? nativeSmoothingCapabilities : nativeIntervalCapabilities,
     compile: compiler,
     buildOption: (table: DataTable, config: ChartConfig) => renderScene(compiler(table, config)),
   }

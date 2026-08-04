@@ -148,8 +148,9 @@ describe('native ECharts line and area adapter', () => {
     expect(layout).not.toMatch(/seasonalAccentYears|seasonal-line/)
   })
 
-  it('keeps the remaining specialized line-like families explicitly legacy', () => {
+  it('keeps only the remaining specialized line-like families explicitly legacy', () => {
     expect(getChartPlugin('slope').compilerMode).toBe('native')
-    for (const kind of ['range-line', 'step-range-line', 'confidence-line', 'scatter', 'waterfall'] as const) expect(getChartPlugin(kind).compilerMode).toBe('legacy')
+    for (const kind of ['range-line', 'step-range-line', 'confidence-line'] as const) expect(getChartPlugin(kind).compilerMode).toBe('native')
+    for (const kind of ['scatter', 'waterfall'] as const) expect(getChartPlugin(kind).compilerMode).toBe('legacy')
   })
 })

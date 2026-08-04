@@ -18,10 +18,13 @@ export function nativeMarkSelections(scene: NativeChartScene): NativeMarkSelecti
       return layer.points.filter((point) => point.editable).map((point) => ({ legacyKey: point.legacyKey, seriesName: source?.sourceName ?? layer.name, displayCategory: point.displayCategory, displayValue: point.displayValue, value: point.value, color: scene.compatibilityConfig.elementStyles[point.legacyKey]?.color ?? layer.color }))
     })
   }
+  if (scene.plot.kind === 'interval') return scene.plot.series.filter((series) => series.visible).flatMap((series) => series.points.map((point) => ({ legacyKey: point.legacyKey, seriesName: series.name, displayCategory: point.displayCategory, displayValue: point.displayValue, value: point.value, color: scene.compatibilityConfig.elementStyles[point.legacyKey]?.color ?? series.color })))
   return scene.plot.series.flatMap((series) => series.points.map((point) => ({ legacyKey: point.legacyKey, seriesName: series.name, displayCategory: point.displayCategory, displayValue: point.displayValue, value: point.value, color: scene.compatibilityConfig.elementStyles[point.legacyKey]?.color ?? series.color })))
 }
 
 export function nativePointSeries(scene: NativeChartScene): Array<{ name: string; points: CartesianPointScene[] }> {
   if (scene.plot.kind === 'bar') return []
-  return scene.plot.kind === 'smoothing' ? scene.plot.layers : scene.plot.series
+  if (scene.plot.kind === 'smoothing') return scene.plot.layers
+  if (scene.plot.kind === 'interval') return scene.plot.series.filter((series) => series.visible)
+  return scene.plot.series
 }

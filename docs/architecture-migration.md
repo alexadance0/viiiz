@@ -45,3 +45,13 @@ Implementation completed in: `f43d45c`.
 `moving-average-line` and `moving-average-scatter` now compile a dedicated `plot.kind = 'smoothing'`. Each source series owns stable raw and moving-average layer IDs; derived point IDs are based on the average layer and source datum identity, never on a calculated value. A pure trailing transform runs after shared visible-data preparation and emits a value only for a complete finite window.
 
 Smoothing reuses the native point-scale Cartesian axes and frame, while its renderer consumes semantic layer roles and render modes. Raw marks remain the only source-editable points, moving-average labels/direct identification belong only to the derived layer, and the categorical legend targets typed layers. The old moving-average transform and smoothing option branch were removed from `chartRegistry.ts`.
+
+## Phase 7 checkpoint — native interval charts
+
+Phase 7 implementation baseline: `595385b73040b26095928d553ae27084b27003d4`.
+
+`range-line`, `step-range-line`, and `confidence-line` now compile `plot.kind = 'interval'`. Actual main/lower/upper fields remain unique source `SeriesId` lines; deterministic `IntervalGroupId` relationships reference them, while each non-editable band owns a derived `LayerId` and renderer-neutral cells. Linear Range cells split at data-space crossings and resolve the visually top boundary color per part. Step Range cells use the same start/end ownership as their source lines. Confidence cells require finite adjacent `lower <= main <= upper` triples and never bridge an invalid or missing point.
+
+Interval charts reuse prepared point data and the shared native Cartesian frame, axes, guides, category-edge behavior, selection visitors, and export lifecycle. The dedicated ECharts adapter translates semantic cells into clipped polygons below visible source lines. The compiler resolves fill colors, opacity, source visibility, boundary presentation, legend/direct/value-label membership, and domain participation; neither the renderer nor `ChartCanvas` branches on the persisted interval product kind.
+
+The legacy `intervalLine()` builder, fake stacked Confidence base/fill series, custom Range band construction, and interval legend filtering were removed from `chartRegistry.ts`. Scatter/bubble, waterfall, butterfly, lollipop, dumbbell, distribution, heatmap, and treemap remain explicitly legacy.

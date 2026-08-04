@@ -2,17 +2,16 @@
 
 ## Checkpoint
 
-Phase 6 implementation baseline SHA: `2924c29243a2fedefb5e6f6b270279ea9c70fa3b`.
-Phase 6 implementation completed in: `f43d45c`.
+Phase 7 implementation baseline SHA: `595385b73040b26095928d553ae27084b27003d4`.
 
-Migrated kinds: the six ordinary bar kinds plus `line`, `spline`, `step-line`, `indexed-line`, `seasonal-line`, `area`, `stacked-area`, `normalized-stacked-area`, `slope`, `moving-average-line`, and `moving-average-scatter`.
+Migrated kinds: the six ordinary bar kinds plus `line`, `spline`, `step-line`, `indexed-line`, `seasonal-line`, `area`, `stacked-area`, `normalized-stacked-area`, `slope`, `moving-average-line`, `moving-average-scatter`, `range-line`, `step-range-line`, and `confidence-line`.
 
 ## Render path
 
 ```text
 legacy ChartConfig adapter
-  → native bar, prepared-line, area, dedicated Slope, or dedicated smoothing semantic compiler
-  → NativeChartScene (discriminated bar/line/area/slope/smoothing plot, axes, guides, stable IDs)
+  → native bar, prepared-line, area, dedicated Slope/smoothing, or interval semantic compiler
+  → NativeChartScene (discriminated bar/line/area/slope/smoothing/interval plot, axes, guides, stable IDs)
   → shared frame/text/axis/reservation layout plus family-local Slope geometry
   → ResolvedScene
   → native ECharts adapter selected by semantic plot kind
@@ -23,10 +22,10 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 
 ## Files introduced or materially changed
 
-- `entities/chart/model`: explicit native/legacy scene union, discriminated bar/line/area/slope/smoothing plots, typed series/layer/datum IDs, and family-neutral semantic mark visitors.
+- `entities/chart/model`: explicit native/legacy scene union, discriminated bar/line/area/slope/smoothing/interval plots, typed series/layer/group/datum IDs, and family-neutral semantic mark visitors.
 - `features/chart-layout`: independent X/Y spacing, identified/resolved rails, styled-run text measurement, and authoritative native bar geometry.
-- `features/chart-types/bar`, `line`, `area`, `slope`, and `smoothing`: semantic compilers, pure specialized transforms, shared Cartesian layout for point plots, and a dedicated Slope comparison layout.
-- `features/chart-renderer/echarts`: native bar, point-plot, Slope, and smoothing adapters with semantic plot-kind dispatch.
+- `features/chart-types/bar`, `line`, `area`, `slope`, `smoothing`, and `interval`: semantic compilers, pure specialized transforms, shared Cartesian layout for point plots, and a dedicated Slope comparison layout.
+- `features/chart-renderer/echarts`: native bar, point-plot, Slope, smoothing, and interval adapters with semantic plot-kind dispatch.
 - `core/chartRegistry.ts`: explicit compiler modes/capabilities and semantic helper branches.
 - `components/ChartCanvas.tsx`: native geometry is preserved across the temporary legacy composition block; native category formatters are not post-mutated; renderer IDs are adapted to existing callbacks at the outer boundary.
 - `src/test-fixtures/charts/bar.ts`, `lineArea.ts`, and adjacent architecture tests: deterministic parity harness and guardrails.
@@ -40,7 +39,8 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 - Categorical guides carry typed series and group items with stable IDs. Seasonal decides semantic membership only: `Seasonal accent ≠ legend mode`; its standard legend is accent series plus the non-accent `Остальные` group. Generic layout and rendering measure and draw that group without Seasonal branches or a fake plot series.
 - `buildOption` remains on the plugin interface for unmigrated callers. For ordinary bars its implementation is a native compile/layout/render compatibility facade, not the legacy cartesian builder.
 - Slope keeps persisted `slopeXValues`, family flags, change-label/direction-color settings, legend/direct settings, series styles, callback keys, annotations, and decorations. Old documents omit the new optional fields and retain the previous appearance because change labels and direction colors default off. It does not expose ordinary legend/direct guides, and its local guide/label graphics never create fake semantic or renderer series.
-- Waterfall, butterfly, lollipop, dumbbell, interval lines, scatter/bubble, distribution, heatmap, and treemap retain their legacy compilers.
+- Interval groups retain persisted field triples, fill settings, `showBounds`, source styles, element override keys, and auto-grouping. Hidden Confidence bounds remain in domains and band validation but are absent from guides, value-label targets, tooltips, and selection visitors. Bands are silent derived layers and are never editable data rows.
+- Waterfall, butterfly, lollipop, dumbbell, scatter/bubble, distribution, heatmap, and treemap retain their legacy compilers.
 
 ## Tests added
 
@@ -50,9 +50,10 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 - Focused Seasonal coverage separates none/standard/direct modes, group edits and visibility, explicit non-accent colors, persistence/reset/history, native/legacy family transitions, SVG/PNG parity, and seven visual baselines.
 - Focused Slope coverage verifies typed two-position preparation, endpoint-label ownership and leaders, centered X labels, shared change semantics, local change-label placement, direction colors, missing/log cases, native/legacy transitions, history, preview/SVG/PNG parity, and a throwing legacy-builder guard.
 - Focused smoothing coverage verifies transform order/window semantics, stable layer and derived-point identity, raw-only selection, layer legends, average-only direct labels, shared axis rails/domains, native family transitions, renderer isolation, SVG/PNG preview parity, and eight visual baselines.
+- Focused interval coverage verifies pure linear crossing/step/confidence-gap geometry, prepared missing/percent behavior, stable group/band/cell identity, unique source lines, confidence visibility and boundary styling, shared top/right/multiline/rotated axes, linear/log/manual domains, guide/visitor filtering, renderer isolation, transitions, undo/redo, SVG/PNG export, and twelve visual baselines.
 
 ## Known debt and next removable legacy code
 
-The shared legacy `cartesian()` source still contains unreachable ordinary-bar, basic-line/area, and smoothing-compatible generic code because remaining specialized interval/comparison charts share the function. The moving-average transform, generated raw/average series branch, and smoothing legend override have been deleted. The next safe removal is to split the remaining specialized builders, then delete migrated generic conditions and their compatibility option-shape tests.
+The shared legacy `cartesian()` source still contains unreachable migrated-family generic code because remaining specialized comparison/relationship charts share the function. The moving-average branches and the complete interval builder—including fake Confidence stacks and custom Range bands—have been deleted. The next safe removal is to split the remaining specialized builders, then delete unreachable generic conditions and compatibility option-shape tests.
 
-Waterfall, butterfly, lollipop, dumbbell, range-line, step-range-line, confidence-line, scatter/bubble, distribution, heatmap, and treemap remain separate migrations.
+Waterfall, butterfly, lollipop, dumbbell, scatter/bubble, distribution, heatmap, and treemap remain separate migrations.

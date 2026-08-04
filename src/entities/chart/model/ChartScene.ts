@@ -111,6 +111,9 @@ interface CartesianPointPlotScene {
 declare const layerIdBrand: unique symbol
 export type LayerId = string & { readonly [layerIdBrand]: 'LayerId' }
 
+declare const intervalGroupIdBrand: unique symbol
+export type IntervalGroupId = string & { readonly [intervalGroupIdBrand]: 'IntervalGroupId' }
+
 export interface SmoothingPointScene extends CartesianPointScene {
   layerId: LayerId
   role: 'observed' | 'derived'
@@ -156,6 +159,47 @@ export interface CartesianAreaPlotScene extends CartesianPointPlotScene {
   kind: 'area'
   stacking: 'none' | 'stacked' | 'normalized'
   series: AreaSeriesScene[]
+}
+
+export interface IntervalBandCellScene {
+  id: ElementId
+  fromCategoryIndex: number
+  toCategoryIndex: number
+  fromT: number
+  toT: number
+  startBottom: number
+  startTop: number
+  endBottom: number
+  endTop: number
+  fillColor: string
+  fillOpacity: number
+  topBoundarySeriesId?: SeriesId
+}
+
+export interface IntervalBandScene {
+  id: LayerId
+  groupId: IntervalGroupId
+  fill: { colorMode: 'resolved-per-cell'; opacity: number }
+  interpolation: 'linear' | 'step-start' | 'step-end'
+  cells: IntervalBandCellScene[]
+}
+
+export interface IntervalGroupScene {
+  id: IntervalGroupId
+  mainSeriesId?: SeriesId
+  lowerSeriesId: SeriesId
+  upperSeriesId: SeriesId
+  bandLayerId: LayerId
+  boundsVisible: boolean
+  validPointCount: number
+}
+
+export interface CartesianIntervalPlotScene extends CartesianPointPlotScene {
+  kind: 'interval'
+  variant: 'range' | 'step-range' | 'confidence'
+  series: LineSeriesScene[]
+  groups: IntervalGroupScene[]
+  bands: IntervalBandScene[]
 }
 
 export interface SlopePositionScene {
@@ -215,7 +259,7 @@ export interface CartesianSlopePlotScene {
   endpointLabels: { distance: number; collision: 'shift-y'; hideOverlap: false; items: SlopeEndpointLabelScene[] }
 }
 
-export type NativePlotScene = CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene
+export type NativePlotScene = CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene
 
 export interface NativeChartScene extends ChartSceneBase {
   migrationMode: 'native'
@@ -231,6 +275,7 @@ export type NativeLineChartScene = NativeChartScene & { plot: CartesianLinePlotS
 export type NativeAreaChartScene = NativeChartScene & { plot: CartesianAreaPlotScene }
 export type NativeSlopeChartScene = NativeChartScene & { plot: CartesianSlopePlotScene }
 export type NativeSmoothingChartScene = NativeChartScene & { plot: CartesianSmoothingPlotScene }
+export type NativeIntervalChartScene = NativeChartScene & { plot: CartesianIntervalPlotScene }
 
 export type ChartScene = LegacyChartScene | NativeChartScene
 

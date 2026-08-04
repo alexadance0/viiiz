@@ -627,14 +627,14 @@ test('every chart type in the picker renders without runtime errors', async ({ p
   assertNoErrors()
 })
 
-test('native line, area, indexed, seasonal and smoothing kinds transition across native and legacy charts', async ({ page }) => {
+test('native line, area, interval, indexed, seasonal and smoothing kinds transition across native and legacy charts', async ({ page }) => {
   test.setTimeout(90_000)
   await page.route('https://fonts.googleapis.com/**', (route) => route.fulfill({ contentType: 'text/css', body: '' }))
   const assertNoErrors = await failOnRuntimeErrors(page)
   await loadDemo(page)
   await page.getByLabel('Период / ось X').selectOption('month')
   await expect(page.getByLabel('Период / ось X')).toHaveValue('month')
-  for (const name of ['Линия', 'Сравнение по годам', 'Линия + среднее', 'Точки + среднее', 'Линия', 'Индекс к дате', 'Столбцы', 'Индекс к дате', 'Область', 'Сравнение по годам', 'Наклонный график', 'Точки + среднее', 'Сравнение по годам']) {
+  for (const name of ['Линия', 'Диапазон между линиями', 'Ступенчатый диапазон', 'Линия с интервалом', 'Сравнение по годам', 'Линия + среднее', 'Точки + среднее', 'Линия', 'Индекс к дате', 'Столбцы', 'Диапазон между линиями', 'Индекс к дате', 'Область', 'Линия с интервалом', 'Сравнение по годам', 'Наклонный график', 'Точки + среднее', 'Сравнение по годам']) {
     const svg = page.locator('.canvas-paper svg').first()
     const previousSvg = await svg.innerHTML().catch(() => '')
     const button = page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: new RegExp(`^${escaped(name)}$`) }) })
@@ -707,6 +707,43 @@ test('native smoothing keeps settings history and exports the resolved preview t
   const svg = await readFile(await (await svgDownload).path()!, 'utf8')
   expect(svg).toContain('<svg')
   expect(svg).not.toContain('__hit__')
+  const pngDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Скачать PNG' }).click()
+  expect((await readFile(await (await pngDownload).path()!)).byteLength).toBeGreaterThan(1000)
+  assertNoErrors()
+})
+
+test('native interval keeps semantic settings history and exports aligned SVG and PNG', async ({ page }) => {
+  test.setTimeout(90_000)
+  const assertNoErrors = await failOnRuntimeErrors(page)
+  await page.route('https://fonts.googleapis.com/**', (route) => route.fulfill({ contentType: 'text/css', body: '' }))
+  await loadDemo(page)
+  await page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Диапазон между линиями$/ }) }).click()
+  await expectRenderedChart(page)
+  await expect(page.getByLabel('Нижняя граница')).not.toHaveValue('')
+  await expect(page.getByLabel('Верхняя граница')).not.toHaveValue('')
+  await page.getByRole('button', { name: /Настроить оформление/ }).click()
+  await page.locator('summary').filter({ hasText: /^Диапазон между линиями$/ }).click()
+  const opacity = page.getByLabel('Прозрачность заливки, %')
+  await expect(opacity).toHaveValue('18')
+  await opacity.fill('42')
+  await opacity.blur()
+  await expect(opacity).toHaveValue('42')
+  const undo = page.getByRole('button', { name: 'Отменить', exact: true })
+  const redo = page.getByRole('button', { name: 'Повторить', exact: true })
+  let undoCount = 0
+  while (await opacity.inputValue() !== '18' && undoCount < 3) { await undo.click(); undoCount += 1 }
+  await expect(opacity).toHaveValue('18')
+  for (let index = 0; index < undoCount; index += 1) await redo.click()
+  await expect(opacity).toHaveValue('42')
+  await expectRenderedChart(page)
+
+  await openExport(page)
+  const svgDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Скачать SVG' }).click()
+  const svg = await readFile(await (await svgDownload).path()!, 'utf8')
+  expect(svg).toContain('<svg')
+  expect(svg).not.toContain('__confidence-line-band')
   const pngDownload = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Скачать PNG' }).click()
   expect((await readFile(await (await pngDownload).path()!)).byteLength).toBeGreaterThan(1000)
