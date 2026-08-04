@@ -56,3 +56,15 @@ Implementation completed in: `d939955`.
 Interval charts reuse prepared point data and the shared native Cartesian frame, axes, guides, category-edge behavior, selection visitors, and export lifecycle. The dedicated ECharts adapter translates semantic cells into clipped polygons below visible source lines. The compiler resolves fill colors, opacity, source visibility, boundary presentation, legend/direct/value-label membership, and domain participation; neither the renderer nor `ChartCanvas` branches on the persisted interval product kind.
 
 The legacy `intervalLine()` builder, fake stacked Confidence base/fill series, custom Range band construction, and interval legend filtering were removed from `chartRegistry.ts`. Scatter/bubble, waterfall, butterfly, lollipop, dumbbell, distribution, heatmap, and treemap remain explicitly legacy.
+
+## Phase 7.1 checkpoint — deterministic native rendering
+
+Phase 7 stabilization started from: `a264fc3e2056939e27ba042f9cf52fda295159b3`.
+Render-lifecycle implementation completed in: `a642d2c6a8f7f767906c7fe6ab04700d1263e979`.
+Full stabilization completed in: `521224f`.
+
+The old `renderedChartKind === config.kind` readiness flag described only initial layout availability. The authoritative preview contract is now a monotonic render revision with explicit loading, compiling, rendering, post-processing, settled, and error states. Settlement occurs after all option/graphic mutations, font readiness, logical resize, ZRender flush, and two animation frames; stale async work and temporary export swaps cannot publish a settled preview.
+
+Playwright waits for a newer settled revision after interactions, verifies semantic/rendered kinds, reduced-motion animation state, SVG presence, and stable canvas bounds. Native Confidence direct-label rules were removed from the legacy helper. Line/Area, Smoothing, and Interval now call a typed Cartesian point base without disguising specialized plots as `plot.kind = 'line'`. Scatter/Bubble migration remains out of scope until this checkpoint's complete deterministic verification is green.
+
+The final gate passed three consecutive full E2E runs (44/44 each), the full suite at `--repeat-each=3` (132/132), and the visual file at `--repeat-each=5` (35/35), with no expected snapshot changes. Playwright uses two parallel workers in the supported macOS snapshot environment to avoid host saturation from concurrent SVG/video/trace contexts; this remains a multi-worker verification path.

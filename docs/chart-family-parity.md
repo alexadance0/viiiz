@@ -2,6 +2,9 @@
 
 Phase 7 implementation baseline: `595385b73040b26095928d553ae27084b27003d4`.
 Phase 7 implementation completed in: `d939955`.
+Phase 7 stabilization started from: `a264fc3e2056939e27ba042f9cf52fda295159b3`.
+Phase 7 stabilization completed in: `521224f`.
+Full E2E verification: three consecutive runs passed (44/44 each), `--repeat-each=3` passed (132/132), and visual `--repeat-each=5` passed (35/35).
 
 | Kind | Family | Compiler | Layout | Interaction | Export | Legacy `buildOption` reachable? |
 |---|---|---|---|---|---|---|
@@ -91,3 +94,7 @@ raw table → filtering/sorting/aggregation → percent/missing policy → inter
 Range and Step Range prepare exactly the selected lower/upper fields and ignore `seriesField`. Linear cells split deterministic data-space crossings; `by-bound` fill follows the visually top real source series on each part. Step cells and both source lines share exact `start`/`end` ownership. Confidence prepares unique fields referenced by explicit groups, or complete automatic `yFields` triples, and creates cells only across adjacent finite ordered triples. Hidden bounds remain real source series in the domain and band relationship but do not leak into guides, labels, tooltip, selection, or callbacks.
 
 Stable `IntervalGroupId` values derive from participating `SeriesId` values and stable band-cell IDs derive from the band plus adjacent category identities and part number. Bands contain no renderer vocabulary, source identity, or editability. The interval ECharts adapter renders clipped silent polygons below visible real lines and dispatches only on `plot.kind = 'interval'`.
+
+## Phase 7.1 integration checkpoint
+
+The interval semantic migration and its integration quality are tracked separately. Integration now uses an explicit revision-aware final-frame contract for preview, transitions, resize/font completion, and export restoration. Full-suite and repeated visual verification capture only `settled` revisions; no expected snapshot was updated. Unmigrated legacy families remain Waterfall, Butterfly, Lollipop, Dumbbell, Scatter/Bubble, Distribution, Heatmap, and Treemap.

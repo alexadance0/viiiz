@@ -5,6 +5,10 @@
 Phase 7 implementation baseline SHA: `595385b73040b26095928d553ae27084b27003d4`.
 Phase 7 implementation completed in: `d939955`.
 
+Phase 7 stabilization started from: `a264fc3e2056939e27ba042f9cf52fda295159b3`.
+Phase 7 stabilization completed in: `521224f`.
+Full E2E verification: three consecutive runs passed (44/44 each), `--repeat-each=3` passed (132/132), and the visual file passed five times (35/35).
+
 Migrated kinds: the six ordinary bar kinds plus `line`, `spline`, `step-line`, `indexed-line`, `seasonal-line`, `area`, `stacked-area`, `normalized-stacked-area`, `slope`, `moving-average-line`, `moving-average-scatter`, `range-line`, `step-range-line`, and `confidence-line`.
 
 ## Render path
@@ -58,3 +62,11 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 The shared legacy `cartesian()` source still contains unreachable migrated-family generic code because remaining specialized comparison/relationship charts share the function. The moving-average branches and the complete interval builder—including fake Confidence stacks and custom Range bands—have been deleted. The next safe removal is to split the remaining specialized builders, then delete unreachable generic conditions and compatibility option-shape tests.
 
 Waterfall, butterfly, lollipop, dumbbell, scatter/bubble, distribution, heatmap, and treemap remain separate migrations.
+
+## Phase 7.1 render lifecycle
+
+`ChartCanvas` now exposes a monotonic preview lifecycle (`data-render-status`, settled revision, chart kind, and semantic plot kind). A revision settles only after the display option, compatibility graphics, font readiness, logical resize, ZRender flush, and two browser frames. Stale callbacks, render errors, and temporary export options cannot settle a newer or non-preview frame.
+
+Visual tests wait for a strictly newer settled revision after render-affecting interactions and verify a stable non-zero canvas box. Expected screenshots remain unchanged. Native Line/Area/Smoothing/Interval share a typed Cartesian point-render model; Smoothing and Interval no longer cast their semantic plots to Line. Confidence direct-label membership now comes only from its semantic guide, not `ChartCanvas.directLegendGraphics`.
+
+Visual baselines are platform-specific (`chromium-darwin`). The supported snapshot environment uses the repository's web-loaded chart fonts and waits for `document.fonts.ready`; cross-platform font rasterization is not treated as pixel-identical.
