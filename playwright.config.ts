@@ -2,6 +2,9 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './e2e',
+  // Keep the browser matrix below the host's saturation point. Extra concurrent
+  // SVG/video/trace contexts starve unrelated navigation and screenshot tests.
+  workers: 2,
   timeout: 30_000,
   expect: { timeout: 5_000 },
   use: {
