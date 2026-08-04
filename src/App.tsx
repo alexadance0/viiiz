@@ -404,8 +404,11 @@ function App() {
       const preservedMeasures = compatibleMeasureSelection(value.yFields, measures, value.yField)
       const pair = [value.yFields.find((field) => measures.includes(field)), ...measures].filter((field, index, fields): field is string => Boolean(field) && fields.indexOf(field) === index).slice(0, 2)
       const triple = [...value.yFields.filter((field) => measures.includes(field)), ...measures].filter((field, index, fields) => fields.indexOf(field) === index).slice(0, 3)
+      const bubbleSizeField = value.scatterSizeField && measures.includes(value.scatterSizeField) ? value.scatterSizeField : measures.find((field) => !preservedMeasures.includes(field)) ?? measures[0]
       const roleDefaults = kind === 'seasonal-line'
         ? { xField: targetXField, yFields: preservedMeasures, yField: preservedMeasures[0] }
+        : kind === 'bubble'
+        ? { scatterSizeField: bubbleSizeField }
         : kind === 'heatmap'
         ? { yFields: preservedMeasures, yField: preservedMeasures[0] }
         : kind === 'waterfall'

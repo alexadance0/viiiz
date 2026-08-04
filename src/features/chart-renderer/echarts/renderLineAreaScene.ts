@@ -1,20 +1,33 @@
 import { axisAffixApplies, formatXAxisNumber, formatYAxisNumber } from '../../../core/numberFormat'
 import { measureTextWidth } from '../../../core/textMetrics'
 import type { ChartTextStyle } from '../../../core/types'
-import type { CartesianAreaPlotScene, CartesianLinePlotScene, NativeChartScene, ResolvedSceneGeometry } from '../../../entities/chart/model/ChartScene'
+import type { AreaSeriesScene, CartesianAreaPlotScene, CartesianLinePlotScene, LineSeriesScene, NativeChartScene, ResolvedSceneGeometry, SmoothingLayerScene } from '../../../entities/chart/model/ChartScene'
 import type { ResolvedReservation } from '../../chart-layout/reservations'
 import type { Rect } from '../../chart-layout/geometry'
 import type { CategoricalLegendItem } from '../../chart-layout/guides/types'
 
 type PointPlot = CartesianLinePlotScene | CartesianAreaPlotScene
 export type ResolvedPointScene = NativeChartScene & { plot: PointPlot; geometry: ResolvedSceneGeometry; resolvedReservations: ResolvedReservation[] }
+export type ResolvedCartesianPointRenderModel = Omit<ResolvedPointScene, 'plot'> & {
+  plot: {
+    mode: 'line' | 'area'
+    stacking: 'none' | 'stacked' | 'normalized'
+    categoryPlacement: PointPlot['categoryPlacement']
+    categories: PointPlot['categories']
+    categoryLabelPlan: PointPlot['categoryLabelPlan']
+    categoryAxis: PointPlot['categoryAxis']
+    valueAxis: PointPlot['valueAxis']
+    valueDomain: PointPlot['valueDomain']
+    series: Array<LineSeriesScene | AreaSeriesScene | SmoothingLayerScene>
+  }
+}
 const textStyle = (style: ChartTextStyle) => ({ color: style.color, fontFamily: style.fontFamily, fontSize: style.size, fontWeight: style.weight, fontStyle: style.italic ? 'italic' : 'normal', lineHeight: Math.round(style.size * style.lineHeight / 100), align: style.align })
 const graphicTextStyle = (style: ChartTextStyle) => { const { color, ...rest } = textStyle(style); return { ...rest, fill: color } }
 const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!)
-const stacking = (plot: PointPlot) => plot.kind === 'area' ? plot.stacking : 'none'
+const stacking = (plot: ResolvedCartesianPointRenderModel['plot']) => plot.stacking
 const interpolationOption = (value: PointPlot['series'][number]['interpolation']) => ({ smooth: value === 'spline' ? .45 : false, smoothMonotone: value === 'spline' ? 'x' : undefined, step: value === 'step-start' ? 'start' : value === 'step-end' ? 'end' : undefined })
 
-function legendGroupGraphics(items: CategoricalLegendItem[], rail: Rect | undefined, config: ResolvedPointScene['compatibilityConfig']) {
+function legendGroupGraphics(items: CategoricalLegendItem[], rail: Rect | undefined, config: ResolvedCartesianPointRenderModel['compatibilityConfig']) {
   if (!rail) return []
   const visible = items.filter((item) => item.visible)
   const horizontal = config.legendPosition === 'top' || config.legendPosition === 'bottom'
@@ -42,7 +55,7 @@ function legendGroupGraphics(items: CategoricalLegendItem[], rail: Rect | undefi
   })
 }
 
-function categoryAxis(scene: ResolvedPointScene) {
+function categoryAxis(scene: ResolvedCartesianPointRenderModel) {
   const config = scene.compatibilityConfig, axis = scene.plot.categoryAxis
   const side = axis.placement.kind === 'side' ? axis.placement.side : undefined
   const lineStyle = { color: config.axisLineColor, width: config.axisLineWidth, type: config.axisLineType }
@@ -58,7 +71,7 @@ function categoryAxis(scene: ResolvedPointScene) {
   }
 }
 
-function valueAxis(scene: ResolvedPointScene) {
+function valueAxis(scene: ResolvedCartesianPointRenderModel) {
   const config = scene.compatibilityConfig, axis = scene.plot.valueAxis
   const side = axis.placement.kind === 'side' ? axis.placement.side : undefined
   const lineStyle = { color: config.axisLineColor, width: config.axisLineWidth, type: config.axisLineType }
@@ -73,10 +86,10 @@ function valueAxis(scene: ResolvedPointScene) {
   }
 }
 
-const usesYAxisEdgeOverlay = (config: ResolvedPointScene['compatibilityConfig']) => (config.showYAxisLabels ?? true) && config.yAxisAffixScope != null && config.yAxisAffixScope !== 'all' && Boolean(config.numberPrefix || config.numberSuffix)
-const usesXAxisEdgeOverlay = (config: ResolvedPointScene['compatibilityConfig']) => (config.showXAxisLabels ?? true) && config.xAxisAffixScope != null && config.xAxisAffixScope !== 'all' && Boolean(config.xAxisNumberPrefix || config.xAxisNumberSuffix)
+const usesYAxisEdgeOverlay = (config: ResolvedCartesianPointRenderModel['compatibilityConfig']) => (config.showYAxisLabels ?? true) && config.yAxisAffixScope != null && config.yAxisAffixScope !== 'all' && Boolean(config.numberPrefix || config.numberSuffix)
+const usesXAxisEdgeOverlay = (config: ResolvedCartesianPointRenderModel['compatibilityConfig']) => (config.showXAxisLabels ?? true) && config.xAxisAffixScope != null && config.xAxisAffixScope !== 'all' && Boolean(config.xAxisNumberPrefix || config.xAxisNumberSuffix)
 
-function axisAffixSeries(scene: ResolvedPointScene) {
+function axisAffixSeries(scene: ResolvedCartesianPointRenderModel) {
   const config = scene.compatibilityConfig
   const yStyle = config.yAxisLabelText ?? config.axisLabelText
   const yPositions = config.yAxisAffixScope === 'first' ? [['first', scene.plot.valueDomain.min] as const] : config.yAxisAffixScope === 'last' ? [['last', scene.plot.valueDomain.max] as const] : [['first', scene.plot.valueDomain.min] as const, ['last', scene.plot.valueDomain.max] as const]
@@ -107,16 +120,16 @@ function axisAffixSeries(scene: ResolvedPointScene) {
   return [...ySeries, ...xSeries]
 }
 
-function segmentSeries(scene: ResolvedPointScene) {
-  if (scene.plot.kind !== 'line') return []
-  return scene.plot.series.flatMap((series) => series.segments.map((segment) => ({
+function segmentSeries(scene: ResolvedCartesianPointRenderModel) {
+  if (scene.plot.mode !== 'line') return []
+  return scene.plot.series.flatMap((series) => !('segments' in series) ? [] : series.segments.map((segment) => ({
     id: segment.id, name: series.name, segmentOf: series.name, type: 'line', symbol: 'none', silent: true, animation: false, tooltip: { show: false }, z: 40,
     ...interpolationOption(series.interpolation), lineStyle: segment.stroke,
     data: [series.points[segment.fromIndex], series.points[segment.toIndex]].map((point) => [scene.plot.categories[point.categoryIndex]?.coordinate, point.value]).concat([null]),
   })))
 }
 
-export function renderNativePointScene(scene: ResolvedPointScene): Record<string, unknown> {
+export function renderCartesianPointBase(scene: ResolvedCartesianPointRenderModel): Record<string, unknown> {
   const config = scene.compatibilityConfig
   const legendGuide = scene.guides.find((guide) => guide.kind === 'categorical-legend')
   const directGuide = scene.guides.find((guide) => guide.kind === 'direct-series')
@@ -140,10 +153,10 @@ export function renderNativePointScene(scene: ResolvedPointScene): Record<string
     const defaultZ = 30 + (scene.plot.series.length - seriesIndex) * 10
     const z = item.presentation?.emphasis === 'accent' ? 1000 + (item.presentation.layerPriority ?? seriesIndex) : defaultZ + (item.presentation?.layerPriority ?? 0)
     return {
-      id: item.id, name: item.name, type: 'line', stack: scene.plot.kind === 'area' && scene.plot.stacking !== 'none' ? 'total' : undefined, triggerEvent: true, clip: true, z,
+      id: item.id, name: item.name, type: 'line', stack: scene.plot.mode === 'area' && scene.plot.stacking !== 'none' ? 'total' : undefined, triggerEvent: true, clip: true, z,
       ...interpolationOption(item.interpolation), showSymbol: true, symbol: item.marker.shape, symbolSize: item.marker.size, connectNulls: item.missing === 'connect',
       lineStyle: { ...item.stroke, opacity: item.presentation?.opacity ?? item.stroke.opacity }, itemStyle: { color: item.marker.fill, borderColor: item.marker.stroke, borderWidth: item.marker.strokeWidth },
-      areaStyle: scene.plot.kind === 'area' ? scene.plot.series[seriesIndex].fill : undefined, emphasis: { scale: false },
+      areaStyle: scene.plot.mode === 'area' && 'fill' in scene.plot.series[seriesIndex] ? scene.plot.series[seriesIndex].fill : undefined, emphasis: { scale: false },
       label: { show: config.showValues, position: config.valueLabelPosition === 'auto' || config.valueLabelPosition == null ? 'top' : config.valueLabelPosition, formatter: (params: { dataIndex?: number }) => params.dataIndex == null ? '' : item.points[params.dataIndex]?.label.text ?? '', ...textStyle(config.valueText) },
       markLine: seriesIndex === 0 && config.showZeroLine && config.yAxisScaleType !== 'log' ? { silent: true, symbol: 'none', data: [{ yAxis: 0 }], lineStyle: { color: config.zeroLineColor, width: config.zeroLineWidth, type: config.zeroLineType }, label: { show: false } } : undefined,
       endLabel: showDirect && !directLeft ? directLabel : undefined,
@@ -173,4 +186,15 @@ export function renderNativePointScene(scene: ResolvedPointScene): Record<string
     grid: { left: plot.x, top: plot.y, right: canvas.width - plot.x - plot.width, bottom: canvas.height - plot.y - plot.height, containLabel: false },
     xAxis: categoryAxis(scene), yAxis: valueAxis(scene), series: [...series, ...segmentSeries(scene), ...hits, ...axisAffixSeries(scene)], graphic: [...verticalTitle, ...legendGroups, ...footer],
   }
+}
+
+export function renderNativePointScene(scene: ResolvedPointScene): Record<string, unknown> {
+  return renderCartesianPointBase({
+    ...scene,
+    plot: {
+      ...scene.plot,
+      mode: scene.plot.kind,
+      stacking: scene.plot.kind === 'area' ? scene.plot.stacking : 'none',
+    },
+  })
 }

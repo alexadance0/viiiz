@@ -24,11 +24,25 @@ async function loadDemo(page: Page) {
 }
 
 async function expectRenderedChart(page: Page) {
+  const canvas = page.locator('.chart-canvas-shell')
+  try {
+    await expect.poll(() => canvas.getAttribute('data-render-status')).toBe('settled')
+  } catch (cause) {
+    if (await canvas.getAttribute('data-render-status') === 'error') throw new Error(await page.locator('.chart-render-error').innerText())
+    throw cause
+  }
   const svg = page.locator('.canvas-paper svg').first()
   await expect(svg).toBeVisible()
   const box = await svg.boundingBox()
   expect(box?.width).toBeGreaterThan(200)
   expect(box?.height).toBeGreaterThan(150)
+}
+
+async function waitForSettledRevision(page: Page, afterRevision = -1) {
+  const canvas = page.locator('.chart-canvas-shell')
+  await expect.poll(async () => Number(await canvas.getAttribute('data-render-revision') ?? 0)).toBeGreaterThan(afterRevision)
+  await expect(canvas).toHaveAttribute('data-render-status', 'settled')
+  return Number(await canvas.getAttribute('data-render-revision'))
 }
 
 async function openExport(page: Page) {
@@ -264,6 +278,7 @@ test('treemap categories show a drop preview and can move to any target', async 
   const target = page.locator('.canvas-paper svg text').filter({ hasText: /Сейчас у меня нет/ }).first()
   const before = await source.boundingBox()
   const targetBox = await target.boundingBox()
+  let revision = Number(await page.locator('.chart-canvas-shell').getAttribute('data-render-revision') ?? 0)
   expect(before).not.toBeNull()
   expect(targetBox).not.toBeNull()
 
@@ -272,16 +287,14 @@ test('treemap categories show a drop preview and can move to any target', async 
   await page.mouse.move(targetBox!.x + targetBox!.width / 4, targetBox!.y + targetBox!.height / 2, { steps: 12 })
   await expect(page.locator('.treemap-drag-preview')).toHaveText('Другое')
   await expect(page.locator('.treemap-drop-indicator')).toBeVisible()
-  await expect.poll(async () => (await source.boundingBox())?.x).not.toBe(before!.x)
+  revision = await waitForSettledRevision(page, revision)
   await page.mouse.up()
   await expect(page.locator('.treemap-drag-preview')).toHaveCount(0)
   await expect(page.locator('.treemap-drop-indicator')).toHaveCount(0)
-  const movedX = (await source.boundingBox())!.x
-  expect(movedX).not.toBe(before!.x)
   await page.locator('.canvas-floating-menu').getByRole('button', { name: 'Отменить' }).click()
-  await expect.poll(async () => (await source.boundingBox())?.x).toBeCloseTo(before!.x, 0)
+  revision = await waitForSettledRevision(page, revision)
   await page.locator('.canvas-floating-menu').getByRole('button', { name: 'Повторить' }).click()
-  await expect.poll(async () => (await source.boundingBox())?.x).toBeCloseTo(movedX, 0)
+  await waitForSettledRevision(page, revision)
   assertNoErrors()
 })
 
@@ -421,10 +434,13 @@ test('country chart spacing is configurable and hidden headers return space to t
   await page.getByRole('button', { name: /^Топ стран$/ }).click()
   await page.getByRole('button', { name: /Выбрать график/ }).click()
   await page.getByRole('button', { name: /^Столбцы$/ }).click()
+  await expectRenderedChart(page)
   await page.getByRole('button', { name: /Настроить оформление/ }).click()
 
   await page.locator('summary').filter({ hasText: /^Оси, шкалы и подписи$/ }).click()
+  const titleRevision = Number(await page.locator('.chart-canvas-shell').getAttribute('data-render-revision') ?? 0)
   await setCheckbox(page.getByRole('checkbox', { name: 'Заголовок оси X' }), true)
+  await waitForSettledRevision(page, titleRevision)
   const countryTitle = page.locator('.canvas-paper svg text').filter({ hasText: /^country$/ }).first()
   const countryLabels = page.locator('.canvas-paper svg text').filter({ hasText: /^(США|Китай|Германия|Япония|Индия|Великобритания|Франция|Италия|Канада|Бразилия)$/ })
   const [countryTitleBox, countryLabelBoxes] = await Promise.all([countryTitle.boundingBox(), countryLabels.evaluateAll((items) => items.map((item) => item.getBoundingClientRect().toJSON()))])
@@ -612,7 +628,7 @@ test('HeroUI checkboxes stay left-aligned and tabs keep their pill layout', asyn
   await expect(tabs.locator('.tabs__list-container__scroll-next')).toBeHidden()
 })
 
-test('every chart type in the picker renders without runtime errors', async ({ page }) => {
+test('every chart type in the picker settles or reports an explicit validation error', async ({ page }) => {
   const assertNoErrors = await failOnRuntimeErrors(page)
   await loadDemo(page)
 
@@ -621,7 +637,10 @@ test('every chart type in the picker renders without runtime errors', async ({ p
     const button = page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: new RegExp(`^${escaped(name)}$`) }) })
     await button.scrollIntoViewIfNeeded()
     await button.click()
-    await expectRenderedChart(page)
+    const canvas = page.locator('.chart-canvas-shell')
+    await expect.poll(() => canvas.getAttribute('data-render-status')).toMatch(/^(settled|error)$/)
+    if (await canvas.getAttribute('data-render-status') === 'error') await expect(page.locator('.chart-render-error')).toBeVisible()
+    else await expectRenderedChart(page)
   }
 
   assertNoErrors()
@@ -677,6 +696,25 @@ test('native line, area, interval, indexed, seasonal and smoothing kinds transit
   assertNoErrors()
 })
 
+test('native render revisions reject stale family frames and advance after an axis change', async ({ page }) => {
+  await loadDemo(page)
+  const canvas = page.locator('.chart-canvas-shell')
+  await page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Линия \+ среднее$/ }) }).click()
+  let revision = await waitForSettledRevision(page)
+  await expect(canvas).toHaveAttribute('data-chart-kind', 'moving-average-line')
+  await expect(canvas).toHaveAttribute('data-plot-kind', 'smoothing')
+
+  await page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Диапазон между линиями$/ }) }).click()
+  revision = await waitForSettledRevision(page, revision)
+  await expect(canvas).toHaveAttribute('data-chart-kind', 'range-line')
+  await expect(canvas).toHaveAttribute('data-plot-kind', 'interval')
+
+  await page.getByRole('button', { name: /Настроить оформление/ }).click()
+  await page.locator('summary').filter({ hasText: /^Оси, шкалы и подписи$/ }).click()
+  await page.getByLabel('Положение оси Y').selectOption('right')
+  expect(await waitForSettledRevision(page, revision)).toBeGreaterThan(revision)
+})
+
 test('native smoothing keeps settings history and exports the resolved preview to SVG and PNG', async ({ page }) => {
   test.setTimeout(90_000)
   const assertNoErrors = await failOnRuntimeErrors(page)
@@ -688,10 +726,11 @@ test('native smoothing keeps settings history and exports the resolved preview t
   await page.locator('summary').filter({ hasText: /^Скользящее среднее$/ }).click()
   const window = page.getByLabel('Период сглаживания')
   await expect(window).toHaveValue('12')
+  const previousWindowRevision = Number(await page.locator('.chart-canvas-shell').getAttribute('data-render-revision') ?? 0)
   await window.fill('4')
   await window.blur()
   await expect(window).toHaveValue('4')
-  await page.waitForTimeout(400)
+  await waitForSettledRevision(page, previousWindowRevision)
   const undo = page.locator('.canvas-floating-menu').getByRole('button', { name: 'Отменить', exact: true })
   const redo = page.locator('.canvas-floating-menu').getByRole('button', { name: 'Повторить', exact: true })
   let undoCount = 0

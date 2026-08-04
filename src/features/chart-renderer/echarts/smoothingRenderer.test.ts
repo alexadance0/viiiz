@@ -52,7 +52,17 @@ describe('native ECharts smoothing adapter', () => {
     const registry = readFileSync(new URL('../../../core/chartRegistry.ts', import.meta.url), 'utf8')
     expect(compiler).not.toMatch(/echarts|buildOption|renderSmoothingScene/)
     expect(renderer).not.toMatch(/compatibilityConfig\.kind|moving-average-line|moving-average-scatter/)
+    expect(renderer).not.toMatch(/as NativeChartScene|as ResolvedPointScene/)
     expect(canvas).not.toMatch(/moving-average-line|moving-average-scatter|plot\.kind === ['"]smoothing/)
     expect(registry).not.toMatch(/const smoothing\s*=|function movingAverage|export const movingAverage/)
+  })
+
+  it('keeps semantic layer order deterministic across multiple source series', () => {
+    const multiple: DataTable = { name: 'multiple', columns: ['period', 'a', 'b'], rows: [1, 2, 3, 4].map((period) => ({ period, a: period, b: period * 2 })) }
+    const source = config('moving-average-line', { yFields: ['a', 'b'] })
+    const scene = getChartPlugin(source.kind).compile(multiple, source)
+    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'smoothing') throw new Error('Expected native smoothing scene')
+    const option = renderScene(scene) as { series: Array<{ id?: string }> }
+    expect(option.series.map((series) => series.id).filter(Boolean)).toEqual(scene.plot.layers.map((layer) => layer.id))
   })
 })

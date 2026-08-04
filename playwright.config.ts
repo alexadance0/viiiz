@@ -13,7 +13,7 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev -- --host 127.0.0.1 --port 5175',
     url: 'http://127.0.0.1:5175',
-    reuseExistingServer: true,
+    reuseExistingServer: process.env.PW_REUSE_SERVER === '1',
     timeout: 30_000,
   },
   projects: [

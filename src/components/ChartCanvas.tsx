@@ -30,6 +30,7 @@ import { DEFAULT_COMPOSITION_SPACING } from '../entities/chart/model/defaults'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 import { layoutText, plainTextDocument } from '../features/chart-layout/textLayout'
 import { legacySelection, type ChartSelection } from '../entities/chart/model/ChartSelection'
+import { advanceChartRender, failChartRender, initialChartRenderLifecycle, settleChartRender, type ChartRenderStatus } from './chartRenderLifecycle'
 
 const AnnotationOverlay = lazy(() => import('./AnnotationOverlay').then(({ AnnotationOverlay: Component }) => ({ default: Component })))
 const CanvasTextOverlay = lazy(() => import('./CanvasTextOverlay').then(({ CanvasTextOverlay: Component }) => ({ default: Component })))
@@ -171,15 +172,8 @@ function directLabelWidth(config: ChartConfig, names: string[]) {
 // oxlint-disable-next-line react/only-export-components -- exported for a renderer regression test
 export function directLegendGraphics(instance: echarts.ECharts, table: DataTable, config: ChartConfig, onFocus?: (section: ChartSettingsSection) => void, selected = false) {
   if (!config.showDirectLabels || config.kind === 'scatter' || config.kind === 'bubble') return []
-  const confidenceGroups = config.kind === 'confidence-line'
-    ? (config.intervalGroups?.length ? config.intervalGroups : config.yFields.slice(0, Math.floor(config.yFields.length / 3) * 3).reduce<NonNullable<ChartConfig['intervalGroups']>>((groups, field, index, fields) => {
-      if (index % 3 === 0 && fields[index + 1] && fields[index + 2]) groups.push({ main: field, lower: fields[index + 1], upper: fields[index + 2] })
-      return groups
-    }, []))
-    : []
-  const directNames = confidenceGroups.length ? new Set(confidenceGroups.flatMap((group) => [group.main, ...(group.showBounds ? [group.lower, group.upper] : [])])) : null
   const preparedRaw = config.kind === 'butterfly' ? prepareButterflyChartData(table, config) : prepareVisibleChartData(table, config)
-  const directSeries = preparedRaw.series.flatMap((series, seriesIndex) => !directNames || directNames.has(series.name) ? [{ series, seriesIndex }] : [])
+  const directSeries = preparedRaw.series.map((series, seriesIndex) => ({ series, seriesIndex }))
   const butterflyLeftFields = new Set(config.butterflyLeftFields?.length ? config.butterflyLeftFields : config.yFields.slice(0, 1))
   const visibleSeries = directSeries.filter(({ series }) => config.seriesStyles[series.name]?.showDirectLabel !== false)
   if (!visibleSeries.length) return []
@@ -1014,11 +1008,16 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     const [renderError, setRenderError] = useState('')
     const [readyKind, setReadyKind] = useState<ChartKind | null>(null)
     const [renderedChartKind, setRenderedChartKind] = useState<ChartKind | null>(null)
+    const [renderedPlotKind, setRenderedPlotKind] = useState('')
+    const [renderAnimationEnabled, setRenderAnimationEnabled] = useState(false)
+    const [renderLifecycle, setRenderLifecycle] = useState(initialChartRenderLifecycle)
+    const [fontRevision, setFontRevision] = useState(0)
     const [plotBounds, setPlotBounds] = useState<PlotBounds | null>(null)
     const [richLayouts, setRichLayouts] = useState<Partial<Record<'title' | 'subtitle' | 'note' | 'source', RichLayout>>>({})
     const [categoryLabelLayout, setCategoryLabelLayout] = useState<CategoryLabelLayout | null>(null)
     const [, setTreemapLayoutRevision] = useState(0)
     const chart = useRef<echarts.ECharts | null>(null)
+    const renderRevision = useRef(0)
     const displayOption = useRef<Record<string, unknown> | null>(null)
     const exportOption = useRef<Record<string, unknown> | null>(null)
     const renderedKind = useRef<ChartKind | null>(null)
@@ -1040,15 +1039,26 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     })(), [requestedCategoryLabel, selectedElementKey, selectedElementTarget])
     const selectedCategoryLabel = activeCategoryLabel
     const chartLayoutReady = renderedChartKind === config.kind && (config.kind !== 'treemap' || treemapLayout.current?.table === table && treemapLayout.current.config === config)
+    const beginRenderCycle = (status: ChartRenderStatus) => {
+      const revision = ++renderRevision.current
+      setRenderLifecycle((current) => ({ ...current, revision, status }))
+      return revision
+    }
 
     useEffect(() => { clickedSeries.current = selectedSeriesName ?? null }, [selectedSeriesName])
 
     useEffect(() => {
       let active = true
+      const revision = beginRenderCycle('loading-modules')
       setReadyKind(null)
+      setRenderError('')
       loadEchartsForKind(config.kind)
         .then(() => { if (active) setReadyKind(config.kind) })
-        .catch((cause) => { if (active) setRenderError(cause instanceof Error ? cause.message : 'Не удалось загрузить модуль графика') })
+        .catch((cause) => {
+          if (!active) return
+          setRenderLifecycle((current) => failChartRender(current, revision))
+          setRenderError(cause instanceof Error ? cause.message : 'Не удалось загрузить модуль графика')
+        })
       return () => { active = false }
     }, [config.kind])
 
@@ -1103,6 +1113,8 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     useEffect(() => {
       const instance = chart.current
       if (!instance || instance.isDisposed() || readyKind !== config.kind) return
+      const revision = beginRenderCycle('compiling')
+      const fontsWerePending = document.fonts.status !== 'loaded'
       try {
       const selectDecoration = onDecorationSelect ?? ((id: string) => { const decoration = config.decorations?.find((item) => item.id === id); if (decoration) onDecorationChange?.(decoration) })
       const visibleTitle = config.showTitle === false ? '' : config.title
@@ -1123,10 +1135,12 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const validation = plugin.validate(table, renderConfig)
       if (!validation.ok) throw new Error(validation.errors.map((error) => error.message).join(' '))
       const compiledScene = plugin.compile(table, renderConfig)
+      const plotKind = compiledScene.migrationMode === 'native' ? compiledScene.plot.kind : 'legacy'
       const rendererOwnsDirectLabels = compiledScene.migrationMode === 'native' && compiledScene.plot.kind !== 'bar'
       const option = renderScene(compiledScene) as Record<string, unknown> & { graphic?: unknown[] }
       const nativeLayoutSnapshot = plugin.compilerMode === 'native' ? cloneChartOption({ grid: option.grid, xAxis: option.xAxis, yAxis: option.yAxis, legend: option.legend }) : null
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      setRenderAnimationEnabled(!reducedMotion)
       const firstTreemapLayout = config.kind === 'treemap' && (treemapLayout.current?.table !== table || treemapLayout.current.config !== config)
       option.animation = !reducedMotion && !firstTreemapLayout
       option.animationDuration ??= reducedMotion ? 0 : 420
@@ -1480,11 +1494,13 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       cleanOption.graphic = [...cleanLabels, ...decorationGraphics(config.decorations ?? []), ...cleanTitleHits, ...annotations.map((annotation) => ({ ...annotation, style: { ...annotation.style, opacity: 1 } }))]
       splitCenteredButterflyAxes(option, table, config)
       splitCenteredButterflyAxes(cleanOption as Record<string, unknown>, table, config)
+      setRenderLifecycle((current) => advanceChartRender(current, revision, 'rendering'))
       const animateTreemapUpdate = config.kind === 'treemap' && renderedKind.current === 'treemap'
       if (animateTreemapUpdate) instance.setOption(option, { replaceMerge: ['series', 'graphic'] })
       else instance.setOption(option, true)
       renderedKind.current = config.kind
       setRenderedChartKind(config.kind)
+      setRenderedPlotKind(plotKind)
       if (activeCategoryLabel && config.kind !== 'treemap') {
         const axisKey = activeCategoryLabel.axis === 'x' ? 'xAxis' : 'yAxis'
         const axisOption = option[axisKey] as { data?: unknown[]; position?: 'top' | 'bottom' | 'left' | 'right'; axisLabel?: { rotate?: number; show?: boolean } } | Array<{ data?: unknown[]; position?: 'top' | 'bottom' | 'left' | 'right'; axisLabel?: { rotate?: number; show?: boolean } }> | undefined
@@ -1625,6 +1641,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       }
       displayOption.current = option
       exportOption.current = cleanOption
+      setRenderLifecycle((current) => advanceChartRender(current, revision, 'post-processing'))
       instance.dispatchAction({ type: 'downplay' })
       instance.getZr().flush()
       if (config.kind === 'treemap') {
@@ -1642,12 +1659,31 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         treemapLayoutToken.current += 1
       }
       setRenderError('')
+      void (async () => {
+        await document.fonts.ready
+        if (revision !== renderRevision.current || instance.isDisposed() || chart.current !== instance) return
+        if (fontsWerePending) {
+          setFontRevision((current) => current + 1)
+          return
+        }
+        instance.resize({ width: Math.min(1000, config.canvasWidth ?? 1000), height: Math.min(1000, config.canvasHeight ?? 563), animation: { duration: 0 } })
+        instance.getZr().flush()
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        if (revision !== renderRevision.current || instance.isDisposed() || chart.current !== instance) return
+        instance.getZr().flush()
+        setRenderLifecycle((current) => settleChartRender(current, revision))
+      })()
       } catch (cause) {
         displayOption.current = null
         exportOption.current = null
+        renderedKind.current = null
+        setRenderedChartKind(null)
+        setRenderedPlotKind('')
+        setRenderLifecycle((current) => failChartRender(current, revision))
         setRenderError(cause instanceof Error ? cause.message : 'Не удалось отрисовать график')
       }
-    }, [activeCategoryLabel, table, config, hoveredSeriesName, onAnnotationSelect, onDecorationChange, onDecorationSelect, onSelect, onSeriesSelect, onSettingsFocus, readyKind, selectedAnnotationId, selectedElementKey, selectedElementTarget, selectedSeriesName, selectedSettingsSection])
+    }, [activeCategoryLabel, table, config, fontRevision, hoveredSeriesName, onAnnotationSelect, onDecorationChange, onDecorationSelect, onSelect, onSeriesSelect, onSettingsFocus, readyKind, selectedAnnotationId, selectedElementKey, selectedElementTarget, selectedSeriesName, selectedSettingsSection])
 
     useEffect(() => {
       const instance = chart.current
@@ -2010,6 +2046,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       async exportSvg(options) {
         const instance = chart.current
         if (!instance || !exportOption.current) return
+        const revision = beginRenderCycle('post-processing')
         await document.fonts.ready
         instance.setOption(exportOption.current, true)
         instance.getZr().flush()
@@ -2026,11 +2063,15 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           await exportChartAsSvg(svg, { canvasWidth: config.canvasWidth, canvasHeight: config.canvasHeight, customFonts: config.customFonts }, options, textBlocks)
         } finally {
           if (displayOption.current) { instance.setOption(displayOption.current, true); instance.getZr().flush(); if (config.kind === 'treemap') applyTreemapLayout(instance, container.current, selectedElementKey) }
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          if (!instance.isDisposed() && chart.current === instance && revision === renderRevision.current) setRenderLifecycle((current) => settleChartRender(current, revision))
         }
       },
       async exportPng(options) {
         const instance = chart.current
         if (!instance || !exportOption.current) return
+        const revision = beginRenderCycle('post-processing')
         await document.fonts.ready
         instance.setOption(exportOption.current, true)
         instance.getZr().flush()
@@ -2047,6 +2088,9 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           await exportChartAsPng(svg, { canvasWidth: config.canvasWidth, canvasHeight: config.canvasHeight, customFonts: config.customFonts }, options, textBlocks)
         } finally {
           if (displayOption.current) { instance.setOption(displayOption.current, true); instance.getZr().flush(); if (config.kind === 'treemap') applyTreemapLayout(instance, container.current, selectedElementKey) }
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          if (!instance.isDisposed() && chart.current === instance && revision === renderRevision.current) setRenderLifecycle((current) => settleChartRender(current, revision))
         }
       },
     }), [config, richLayouts, selectedElementKey])
@@ -2069,7 +2113,20 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     const canvasTransform = config.autoFitCanvas === false ? `scale(${safeZoom})` : `translate(-50%, -50%) scale(${canvasScale * safeZoom})`
     return (
       <div className={`chart-canvas-viewport ${config.autoFitCanvas === false ? 'native-size' : ''}`} ref={viewport}>
-        <div className={`chart-canvas-shell logical-canvas ${config.kind === 'treemap' && !chartLayoutReady ? 'layout-pending' : ''}`} data-layout-ready={chartLayoutReady ? 'true' : 'false'} aria-busy={!chartLayoutReady} style={{ width: canvasWidth, height: canvasHeight, transform: canvasTransform }}>
+        <div
+          className={`chart-canvas-shell logical-canvas ${config.kind === 'treemap' && !chartLayoutReady ? 'layout-pending' : ''}`}
+          data-layout-ready={chartLayoutReady ? 'true' : 'false'}
+          data-render-settled={renderLifecycle.status === 'settled' ? 'true' : 'false'}
+          data-render-status={renderLifecycle.status}
+          data-render-revision={renderLifecycle.settledRevision}
+          data-render-pending-revision={renderLifecycle.revision}
+          data-render-signature={`${renderedChartKind ?? 'none'}:${renderedPlotKind || 'none'}:${renderLifecycle.settledRevision}:${canvasWidth}x${canvasHeight}`}
+          data-render-animation={renderAnimationEnabled ? 'on' : 'off'}
+          data-chart-kind={renderedChartKind ?? ''}
+          data-plot-kind={renderedPlotKind}
+          aria-busy={renderLifecycle.status !== 'settled'}
+          style={{ width: canvasWidth, height: canvasHeight, transform: canvasTransform }}
+        >
           <div className="chart-canvas" ref={container}/>
           {renderError && <div className="chart-render-error" role="alert"><strong>Не удалось отрисовать график</strong><span>{renderError}</span></div>}
           {richDisplays.map(({ field, html, layout, style }) => <CanvasTextDisplay key={field} html={html} style={{ ...style, size: layout.baseSize }} left={layout.left} top={layout.top} width={layout.width} onSelect={() => { onAnnotationSelect?.(''); onSettingsFocus?.(field) }}/>)}

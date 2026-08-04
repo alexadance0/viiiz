@@ -1,7 +1,8 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 
-test.use({ viewport: { width: 1600, height: 1200 }, colorScheme: 'light', reducedMotion: 'reduce' })
+test.use({ viewport: { width: 1600, height: 1200 }, colorScheme: 'light' })
+test.beforeEach(async ({ page }) => page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' }))
 
 const escaped = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -9,19 +10,56 @@ const setCheckbox = async (checkbox: Locator, selected: boolean) => {
   if (await checkbox.isChecked() !== selected) await checkbox.press('Space')
 }
 
-const waitForLayout = async (page: Page) => {
-  await page.evaluate(() => document.fonts.ready)
-  await expect(page.locator('.chart-canvas-shell')).toHaveAttribute('data-layout-ready', 'true')
-  await expect(page.locator('.chart-canvas svg')).toBeVisible()
-  await expect(page.locator('.chart-canvas-shell')).toContainText('Источник:')
+const chartRevision = async (canvas: Locator) => Number(await canvas.getAttribute('data-render-revision') ?? 0)
+
+const waitForStableBox = async (locator: Locator) => {
+  await expect.poll(async () => locator.evaluate((element) => new Promise<boolean>((resolve) => {
+    const first = element.getBoundingClientRect()
+    requestAnimationFrame(() => {
+      const second = element.getBoundingClientRect()
+      resolve(first.width > 0 && first.height > 0 && Math.abs(first.x - second.x) < .25 && Math.abs(first.y - second.y) < .25 && Math.abs(first.width - second.width) < .25 && Math.abs(first.height - second.height) < .25)
+    })
+  }))).toBe(true)
 }
+
+const waitForChartSettled = async (page: Page, canvas = page.locator('.chart-canvas-shell'), afterRevision?: number) => {
+  await page.evaluate(() => document.fonts.ready)
+  try {
+    await expect.poll(async () => {
+      const status = await canvas.getAttribute('data-render-status')
+      const revision = await chartRevision(canvas)
+      return status === 'settled' && (afterRevision == null || revision > afterRevision)
+    }).toBe(true)
+  } catch (cause) {
+    if (await canvas.getAttribute('data-render-status') === 'error') throw new Error(await page.locator('.chart-render-error').innerText())
+    throw cause
+  }
+  await expect(canvas).toHaveAttribute('data-render-settled', 'true')
+  expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true)
+  await expect(canvas).toHaveAttribute('data-render-animation', 'off')
+  await expect(page.locator('.chart-canvas svg')).toBeVisible()
+  await expect(canvas).toContainText('Источник:')
+  await waitForStableBox(canvas)
+}
+
+const updateChart = async (page: Page, canvas: Locator, action: () => Promise<unknown>) => {
+  const previous = await chartRevision(canvas)
+  await action()
+  await waitForChartSettled(page, canvas, previous)
+}
+
+const waitForLayout = (page: Page) => waitForChartSettled(page)
 
 const openDemoChart = async (page: Page, demo: string, chart?: string) => {
   await page.goto('/editor')
   await page.getByRole('button', { name: demo, exact: true }).click()
   await page.getByRole('button', { name: /Выбрать график/ }).click()
-  if (chart) await page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: new RegExp(`^${escaped(chart)}$`) }) }).click()
-  await waitForLayout(page)
+  if (chart) {
+    const canvas = page.locator('.chart-canvas-shell')
+    const previous = await chartRevision(canvas)
+    await page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: new RegExp(`^${escaped(chart)}$`) }) }).click()
+    await waitForChartSettled(page, canvas, previous)
+  } else await waitForLayout(page)
 }
 
 const openDesign = async (page: Page) => {
@@ -38,41 +76,40 @@ test('native smoothing semantics stay visually stable', async ({ page }) => {
   test.setTimeout(90_000)
   await openDemoChart(page, 'Временной ряд', 'Линия + среднее')
   const canvas = page.locator('.chart-canvas-shell')
+  await expect(canvas).toHaveAttribute('data-plot-kind', 'smoothing')
   await expect(canvas).toHaveScreenshot('moving-average-line-default.png')
 
-  await page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Точки \+ среднее$/ }) }).click()
-  await waitForLayout(page)
+  await updateChart(page, canvas, () => page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Точки \+ среднее$/ }) }).click())
   await expect(canvas).toHaveScreenshot('moving-average-scatter-default.png')
 
-  await setCheckbox(page.getByRole('checkbox', { name: 'orders', exact: true }), true)
-  await page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Линия \+ среднее$/ }) }).click()
-  await waitForLayout(page)
+  await updateChart(page, canvas, () => setCheckbox(page.getByRole('checkbox', { name: 'orders', exact: true }), true))
+  await updateChart(page, canvas, () => page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Линия \+ среднее$/ }) }).click())
   await expect(canvas).toHaveScreenshot('moving-average-multiple-series.png')
 
   await openDesign(page)
   await openSettings(page, 'Легенда')
-  await page.getByText('Обычная', { exact: true }).click()
+  await updateChart(page, canvas, () => page.getByText('Обычная', { exact: true }).click())
   await expect(canvas).toHaveScreenshot('moving-average-long-legend.png')
 
-  await page.getByText('Справа у рядов', { exact: true }).click()
+  await updateChart(page, canvas, () => page.getByText('Справа у рядов', { exact: true }).click())
   await expect(canvas).toHaveScreenshot('moving-average-direct-labels.png')
 
   await openSettings(page, 'Скользящее среднее')
-  await page.getByLabel('Период сглаживания').fill('365')
+  await updateChart(page, canvas, () => page.getByLabel('Период сглаживания').fill('365'))
   await expect(canvas).toHaveScreenshot('moving-average-missing-window.png')
-  await page.getByLabel('Период сглаживания').fill('4')
+  await updateChart(page, canvas, () => page.getByLabel('Период сглаживания').fill('4'))
 
   await openSettings(page, 'Ряды данных')
   await page.locator('.series-settings .series-name-button').first().click()
   const editor = page.locator('.series-editor')
-  await editor.getByLabel('Толщина линии, px').fill('6')
-  await editor.getByLabel('Тип линии').selectOption('dashed')
-  await page.getByRole('button', { name: 'Снять выделение' }).click()
+  await updateChart(page, canvas, () => editor.getByLabel('Толщина линии, px').fill('6'))
+  await updateChart(page, canvas, () => editor.getByLabel('Тип линии').selectOption('dashed'))
+  await updateChart(page, canvas, () => page.getByRole('button', { name: 'Снять выделение' }).click())
   await expect(canvas).toHaveScreenshot('moving-average-custom-styles.png')
 
   await openSettings(page, 'Оси, шкалы и подписи')
-  await page.getByLabel('Положение оси X').selectOption('top')
-  await page.getByLabel('Положение оси Y').selectOption('right')
+  await updateChart(page, canvas, () => page.getByLabel('Положение оси X').selectOption('top'))
+  await updateChart(page, canvas, () => page.getByLabel('Положение оси Y').selectOption('right'))
   await expect(canvas).toHaveScreenshot('moving-average-axis-top-right.png')
 })
 
@@ -80,32 +117,34 @@ test('native interval semantics stay visually stable', async ({ page }) => {
   test.setTimeout(120_000)
   await openDemoChart(page, 'Временной ряд', 'Диапазон между линиями')
   const canvas = page.locator('.chart-canvas-shell')
+  await expect(canvas).toHaveAttribute('data-chart-kind', 'range-line')
+  await expect(canvas).toHaveAttribute('data-plot-kind', 'interval')
   await expect(canvas).toHaveScreenshot('range-line-default.png')
 
   await openDesign(page)
   await openSettings(page, 'Диапазон между линиями')
   const range = page.locator('.line-variant-settings')
-  await range.getByLabel('Нижняя граница').selectOption('plan')
-  await range.getByLabel('Верхняя граница').selectOption('revenue')
+  await updateChart(page, canvas, () => range.getByLabel('Нижняя граница').selectOption('plan'))
+  await updateChart(page, canvas, () => range.getByLabel('Верхняя граница').selectOption('revenue'))
   await expect(canvas).toHaveScreenshot('range-line-crossing-by-bound.png')
-  await range.locator('label').filter({ hasText: /^Цвет заливки/ }).locator('select').selectOption('custom')
+  await updateChart(page, canvas, () => range.locator('label').filter({ hasText: /^Цвет заливки/ }).locator('select').selectOption('custom'))
   await expect(canvas).toHaveScreenshot('range-line-custom-fill.png')
 
   await page.getByRole('button', { name: '← Тип графика' }).click()
-  await page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Ступенчатый диапазон$/ }) }).click()
-  await waitForLayout(page)
+  await updateChart(page, canvas, () => page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Ступенчатый диапазон$/ }) }).click())
+  await expect(canvas).toHaveAttribute('data-chart-kind', 'step-range-line')
   await openDesign(page)
   await openSettings(page, 'Диапазон между линиями')
   const step = page.locator('.line-variant-settings')
-  await step.locator('label').filter({ hasText: /^Цвет заливки/ }).locator('select').selectOption('by-bound')
-  await step.getByLabel('Переход между значениями').selectOption('start')
+  await updateChart(page, canvas, () => step.locator('label').filter({ hasText: /^Цвет заливки/ }).locator('select').selectOption('by-bound'))
+  await updateChart(page, canvas, () => step.getByLabel('Переход между значениями').selectOption('start'))
   await expect(canvas).toHaveScreenshot('step-range-start.png')
-  await step.getByLabel('Переход между значениями').selectOption('end')
+  await updateChart(page, canvas, () => step.getByLabel('Переход между значениями').selectOption('end'))
   await expect(canvas).toHaveScreenshot('step-range-end.png')
 
   await page.getByRole('button', { name: '← Тип графика' }).click()
-  await page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Линия с интервалом$/ }) }).click()
-  await waitForLayout(page)
+  await updateChart(page, canvas, () => page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Линия с интервалом$/ }) }).click())
+  await expect(canvas).toHaveAttribute('data-chart-kind', 'confidence-line')
   await openDesign(page)
   await openSettings(page, 'Линия с интервалом')
   const confidence = page.locator('.line-variant-settings')
@@ -113,37 +152,43 @@ test('native interval semantics stay visually stable', async ({ page }) => {
     await openSettings(page, 'Линия с интервалом')
     await confidence.locator('.interval-group').first().getByLabel(label).selectOption(value)
   }
+  let previous = await chartRevision(canvas)
   await selectConfidenceField('Верхняя граница', 'plan')
   await selectConfidenceField('Нижняя граница', 'profit')
   await selectConfidenceField('Средняя линия', 'orders')
   await selectConfidenceField('Верхняя граница', 'revenue')
+  await waitForChartSettled(page, canvas, previous)
   await expect(canvas).toHaveScreenshot('confidence-line-default.png')
   await openSettings(page, 'Линия с интервалом')
-  await setCheckbox(confidence.locator('.interval-group').first().getByRole('checkbox', { name: 'Подписывать границы справа' }), true)
+  await updateChart(page, canvas, () => setCheckbox(confidence.locator('.interval-group').first().getByRole('checkbox', { name: 'Подписывать границы справа' }), true))
   await expect(canvas).toHaveScreenshot('confidence-line-show-bounds.png')
+  previous = await chartRevision(canvas)
   await selectConfidenceField('Средняя линия', 'revenue')
   await selectConfidenceField('Нижняя граница', 'orders')
   await selectConfidenceField('Верхняя граница', 'plan')
+  await waitForChartSettled(page, canvas, previous)
   await expect(canvas).toHaveScreenshot('confidence-line-invalid-gap.png')
   await openSettings(page, 'Линия с интервалом')
-  await confidence.getByRole('button', { name: 'Добавить группу' }).click()
+  await updateChart(page, canvas, () => confidence.getByRole('button', { name: 'Добавить группу' }).click())
   await openSettings(page, 'Линия с интервалом')
+  previous = await chartRevision(canvas)
   await confidence.locator('.interval-group').nth(1).getByLabel('Верхняя граница').selectOption('revenue')
   await openSettings(page, 'Линия с интервалом')
   await confidence.locator('.interval-group').nth(1).getByLabel('Нижняя граница').selectOption('profit')
   await openSettings(page, 'Линия с интервалом')
   await confidence.locator('.interval-group').nth(1).getByLabel('Средняя линия').selectOption('orders')
+  await waitForChartSettled(page, canvas, previous)
   await expect(canvas).toHaveScreenshot('confidence-line-multiple-groups.png')
   await openSettings(page, 'Линия с интервалом')
-  await confidence.locator('label').filter({ hasText: /^Цвет заливки/ }).locator('select').selectOption('custom')
+  await updateChart(page, canvas, () => confidence.locator('label').filter({ hasText: /^Цвет заливки/ }).locator('select').selectOption('custom'))
   await expect(canvas).toHaveScreenshot('confidence-line-custom-fill.png')
 
   await openSettings(page, 'Оси, шкалы и подписи')
-  await page.getByLabel('Положение оси X').selectOption('top')
-  await page.getByLabel('Положение оси Y').selectOption('right')
+  await updateChart(page, canvas, () => page.getByLabel('Положение оси X').selectOption('top'))
+  await updateChart(page, canvas, () => page.getByLabel('Положение оси Y').selectOption('right'))
   await expect(canvas).toHaveScreenshot('interval-axis-top-right.png')
   await openSettings(page, 'Легенда')
-  await page.getByText('Слева у рядов', { exact: true }).click()
+  await updateChart(page, canvas, () => page.getByText('Слева у рядов', { exact: true }).click())
   await expect(canvas).toHaveScreenshot('interval-direct-labels.png')
 })
 

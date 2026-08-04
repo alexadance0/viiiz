@@ -1,20 +1,20 @@
-import type { NativeChartScene, NativeIntervalChartScene, ResolvedSceneGeometry } from '../../../entities/chart/model/ChartScene'
+import type { NativeIntervalChartScene, ResolvedSceneGeometry } from '../../../entities/chart/model/ChartScene'
 import type { ResolvedReservation } from '../../chart-layout/reservations'
-import { renderNativePointScene, type ResolvedPointScene } from './renderLineAreaScene'
+import { renderCartesianPointBase, type ResolvedCartesianPointRenderModel } from './renderLineAreaScene'
 
 export type ResolvedIntervalScene = NativeIntervalChartScene & { geometry: ResolvedSceneGeometry; resolvedReservations: ResolvedReservation[] }
 
 export function renderIntervalScene(scene: ResolvedIntervalScene): Record<string, unknown> {
   const visibleSeries = scene.plot.series.filter((series) => series.visible)
-  const pointScene: ResolvedPointScene = {
+  const pointScene: ResolvedCartesianPointRenderModel = {
     ...scene,
     plot: {
-      kind: 'line', categoryPlacement: scene.plot.categoryPlacement, categories: scene.plot.categories,
+      mode: 'line', stacking: 'none', categoryPlacement: scene.plot.categoryPlacement, categories: scene.plot.categories,
       categoryLabelPlan: scene.plot.categoryLabelPlan, categoryAxis: scene.plot.categoryAxis,
       valueAxis: scene.plot.valueAxis, valueDomain: scene.plot.valueDomain, series: visibleSeries,
     },
-  } as NativeChartScene as ResolvedPointScene
-  const option = renderNativePointScene(pointScene)
+  }
+  const option = renderCartesianPointBase(pointScene)
   const bands = scene.plot.bands.map((band) => ({
     id: band.id, name: `__interval-band:${band.id}`, type: 'custom', coordinateSystem: 'cartesian2d', silent: true,
     tooltip: { show: false }, clip: true, z: 0, data: band.cells.map((_cell, index) => index),

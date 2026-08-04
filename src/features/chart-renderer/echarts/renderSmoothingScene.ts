@@ -1,19 +1,19 @@
-import type { NativeChartScene, NativeSmoothingChartScene, ResolvedSceneGeometry } from '../../../entities/chart/model/ChartScene'
+import type { NativeSmoothingChartScene, ResolvedSceneGeometry } from '../../../entities/chart/model/ChartScene'
 import type { ResolvedReservation } from '../../chart-layout/reservations'
-import { renderNativePointScene, type ResolvedPointScene } from './renderLineAreaScene'
+import { renderCartesianPointBase, type ResolvedCartesianPointRenderModel } from './renderLineAreaScene'
 
 export type ResolvedSmoothingScene = NativeSmoothingChartScene & { geometry: ResolvedSceneGeometry; resolvedReservations: ResolvedReservation[] }
 
 export function renderSmoothingScene(scene: ResolvedSmoothingScene): Record<string, unknown> {
-  const pointScene: ResolvedPointScene = {
+  const pointScene: ResolvedCartesianPointRenderModel = {
     ...scene,
     plot: {
-      kind: 'line', categoryPlacement: scene.plot.categoryPlacement, categories: scene.plot.categories,
+      mode: 'line', stacking: 'none', categoryPlacement: scene.plot.categoryPlacement, categories: scene.plot.categories,
       categoryLabelPlan: scene.plot.categoryLabelPlan, categoryAxis: scene.plot.categoryAxis,
       valueAxis: scene.plot.valueAxis, valueDomain: scene.plot.valueDomain, series: scene.plot.layers,
     },
-  } as NativeChartScene as ResolvedPointScene
-  const option = renderNativePointScene(pointScene)
+  }
+  const option = renderCartesianPointBase(pointScene)
   const layers = new Map<string, (typeof scene.plot.layers)[number]>(scene.plot.layers.map((layer) => [layer.id, layer]))
   option.series = (option.series as Array<Record<string, unknown>>).map((series) => {
     const layer = layers.get(String(series.id ?? ''))

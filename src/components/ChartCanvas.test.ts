@@ -324,23 +324,6 @@ describe('direct legend rendering', () => {
     expect(pointSeries()).toEqual(before)
   })
 
-  it('draws confidence direct labels only for visible interval series', () => {
-    const intervalTable: DataTable = { name: 'interval', columns: ['year', 'main', 'low', 'high'], rows: [{ year: 2022, main: 10, low: 8, high: 12 }, { year: 2023, main: 12, low: 7, high: 15 }] }
-    const intervalConfig: ChartConfig = { ...config, kind: 'confidence-line', yFields: ['main', 'low', 'high'], showDirectLabels: true, seriesStyles: { main: {}, low: {}, high: {} } }
-    const chart = {
-      getWidth: () => 800,
-      getOption: () => ({ yAxis: [{ min: 0, max: 20 }] }),
-      convertToPixel: (finder: { xAxisIndex?: number; yAxisIndex?: number }, value: number) => finder.xAxisIndex === 0 ? 100 + value * 100 : 420 - value * 15,
-    } as unknown as echarts.ECharts
-    const hiddenBounds = directLegendGraphics(chart, intervalTable, intervalConfig) as Array<{ id?: string }>
-    expect(hiddenBounds.some((item) => item.id === 'direct-legend-name-main')).toBe(true)
-    expect(hiddenBounds.some((item) => item.id === 'direct-legend-name-low')).toBe(false)
-
-    const visibleBounds = directLegendGraphics(chart, intervalTable, { ...intervalConfig, intervalGroups: [{ main: 'main', lower: 'low', upper: 'high', showBounds: true }] }) as Array<{ id?: string }>
-    expect(visibleBounds.some((item) => item.id === 'direct-legend-name-low')).toBe(true)
-    expect(visibleBounds.some((item) => item.id === 'direct-legend-name-high')).toBe(true)
-  })
-
   it('dims bar peers while keeping the selected bar fully visible', () => {
     const barConfig: ChartConfig = { ...config, kind: 'bar', palette: ['#168a72', '#e56b45'], yFields: ['a', 'b'], seriesStyles: { a: {}, b: {} } }
     const option = getChartPlugin('bar').buildOption(table, barConfig) as Record<string, unknown> & { series: Array<{ name?: string; type?: string; itemStyle?: { opacity?: number }; data?: Array<{ itemStyle?: { color?: string; opacity?: number } }> }> }

@@ -4,6 +4,7 @@ import { createDefaultChartConfig } from '../../../entities/chart/model/defaultC
 import { resolveNativeCartesianScene } from '../../chart-types/bar/layout'
 import { compileNativeIntervalScene } from '../../chart-types/interval/compiler'
 import { renderIntervalScene, type ResolvedIntervalScene } from './renderIntervalScene'
+import { readFileSync } from 'node:fs'
 
 const table: DataTable = { name: 'crossing', columns: ['x', 'low', 'high', 'main'], rows: [
   { x: 'A', low: 1, high: 5, main: 3 }, { x: 'B', low: 6, high: 2, main: 4 }, { x: 'C', low: 3, high: 8, main: 5 },
@@ -31,5 +32,19 @@ describe('native interval ECharts adapter', () => {
     expect(hidden.series.some((series) => series.name === 'low' || series.name === 'high')).toBe(false)
     expect(shown.series.some((series) => series.name === 'low')).toBe(true)
     expect(shown.series.some((series) => series.name === 'high')).toBe(true)
+  })
+
+  it('gets confidence direct-label membership only from the semantic guide', () => {
+    const scene = resolveNativeCartesianScene(compileNativeIntervalScene(table, config('confidence-line', { showDirectLabels: true }))) as ResolvedIntervalScene
+    const option = renderIntervalScene(scene) as { series: Array<{ name: string; endLabel?: { show?: boolean }; data?: Array<{ directLegendLabel?: boolean }> }> }
+    expect(option.series.find((series) => series.name === 'main')?.endLabel?.show).toBe(true)
+    expect(option.series.some((series) => series.name === 'low' || series.name === 'high')).toBe(false)
+    expect(readFileSync(new URL('../../../components/ChartCanvas.tsx', import.meta.url), 'utf8')).not.toMatch(/confidenceGroups|config\.kind === ['"]confidence-line['"]/)
+  })
+
+  it('returns the same serializable structure for the same scene', () => {
+    const scene = resolveNativeCartesianScene(compileNativeIntervalScene(table, config('range-line'))) as ResolvedIntervalScene
+    const serialize = () => JSON.stringify(renderIntervalScene(scene), (_key, value) => typeof value === 'function' ? '[function]' : value)
+    expect(serialize()).toBe(serialize())
   })
 })

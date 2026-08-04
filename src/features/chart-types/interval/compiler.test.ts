@@ -112,6 +112,7 @@ describe('native interval compiler', () => {
     expect(compiler).not.toMatch(/echarts|renderItem|buildOption/)
     expect(registry).not.toMatch(/const intervalLine|__range-line-band|__confidence-line-band/)
     expect(renderer).not.toMatch(/compatibilityConfig\.kind|rangeLowerField|rangeUpperField|intervalGroups|intervalFillMode/)
+    expect(renderer).not.toMatch(/as NativeChartScene|as ResolvedPointScene/)
     expect(canvas).not.toMatch(/plot\.kind === ['"]interval|plot\.kind !== ['"]interval/)
   })
 })
