@@ -9,16 +9,18 @@ Phase 7 stabilization started from: `a264fc3e2056939e27ba042f9cf52fda295159b3`.
 Phase 7 stabilization completed in: `521224f`.
 Full E2E verification: three consecutive runs passed (44/44 each), `--repeat-each=3` passed (132/132), and the visual file passed five times (35/35).
 
-Phase 8 started from `b089ab3b5a0eeda0d242ae10482f91496340b82b`; completion is the current `refactor/native-scatter-bubble` working tree (commit pending).
+Phase 8 started from `b089ab3b5a0eeda0d242ae10482f91496340b82b` and completed in `70bb42f6aa024a92e6f765d08b200fd7e723e85c`.
 
-Migrated kinds: the six ordinary bar kinds plus `line`, `spline`, `step-line`, `indexed-line`, `seasonal-line`, `area`, `stacked-area`, `normalized-stacked-area`, `slope`, `moving-average-line`, `moving-average-scatter`, `range-line`, `step-range-line`, `confidence-line`, `scatter`, and `bubble`.
+Phase 9A started from `70bb42f6aa024a92e6f765d08b200fd7e723e85c` and its native Distribution implementation completed in `abef01b4d646512ead007420b62ec7b308694ed5`.
+
+Migrated kinds: the six ordinary bar kinds plus `line`, `spline`, `step-line`, `indexed-line`, `seasonal-line`, `area`, `stacked-area`, `normalized-stacked-area`, `slope`, `moving-average-line`, `moving-average-scatter`, `range-line`, `step-range-line`, `confidence-line`, `scatter`, `bubble`, `strip-plot`, `jitter-plot`, `beeswarm`, `counts-plot`, and `barcode-plot`.
 
 ## Render path
 
 ```text
 legacy ChartConfig adapter
   → native bar, prepared-line, area, dedicated Slope/smoothing, or interval semantic compiler
-  → NativeChartScene (discriminated bar/line/area/slope/smoothing/interval/xy plot, axes, guides, stable IDs)
+  → NativeChartScene (discriminated bar/line/area/slope/smoothing/interval/xy/distribution plot, axes, guides, stable IDs)
   → shared frame/text/axis/reservation layout plus family-local Slope geometry
   → ResolvedScene
   → native ECharts adapter selected by semantic plot kind
@@ -47,7 +49,7 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 - `buildOption` remains on the plugin interface for unmigrated callers. For ordinary bars its implementation is a native compile/layout/render compatibility facade, not the legacy cartesian builder.
 - Slope keeps persisted `slopeXValues`, family flags, change-label/direction-color settings, legend/direct settings, series styles, callback keys, annotations, and decorations. Old documents omit the new optional fields and retain the previous appearance because change labels and direction colors default off. It does not expose ordinary legend/direct guides, and its local guide/label graphics never create fake semantic or renderer series.
 - Interval groups retain persisted field triples, fill settings, `showBounds`, source styles, element override keys, and auto-grouping. Hidden Confidence bounds remain in domains and band validation but are absent from guides, value-label targets, tooltips, and selection visitors. Bands are silent derived layers and are never editable data rows.
-- Waterfall, butterfly, lollipop, dumbbell, distribution, heatmap, and treemap retain their legacy compilers.
+- Waterfall, butterfly, lollipop, dumbbell, the six density/statistical-shape Distribution kinds, heatmap, and treemap retain their legacy compilers.
 
 ## Tests added
 
@@ -63,7 +65,7 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 
 The shared legacy `cartesian()` source still contains unreachable migrated-family generic code because remaining specialized comparison/relationship charts share the function. The moving-average branches and the complete interval builder—including fake Confidence stacks and custom Range bands—have been deleted. The next safe removal is to split the remaining specialized builders, then delete unreachable generic conditions and compatibility option-shape tests.
 
-Waterfall, butterfly, lollipop, dumbbell, distribution, heatmap, and treemap remain separate migrations.
+Waterfall, butterfly, lollipop, dumbbell, the remaining Distribution shapes/density variants, heatmap, and treemap remain separate migrations.
 
 ## Phase 8 native XY
 
@@ -72,6 +74,14 @@ Waterfall, butterfly, lollipop, dumbbell, distribution, heatmap, and treemap rem
 Linear regression is a pure transform. The trend uses the existing least-squares slope/intercept, 31 deterministic samples, and the existing 95% mean-band delta `1.96 × residualStandardError × sqrt(1/n + (x-xMean)^2/Sxx)`. References, diagonal, quadrants, confidence bands, and size guides are typed layers/guides rather than `markLine`, `markArea`, stacked fake bands, or fake source series.
 
 Native `ElementId` uses source-row/measure identity and therefore does not collapse duplicate X rows. Persisted `legacyKey = series + X` remains readable for overrides; duplicate-X overrides retain their historical shared-key limitation. The legacy relationship builder was removed and replaced by a throwing guard.
+
+## Phase 9A native Distribution observations
+
+`strip-plot`, `jitter-plot`, `beeswarm`, `counts-plot`, and `barcode-plot` now compile `plot.kind = 'distribution'`. A group is the stable measure × optional typed category relationship; semantic lanes keep their own IDs and labels, and raw observation IDs use source row plus measure rather than value, order, label, or pixel position. Persisted row and `count:<value>` override keys remain separate `legacyKey` compatibility fields.
+
+The compiler produces observations, exact-value Counts aggregates, Barcode strokes, full interpolated-quartile/1.5-IQR statistics, and mean/median summary intent. Layout owns the continuous value projection, semantic numeric lane axis, measured label rails, deterministic legacy jitter, cross-group-per-lane swarm packing, Barcode endpoints, summary extents, and lane-grid lines. The dedicated renderer consumes resolved geometry without a `DataTable`, statistics, jitter, swarm, or fake grid series. `DistributionSettings` now imports the neutral series-color helper directly.
+
+The migrated five legacy branches were removed and their legacy entry point throws. `boxplot`, `violinplot`, `raincloud`, `histogram`, `kde-plot`, and `ridgeline` remain legacy for Phase 9B/9C and reuse the extracted pure statistics/jitter helpers where applicable. Verification passed 618 unit tests, 47/47 full E2E, 141/141 at `--repeat-each=3`, and the focused Distribution visual scenario 5/5. Seven macOS Chromium Distribution baselines were added.
 
 ## Phase 7.1 render lifecycle
 

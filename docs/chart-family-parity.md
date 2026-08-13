@@ -6,7 +6,8 @@ Phase 7 stabilization started from: `a264fc3e2056939e27ba042f9cf52fda295159b3`.
 Phase 7 stabilization completed in: `521224f`.
 Full E2E verification: three consecutive runs passed (44/44 each), `--repeat-each=3` passed (132/132), and visual `--repeat-each=5` passed (35/35).
 
-Phase 8 started from `b089ab3b5a0eeda0d242ae10482f91496340b82b`; completion is the current `refactor/native-scatter-bubble` working tree (commit pending).
+Phase 8 started from `b089ab3b5a0eeda0d242ae10482f91496340b82b` and completed in `70bb42f6aa024a92e6f765d08b200fd7e723e85c`.
+Phase 9A started from that completion and its implementation completed in `abef01b4d646512ead007420b62ec7b308694ed5`.
 
 | Kind | Family | Compiler | Layout | Interaction | Export | Legacy `buildOption` reachable? |
 |---|---|---|---|---|---|---|
@@ -32,7 +33,10 @@ Phase 8 started from `b089ab3b5a0eeda0d242ae10482f91496340b82b`; completion is t
 | range-line / step-range-line / confidence-line | interval | native | shared native Cartesian frame/axes | visible source point metadata; derived bands excluded | shared SVG/PNG boundary | no |
 | moving-average-line / moving-average-scatter | smoothing transform | native | shared native Cartesian frame/axes | raw native point metadata; derived layer non-editable | shared SVG/PNG boundary | no |
 | scatter / bubble | continuous XY relationship | native | dedicated continuous XY layout inside shared frame | unique native point IDs; derived analytics excluded | shared SVG/PNG boundary | no |
-| distribution family | distribution | legacy | legacy/hybrid | legacy | existing legacy path | yes |
+| strip-plot / jitter-plot / beeswarm | observation distribution | native | dedicated lane/value layout; deterministic offsets | stable raw observation metadata | shared SVG/PNG boundary | no |
+| counts-plot | exact-value distribution aggregate | native | dedicated lane/value layout | stable aggregate metadata | shared SVG/PNG boundary | no |
+| barcode-plot | observation tick distribution | native | dedicated lane/value/tick layout | stable raw observation metadata | shared SVG/PNG boundary | no |
+| boxplot / violinplot / raincloud / histogram / kde-plot / ridgeline | distribution shapes/density | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | heatmap / treemap | matrix / hierarchy | legacy | specialized hybrid | legacy/specialized | existing legacy path | yes |
 
 ## Bar characterization coverage
@@ -69,6 +73,12 @@ Scatter and Bubble compile `plot.kind = 'xy'`: X is linear/time, Y is linear/log
 Bubble uses semantic `sqrt-absolute` size encoding. Zero maps to the minimum diameter, maximum absolute magnitude maps to the maximum, negative values use magnitude, reversed configured bounds are ordered without mutation, and invalid per-row sizes use the ordinary point diameter. Its size-scale guide is an inside-plot overlay with resolved pixel geometry and coexists with the outside categorical legend.
 
 Regression, 95% confidence envelopes, references, the clipped X=Y diagonal, and quadrants are derived semantic layers. They are silent, absent from legends/tooltips/selections/value-label listings, and never become fake source series. The old Scatter/Bubble builder is permanently throwing and its ECharts option construction has been removed.
+
+## Phase 9A Distribution observation parity
+
+All five migrated variants share stable semantic groups, lanes, observations, full summary statistics, orientation mapping, value-domain persistence, lane labels, legend membership, and mean/median summary marks. Strip permits overplotting. Jitter uses the exact deterministic legacy hash. Beeswarm packs every category subgroup sharing a lane as one pixel-space cloud. Counts groups by exact numeric value and resolves `baseSize × sqrt(count)` before rendering. Barcode compiles strokes and resolves perpendicular endpoints in layout.
+
+Raw and Barcode selections expose every source observation without ECharts introspection; Counts exposes only stable exact-value aggregate marks. Historical `elementStyles`, label fields, category labels/colors/order/visibility, series ordering, point/tick opacity, marker overrides, and summary precedence remain compatible through separate legacy keys. Compiler/layout contain no ECharts vocabulary, renderer contains no `DataTable`, and lane grid/summary marks are silent graphics rather than fake series.
 
 Seasonal emphasis and identification are independent: `Seasonal accent ≠ legend mode`. With no legend, accent changes only stroke presentation. The standard Seasonal legend contains individual accent-year items plus one semantic `Остальные` group for ordinary muted non-accent years; a non-accent year with an explicit color remains an individual truthful item. Direct mode uses the shared direct-series guide, defaults accent years on and non-accent years off, and respects explicit per-series overrides.
 

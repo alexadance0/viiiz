@@ -69,10 +69,18 @@ Playwright waits for a newer settled revision after interactions, verifies seman
 
 ## Phase 8 checkpoint — native Scatter/Bubble
 
-Phase 8 started from `b089ab3b5a0eeda0d242ae10482f91496340b82b`; completion is the current `refactor/native-scatter-bubble` working tree (commit pending).
+Phase 8 started from `b089ab3b5a0eeda0d242ae10482f91496340b82b` and completed in `70bb42f6aa024a92e6f765d08b200fd7e723e85c`.
 
 Scatter and Bubble now dispatch through `plot.kind = 'xy'`, with truthful `x`/`y` channels and a dedicated continuous-axis layout. Only actual data groups live in `plot.series`; trend/band/reference/diagonal/quadrant layers and the size-scale guide have separate semantic types and stable IDs. The renderer consumes no table rows and `ChartCanvas` gained no Scatter geometry branches.
 
 The legacy relationship builder, local bubble callback, fake stacked confidence band, `markLine`, `markArea`, fake size-guide series, legacy tooltip, and legend mutation were removed from `chartRegistry.ts`. Remaining legacy families are Waterfall, Butterfly, Lollipop, Horizontal Lollipop, Dumbbell, Distribution, Heatmap, and Treemap.
 
 The final gate passed three consecutive full E2E runs (44/44 each), the full suite at `--repeat-each=3` (132/132), and the visual file at `--repeat-each=5` (35/35), with no expected snapshot changes. Playwright uses two parallel workers in the supported macOS snapshot environment to avoid host saturation from concurrent SVG/video/trace contexts; this remains a multi-worker verification path.
+
+## Phase 9A checkpoint — native Distribution observations
+
+Phase 9A started from the Phase 8 completion `70bb42f6aa024a92e6f765d08b200fd7e723e85c`; implementation completed in `abef01b4d646512ead007420b62ec7b308694ed5`.
+
+Strip, Jitter, Beeswarm, Counts, and Barcode share one semantic `plot.kind = 'distribution'`: continuous numeric observations plus stable semantic lanes. Compiler-owned groups use measure × optional category identity; observations use raw row/field identity; exact Counts aggregates use aggregate identity; all retain their historical override keys separately. Pure statistics preserve interpolated quartiles and 1.5 IQR, while pure jitter preserves the legacy deterministic index seed.
+
+The dedicated layout resolves frame/axes, measured lane labels, lane/value projection, cross-group swarm packing, jitter, Barcode endpoints, summaries, and semantic lane grids. The ECharts adapter receives final geometry and never reads the table or computes statistics/offsets. The five old renderer branches were deleted and guarded; Box, Violin, Raincloud, Histogram, KDE, and Ridgeline deliberately remain legacy.
