@@ -1326,10 +1326,12 @@ test('distribution demo opens directly as a distribution chart', async ({ page }
   await expect(page.getByLabel('Разбить цветом по категории')).toHaveValue('')
   await expectRenderedChart(page)
   const renders: Buffer[] = []
+  const nativeDistributionNames = new Set(['Beeswarm plot', 'Strip plot', 'Jitter plot', 'Counts plot', 'Barcode plot'])
   for (const name of ['Box plot', 'Violin plot', 'Raincloud plot', 'Histogram', 'KDE plot', 'Ridgeline plot', 'Beeswarm plot', 'Strip plot', 'Jitter plot', 'Counts plot', 'Barcode plot']) {
     await page.getByRole('button', { name }).click()
     await expect(page.getByRole('button', { name })).toHaveClass(/active/)
     await expectRenderedChart(page)
+    if (nativeDistributionNames.has(name)) await expect(page.locator('.chart-canvas-shell')).toHaveAttribute('data-plot-kind', 'distribution')
     await page.waitForTimeout(250)
     const render = await page.locator('.canvas-paper').screenshot()
     expect(render.byteLength).toBeGreaterThan(5_000)

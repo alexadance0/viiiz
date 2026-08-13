@@ -6,6 +6,8 @@ import { absorbedBarLabelPlacement } from './chartLabels'
 import { isoWeekParts } from './timeFrequency'
 import { entrepreneurshipDifficultiesDemoTable } from './demoData'
 import type { ChartConfig, ChartTextStyle, DataTable } from './types'
+import { compileNativeDistributionScene } from '../features/chart-types/distribution/compiler'
+import { resolveNativeDistributionScene } from '../features/chart-types/distribution/layout'
 
 const style = (size: number): ChartTextStyle => ({ fontFamily: 'Arial', size, color: '#000000', weight: 400, italic: false, lineHeight: 120, align: 'left' })
 const table: DataTable = { name: 'test', columns: ['month', 'value'], rows: [{ month: 'Янв', value: 10 }, { month: 'Фев', value: 20 }] }
@@ -311,8 +313,8 @@ describe('individual chart element styles', () => {
 
     const swarm = getChartPlugin('beeswarm').buildOption(countries, { ...base('beeswarm'), yField: 'gdp', yFields: ['gdp'], distributionLabelField: 'country', distributionShowLabels: true }) as { series: PointSeries[] }
     const cloud = swarm.series.find((series) => series.type === 'custom' && series.name === 'gdp')!
-    const rendered = cloud.renderItem!(null, { coord: ([value, lane]) => [value * 10, lane * 100], size: () => [10, 100] })
-    expect(rendered.children.filter((child) => child.type === 'text').map((child) => child.style?.text)).toEqual(['Бразилия', 'Франция', 'Япония'])
+    const labels = cloud.data.flatMap((_item, dataIndex) => cloud.renderItem!({ dataIndex }, { coord: ([value, lane]) => [value * 10, lane * 100], size: () => [10, 100] }).children.filter((child) => child.type === 'text').map((child) => child.style?.text))
+    expect(labels).toEqual(['Бразилия', 'Франция', 'Япония'])
   })
 
   it('lists every editable value label for the settings panel', () => {
@@ -440,8 +442,10 @@ describe('individual chart element styles', () => {
     const barcode = option.series.find((series) => series.name === 'profit' && series.type === 'custom')!
     expect(barcode.data).toHaveLength(3)
     const tick = barcode.renderItem!({ dataIndex: 0 }, { coord: ([value, lane]) => [value * 10, lane * 100], size: () => [10, 100] }).children![0]
-    expect(tick).toMatchObject({ type: 'line', shape: { x1: 20, y1: -28, x2: 20, y2: 28 }, style: { lineWidth: 3 } })
-    const median = option.series.find((series) => series.name === 'profit' && series.silent)!.renderItem!({ dataIndex: 0 }, { coord: ([value, lane]) => [value * 10, lane * 100], size: () => [10, 100] }).shape!
+    expect(tick).toMatchObject({ type: 'line', style: { lineWidth: 3 } })
+    expect(tick.shape.x1).toBe(tick.shape.x2)
+    expect(tick.shape.y2 - tick.shape.y1).toBe(56)
+    const median = (option as unknown as { graphic: Array<{ id?: string; shape?: BarcodeShape }> }).graphic.find((item) => item.id?.startsWith('summary:'))!.shape!
     expect(median.y2 - median.y1).toBe(tick.shape.y2 - tick.shape.y1)
   })
 
@@ -601,7 +605,7 @@ describe('individual chart element styles', () => {
     expect(horizontal.yAxis).toMatchObject({ axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false } })
     expect(vertical.xAxis).toMatchObject({ axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false } })
     expect(vertical.yAxis).toMatchObject({ axisLine: { show: true }, axisTick: { show: true }, splitLine: { show: false } })
-    for (const option of [horizontal, vertical] as Array<typeof horizontal & { series?: Array<{ name?: string }> }>) expect(option.series?.filter((series) => series.name === '__distribution-grid')).toHaveLength(1)
+    for (const option of [horizontal, vertical] as Array<typeof horizontal & { graphic?: Array<{ id?: string }> }>) expect(option.graphic?.filter((item) => item.id?.startsWith('distribution-grid:'))).toHaveLength(1)
   })
 
   it('removes empty outer distribution lanes unless the full grid is enabled', () => {
@@ -626,22 +630,19 @@ describe('individual chart element styles', () => {
       { region: 'A', value: 1 }, { region: 'A', value: 2 }, { region: 'A', value: 9 },
       { region: 'B', value: 10 }, { region: 'B', value: 11 }, { region: 'B', value: 30 },
     ] }
-    type SummarySeries = { silent?: boolean; z?: number; data: number[][]; renderItem?: (_params: unknown, api: { coord(value: number[]): number[]; size(value: number[]): number[] }) => { shape: { x1: number; y1: number; x2: number; y2: number } } }
-    const summaries = (kind: 'strip-plot' | 'jitter-plot' | 'counts-plot' | 'beeswarm', distributionSummaryStatistic: ChartConfig['distributionSummaryStatistic'] = 'median', extra: Partial<ChartConfig> = {}) => (getChartPlugin(kind).buildOption(observations, { ...base(kind), yField: 'value', yFields: ['value'], distributionGroupField: 'region', distributionSummaryStatistic, ...extra }) as { series: Array<SummarySeries & { name?: string }> }).series.filter((series) => series.silent && series.name !== '__distribution-grid')
+    const summaries = (kind: 'strip-plot' | 'jitter-plot' | 'counts-plot' | 'beeswarm', distributionSummaryStatistic: ChartConfig['distributionSummaryStatistic'] = 'median', extra: Partial<ChartConfig> = {}) => resolveNativeDistributionScene(compileNativeDistributionScene(observations, { ...base(kind), yField: 'value', yFields: ['value'], distributionGroupField: 'region', distributionSummaryStatistic, ...extra }))
     const median = summaries('strip-plot'), mean = summaries('strip-plot', 'mean')
-    expect(median[0].data[0]).toEqual([2, 0])
-    expect(mean[0].data[0][0]).toBe(4)
-    expect(mean.map((series) => series.data[0][1])).toEqual([0, 0])
-    const api = { coord: ([value, lane]: number[]) => [value * 10, lane * 100], size: () => [10, 100] }
-    const lineLength = (kind: 'strip-plot' | 'jitter-plot' | 'counts-plot' | 'beeswarm') => { const shape = summaries(kind)[0].renderItem!(null, api).shape; return shape.y2 - shape.y1 }
+    expect(median.plot.groups[0].summary.median).toBe(2)
+    expect(mean.plot.layers.find((layer) => layer.kind === 'summaries')!.marks[0].value).toBe(4)
+    expect(mean.distributionGeometry.summaries.every((line) => line.y1 === mean.distributionGeometry.summaries[0].y1)).toBe(true)
+    const lineLength = (kind: 'strip-plot' | 'jitter-plot' | 'counts-plot' | 'beeswarm') => { const shape = summaries(kind).distributionGeometry.summaries[0]; return shape.y2 - shape.y1 }
     expect(lineLength('strip-plot')).toBeLessThan(lineLength('counts-plot'))
     expect(lineLength('counts-plot')).toBeLessThan(lineLength('jitter-plot'))
     expect(lineLength('jitter-plot')).toBeLessThan(lineLength('beeswarm'))
     expect(lineLength('jitter-plot')).toBeLessThan(72)
-    const defaultShape = summaries('jitter-plot')[0].renderItem!(null, api).shape
-    const shortShape = summaries('jitter-plot', 'median', { distributionSummaryLength: 50 })[0].renderItem!(null, api).shape
+    const defaultShape = summaries('jitter-plot').distributionGeometry.summaries[0]
+    const shortShape = summaries('jitter-plot', 'median', { distributionSummaryLength: 50 }).distributionGeometry.summaries[0]
     expect(shortShape.y2 - shortShape.y1).toBeCloseTo((defaultShape.y2 - defaultShape.y1) / 2)
-    expect(mean[0].z).toBeGreaterThan(5)
   })
 
   it('uses each series color for summary lines and allows color and width overrides', () => {
@@ -651,18 +652,22 @@ describe('individual chart element styles', () => {
     type Rendered = { style?: { stroke?: string; lineWidth?: number }; children?: Array<{ style?: { stroke?: string; lineWidth?: number } }> }
     type CustomSeries = { name?: string; type: string; silent?: boolean; renderItem?: (_params: unknown, api: { coord(value: number[]): number[]; size(value: number[]): number[] }) => Rendered }
     const api = { coord: ([value, lane]: number[]) => [value * 10, lane * 100], size: () => [10, 100] }
-    const pointKinds = new Set<ChartConfig['kind']>(['beeswarm', 'strip-plot', 'jitter-plot', 'counts-plot'])
     const summaries = (kind: ChartConfig['kind'], seriesStyles: ChartConfig['seriesStyles'] = {}) => {
       const option = getChartPlugin(kind).buildOption(observations, { ...base(kind), yField: 'profit', yFields: ['profit', 'orders'], palette: ['#123456', '#abcdef'], seriesStyles }) as { series: CustomSeries[] }
       return ['profit', 'orders'].map((name) => {
-        const series = option.series.find((candidate) => candidate.name === name && candidate.type === 'custom' && (pointKinds.has(kind) ? candidate.silent : !candidate.silent))!
+        const series = option.series.find((candidate) => candidate.name === name && candidate.type === 'custom' && !candidate.silent)!
         const rendered = series.renderItem!(null, api)
         return rendered.style ?? rendered.children?.at(-1)?.style
       })
     }
-    for (const kind of ['boxplot', 'violinplot', 'beeswarm', 'strip-plot', 'jitter-plot', 'counts-plot'] as const) {
+    for (const kind of ['boxplot', 'violinplot'] as const) {
       expect(summaries(kind).map((style) => style?.stroke)).toEqual(['#123456', '#abcdef'])
       expect(summaries(kind, { profit: { distributionSummaryColor: '#ff0000', distributionSummaryWidth: 5, distributionSummaryLength: 140 }, orders: { distributionSummaryColor: '#00aa44', distributionSummaryWidth: 7 } })).toMatchObject([{ stroke: '#ff0000', lineWidth: 5 }, { stroke: '#00aa44', lineWidth: 7 }])
+    }
+    for (const kind of ['beeswarm', 'strip-plot', 'jitter-plot', 'counts-plot'] as const) {
+      const native = (seriesStyles: ChartConfig['seriesStyles'] = {}) => resolveNativeDistributionScene(compileNativeDistributionScene(observations, { ...base(kind), yField: 'profit', yFields: ['profit', 'orders'], palette: ['#123456', '#abcdef'], seriesStyles })).distributionGeometry.summaries
+      expect(native().map((line) => line.color)).toEqual(['#123456', '#abcdef'])
+      expect(native({ profit: { distributionSummaryColor: '#ff0000', distributionSummaryWidth: 5 }, orders: { distributionSummaryColor: '#00aa44', distributionSummaryWidth: 7 } })).toMatchObject([{ color: '#ff0000', width: 5 }, { color: '#00aa44', width: 7 }])
     }
   })
 
@@ -688,9 +693,9 @@ describe('individual chart element styles', () => {
     expect(renderedSwarm.children[0].shape.r).toBeCloseTo(5)
     expect(renderedSwarm.children[0].style).toMatchObject({ fill: '#123456', opacity: .5, lineWidth: 0 })
 
-    const counts = getChartPlugin('counts-plot').buildOption(observations, { ...config, kind: 'counts-plot' }) as { series: Array<{ name: string; data: Array<{ count: number }>; symbolSize?: (_value: unknown, params: { data: { count: number } }) => number }> }
+    const counts = getChartPlugin('counts-plot').buildOption(observations, { ...config, kind: 'counts-plot' }) as { series: Array<{ name: string; data: Array<{ count: number; symbolSize: number }> }> }
     const profit = counts.series.find((series) => series.name === 'profit')!
-    const sizes = profit.data.map((point) => profit.symbolSize!(null, { data: point }))
+    const sizes = profit.data.map((point) => point.symbolSize)
     expect(Math.min(...sizes)).toBe(10)
     expect(Math.max(...sizes)).toBeGreaterThan(Math.min(...sizes))
   })

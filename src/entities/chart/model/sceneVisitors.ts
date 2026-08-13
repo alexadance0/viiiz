@@ -7,6 +7,7 @@ export interface NativeMarkSelection {
   displayValue: string
   value: number | null
   color: string
+  displayLabel?: string
 }
 
 export function nativeMarkSelections(scene: NativeChartScene): NativeMarkSelection[] {
@@ -21,6 +22,10 @@ export function nativeMarkSelections(scene: NativeChartScene): NativeMarkSelecti
   }
   case 'interval': return scene.plot.series.filter((series) => series.visible).flatMap((series) => series.points.map((point) => ({ legacyKey: point.legacyKey, seriesName: series.name, displayCategory: point.displayCategory, displayValue: point.displayValue, value: point.value, color: scene.compatibilityConfig.elementStyles[point.legacyKey]?.color ?? series.color })))
   case 'xy': return scene.plot.series.flatMap((series) => series.points.map((point) => ({ legacyKey: point.legacyKey, seriesName: series.name, displayCategory: point.displayX, displayValue: point.displayY, value: point.y, color: series.color })))
+  case 'distribution': {
+    const groups = new Map(scene.plot.groups.map((group) => [group.id, group]))
+    return scene.plot.layers.flatMap((layer) => layer.kind === 'observations' || layer.kind === 'counts' || layer.kind === 'barcodes' ? layer.groups.flatMap((entry) => { const group = groups.get(entry.groupId); return entry.marks.map((mark) => ({ legacyKey: mark.legacyKey, seriesName: group?.sourceSeriesName ?? '', displayCategory: mark.displayCategory, displayValue: mark.displayValue, displayLabel: mark.displayLabel, value: mark.value, color: 'marker' in mark ? mark.marker.fill : mark.stroke.color })) }) : [])
+  }
   case 'line':
   case 'area':
   case 'slope': return scene.plot.series.flatMap((series) => series.points.map((point) => ({ legacyKey: point.legacyKey, seriesName: series.name, displayCategory: point.displayCategory, displayValue: point.displayValue, value: point.value, color: scene.compatibilityConfig.elementStyles[point.legacyKey]?.color ?? series.color })))
@@ -32,6 +37,7 @@ export function nativePointSeries(scene: NativeChartScene): Array<{ name: string
   switch (scene.plot.kind) {
   case 'bar':
   case 'xy': return []
+  case 'distribution': return []
   case 'smoothing': return scene.plot.layers
   case 'interval': return scene.plot.series.filter((series) => series.visible)
   case 'line':

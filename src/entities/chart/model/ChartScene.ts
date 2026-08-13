@@ -353,7 +353,121 @@ export interface CartesianXYPlotScene {
   analyticalLayers: Array<XYTrendLayerScene | XYReferenceLineScene | XYQuadrantLayerScene>
 }
 
-export type NativePlotScene = CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene
+declare const distributionGroupIdBrand: unique symbol
+export type DistributionGroupId = string & { readonly [distributionGroupIdBrand]: 'DistributionGroupId' }
+declare const distributionLaneIdBrand: unique symbol
+export type DistributionLaneId = string & { readonly [distributionLaneIdBrand]: 'DistributionLaneId' }
+
+export interface DistributionMarkerStyle {
+  shape: 'circle' | 'rect' | 'roundRect' | 'triangle' | 'diamond'
+  size: number
+  fill: string
+  stroke: string
+  strokeWidth: number
+  opacity: number
+}
+
+export interface DistributionObservationScene {
+  id: ElementId
+  datumId: DatumId
+  groupId: DistributionGroupId
+  legacyKey: string
+  value: number
+  sourceRowIndex: number
+  sourceField: string
+  displayValue: string
+  displayLabel: string
+  displayCategory: string
+  marker: DistributionMarkerStyle
+  label: { visible: boolean; text: string; position: 'top' | 'right' | 'bottom' | 'left'; style: ChartTextStyle }
+}
+
+export interface DistributionCountMarkScene {
+  id: ElementId
+  datumId: DatumId
+  groupId: DistributionGroupId
+  legacyKey: string
+  value: number
+  count: number
+  sourceDatumIds: DatumId[]
+  displayValue: string
+  displayCategory: string
+  displayLabel: string
+  marker: DistributionMarkerStyle
+  label: DistributionObservationScene['label']
+}
+
+export interface DistributionBarcodeMarkScene {
+  id: ElementId
+  datumId: DatumId
+  groupId: DistributionGroupId
+  legacyKey: string
+  value: number
+  displayValue: string
+  displayCategory: string
+  displayLabel: string
+  stroke: { color: string; width: number; opacity: number }
+  label: DistributionObservationScene['label']
+}
+
+export interface DistributionSummaryStats {
+  count: number
+  minimumInlier: number
+  q1: number
+  median: number
+  mean: number
+  q3: number
+  maximumInlier: number
+  outlierDatumIds: DatumId[]
+}
+
+export interface DistributionGroupScene {
+  id: DistributionGroupId
+  field: string
+  categoryKey?: string
+  categoryLabel?: string
+  sourceSeriesName: string
+  seriesKey: string
+  displayName: string
+  color: string
+  laneId: DistributionLaneId
+  subgroupIndex: number
+  subgroupCount: number
+  observations: DistributionObservationScene[]
+  summary: DistributionSummaryStats
+}
+
+export interface DistributionLaneScene {
+  id: DistributionLaneId
+  index: number
+  label: string
+  groupIds: DistributionGroupId[]
+}
+
+export type DistributionLayerScene =
+  | { kind: 'observations'; groups: Array<{ groupId: DistributionGroupId; marks: DistributionObservationScene[] }> }
+  | { kind: 'counts'; groups: Array<{ groupId: DistributionGroupId; marks: DistributionCountMarkScene[] }> }
+  | { kind: 'barcodes'; groups: Array<{ groupId: DistributionGroupId; marks: DistributionBarcodeMarkScene[] }> }
+  | { kind: 'summaries'; marks: Array<{ id: ElementId; groupId: DistributionGroupId; value: number; visible: boolean; statistic: 'median' | 'mean'; color: string; width: number; lengthRatio: number }> }
+
+export interface DistributionPlotScene {
+  kind: 'distribution'
+  variant: 'strip' | 'jitter' | 'beeswarm' | 'counts' | 'barcode'
+  orientation: 'horizontal' | 'vertical'
+  layoutMode: 'measures' | 'categories'
+  valueAxis: AxisSpec
+  laneAxis: AxisSpec
+  valueDomain: { min: number; max: number; step: number }
+  laneDomain: { min: number; max: number; interval: number }
+  widthRatio: number
+  jitterAmount: number
+  lanes: DistributionLaneScene[]
+  groups: DistributionGroupScene[]
+  layers: DistributionLayerScene[]
+  grid: { valueVisible: boolean; laneVisible: boolean; color: string; width: number; type: 'solid' | 'dashed' | 'dotted' }
+}
+
+export type NativePlotScene = CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene | DistributionPlotScene
 
 export interface NativeChartScene extends ChartSceneBase {
   migrationMode: 'native'
@@ -371,6 +485,7 @@ export type NativeSlopeChartScene = NativeChartScene & { plot: CartesianSlopePlo
 export type NativeSmoothingChartScene = NativeChartScene & { plot: CartesianSmoothingPlotScene }
 export type NativeIntervalChartScene = NativeChartScene & { plot: CartesianIntervalPlotScene }
 export type NativeXYChartScene = NativeChartScene & { plot: CartesianXYPlotScene }
+export type NativeDistributionChartScene = NativeChartScene & { plot: DistributionPlotScene }
 
 export type ChartScene = LegacyChartScene | NativeChartScene
 

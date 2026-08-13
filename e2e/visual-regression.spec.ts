@@ -74,6 +74,35 @@ const openSettings = async (page: Page, name: string) => {
   if (!(await summary.evaluate((element) => (element.parentElement as HTMLDetailsElement).open))) await summary.click()
 }
 
+test('native Distribution observation semantics stay visually stable', async ({ page }) => {
+  test.setTimeout(120_000)
+  await openDemoChart(page, 'Распределения', 'Strip plot', true)
+  const canvas = page.locator('.chart-canvas-shell')
+  await expect(canvas).toHaveAttribute('data-plot-kind', 'distribution')
+  await expect(canvas).toHaveScreenshot('distribution-strip-default.png')
+
+  await updateChart(page, canvas, () => page.getByLabel('Разбить цветом по категории').selectOption('region'))
+  await expect(canvas).toHaveScreenshot('distribution-strip-grouped.png')
+
+  const choose = async (name: string) => {
+    await updateChart(page, canvas, () => page.getByRole('button', { name, exact: true }).click())
+    await expect(canvas).toHaveAttribute('data-plot-kind', 'distribution')
+  }
+  await choose('Jitter plot')
+  await expect(canvas).toHaveScreenshot('distribution-jitter-grouped.png')
+  await choose('Beeswarm plot')
+  await expect(canvas).toHaveScreenshot('distribution-beeswarm-grouped.png')
+  await choose('Counts plot')
+  await expect(canvas).toHaveScreenshot('distribution-counts-grouped.png')
+  await choose('Barcode plot')
+  await expect(canvas).toHaveScreenshot('distribution-barcode-grouped.png')
+
+  await openDesign(page)
+  await openSettings(page, 'Форма распределения')
+  await updateChart(page, canvas, () => page.getByLabel('Ориентация').selectOption('vertical'))
+  await expect(canvas).toHaveScreenshot('distribution-barcode-vertical.png')
+})
+
 test('native Scatter and Bubble semantics stay visually stable', async ({ page }) => {
   test.setTimeout(120_000)
   await openDemoChart(page, 'Временной ряд', 'Точечный', true)

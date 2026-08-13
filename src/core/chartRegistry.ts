@@ -21,6 +21,10 @@ import { compileNativeSlopeScene } from '../features/chart-types/slope/compiler'
 import { compileNativeSmoothingScene, isNativeSmoothingKind } from '../features/chart-types/smoothing/compiler'
 import { compileNativeIntervalScene, isNativeIntervalKind } from '../features/chart-types/interval/compiler'
 import { compileNativeXYScene, isNativeXYKind, validateNativeXYMapping } from '../features/chart-types/xy/compiler'
+import { compileNativeDistributionScene, isNativeDistributionKind, validateNativeDistributionMapping } from '../features/chart-types/distribution/compiler'
+import { deterministicDistributionOffset } from '../features/chart-types/distribution/jitter'
+import { distributionStatistics } from '../features/chart-types/distribution/statistics'
+export { fitSwarmClouds, fitSwarmOffsets, packSwarmOffsets } from '../features/chart-types/distribution/swarm'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 import { nativeMarkSelections } from '../entities/chart/model/sceneVisitors'
 import { repeatedChartCategories } from './chartData'
@@ -1565,50 +1569,6 @@ export const legacyRelationshipBuilderGuard = () => { throw new Error('Legacy Sc
 const scatter: LegacyChartPlugin = { ...pluginModel('scatter'), id: 'scatter', label: relationshipChartDefinitions[0][1], category: 'relationship', settings: relationshipSettings, buildOption: legacyRelationshipBuilderGuard }
 const bubble: LegacyChartPlugin = { ...pluginModel('bubble'), id: 'bubble', label: relationshipChartDefinitions[1][1], category: 'relationship', settings: relationshipSettings, buildOption: legacyRelationshipBuilderGuard }
 
-const quantile = (values: number[], position: number) => {
-  if (!values.length) return 0
-  const index = (values.length - 1) * position, lower = Math.floor(index), upper = Math.ceil(index)
-  return values[lower] + (values[upper] - values[lower]) * (index - lower)
-}
-
-export const packSwarmOffsets = (positions: number[], diameter: number) => {
-  const placed: Array<{ position: number; offset: number }> = []
-  return positions.map((position) => {
-    const candidates = [0]
-    placed.forEach((point) => {
-      const distance = Math.abs(position - point.position)
-      if (distance >= diameter) return
-      const cross = Math.sqrt(Math.max(0, diameter ** 2 - distance ** 2))
-      candidates.push(point.offset - cross, point.offset + cross)
-    })
-    candidates.sort((left, right) => Math.abs(left) - Math.abs(right) || left - right)
-    const offset = candidates.find((candidate) => placed.every((point) => (position - point.position) ** 2 + (candidate - point.offset) ** 2 >= (diameter - .01) ** 2)) ?? 0
-    placed.push({ position, offset })
-    return offset
-  })
-}
-
-export const fitSwarmClouds = (positionClouds: number[][], preferredDiameter: number, maximumOffset: number) => {
-  const diameter = Math.max(.25, preferredDiameter)
-  const offsets = positionClouds.map((positions) => packSwarmOffsets(positions, diameter))
-  const extent = Math.max(...offsets.flatMap((cloud) => cloud.map(Math.abs)), 0)
-  const scale = extent > maximumOffset && extent > 0 ? maximumOffset / extent : 1
-  return { offsets: offsets.map((cloud) => cloud.map((offset) => offset * scale)), diameter: diameter * scale }
-}
-
-export const fitSwarmOffsets = (positions: number[], preferredDiameter: number, maximumOffset: number) => {
-  const fitted = fitSwarmClouds([positions], preferredDiameter, maximumOffset)
-  return { offsets: fitted.offsets[0], diameter: fitted.diameter }
-}
-
-const distributionRandom = (index: number, group: number) => {
-  let value = Math.imul(index + 1, 0x9e3779b1) ^ Math.imul(group + 1, 0x85ebca6b)
-  value ^= value >>> 16
-  value = Math.imul(value, 0x7feb352d)
-  value ^= value >>> 15
-  return ((value >>> 0) / 0xffffffff) * 2 - 1
-}
-
 const distribution: LegacyChartPlugin = {
   ...pluginModel('boxplot'), id: 'boxplot', label: distributionChartDefinitions[0][1], category: 'distribution',
   settings: { sections: ['series', 'annotations', 'grid', 'text', 'headings', 'axes', 'legend-values', 'credits'], series: ['color', 'markers'], features: { directLabels: false, barLayout: false, dataPreparation: false, normalizedStack: false, areaLayout: false, scatterLayout: false, distributionLayout: true, lineVariant: false } },
@@ -1676,11 +1636,7 @@ const distribution: LegacyChartPlugin = {
     const pointLabel = { show: config.distributionShowLabels ?? false, position: pointLabelPosition, distance: 5, ...text(config.valueText), ...pointLabelPlacement(pointLabelPosition), formatter: '{b}' }
     const pointLabelLayout = { hideOverlap: config.valueLabelHideOverlap ?? false, moveOverlap: horizontal ? 'shiftY' : 'shiftX' }
     const configuredLegendIcon = ({ circle: 'circle', square: 'rect', line: 'path://M0 4H24V7H0Z', diamond: 'diamond', triangle: 'triangle' } as const)[config.legendMarker as 'circle' | 'square' | 'line' | 'diamond' | 'triangle']
-    const stats = groups.map((group) => {
-      const q1 = quantile(group.values, .25), median = quantile(group.values, .5), q3 = quantile(group.values, .75), iqr = q3 - q1
-      const inside = group.values.filter((value) => value >= q1 - iqr * 1.5 && value <= q3 + iqr * 1.5)
-      return { min: inside[0] ?? q1, q1, median, mean: group.values.reduce((sum, value) => sum + value, 0) / group.values.length, q3, max: inside.at(-1) ?? q3, outliers: group.values.filter((value) => value < (inside[0] ?? q1) || value > (inside.at(-1) ?? q3)) }
-    })
+    const stats = groups.map((group) => { const result = distributionStatistics(group.observations.map((observation) => ({ value: observation.value, datumId: observation.elementKey }))); return { min: result.minimumInlier, q1: result.q1, median: result.median, mean: result.mean, q3: result.q3, max: result.maximumInlier, outliers: group.observations.filter((observation) => result.outlierDatumIds.includes(observation.elementKey)).map((observation) => observation.value) } })
     if (config.kind === 'histogram' || config.kind === 'kde-plot') {
       const histogram = config.kind === 'histogram'
       const [requestedHistogramMin, requestedHistogramMax] = orderedBounds(config.distributionHistogramMin, config.distributionHistogramMax)
@@ -1863,7 +1819,6 @@ const distribution: LegacyChartPlugin = {
       const shapeWidth = groupedShape && !splitViolin ? categorySlot * .84 : rowWidth
       const pointStyle = { color: config.kind === 'raincloud' ? config.canvasBackground ?? '#ffffff' : color, opacity: pointOpacity, borderColor: color, borderWidth: config.kind === 'raincloud' ? 1.25 : 0 }
       const pointEmphasis = { disabled: true, scale: false }
-      const barcodeHalf = (band: number) => Math.min(28, Math.max(4, band * shapeWidth / 2))
       const observationData = (observation: typeof group.observations[number], value: number[]) => {
         const override = config.elementStyles[observation.elementKey]
         const labelStyle = override?.valueText ?? config.valueText
@@ -1877,50 +1832,6 @@ const distribution: LegacyChartPlugin = {
           itemStyle: { ...pointStyle, ...(override?.color ? { color: override.color, borderColor: override.color } : {}), ...(override?.markerFill ? { color: override.markerFill } : {}), ...(override?.markerBorder ? { borderColor: override.markerBorder } : {}), ...(override?.markerBorderWidth != null ? { borderWidth: override.markerBorderWidth } : {}), ...(override?.fillOpacity != null ? { opacity: override.fillOpacity } : {}) },
           label: override ? { ...pointLabel, show: override.showLabel ?? config.distributionShowLabels ?? false, formatter: override.label || observation.displayLabel, position: labelPosition, ...text(labelStyle), ...pointLabelPlacement(labelPosition) } : undefined,
         }
-      }
-      const addSummary = () => {
-        const summaryValue = config.distributionSummaryStatistic === 'mean' ? stat.mean : stat.median
-        if (config.distributionShowMedian ?? true) option.series.push({ name: group.name, type: 'custom', coordinateSystem: 'cartesian2d', silent: true, tooltip: { show: false }, data: [point(summaryValue, lane)], renderItem: (_params: unknown, api: { coord(value: number[]): number[]; size(value: number[]): number[] }) => {
-          const [x, y] = api.coord(point(summaryValue, lane))
-          const band = Math.abs(api.size(horizontal ? [0, 1] : [1, 0])[horizontal ? 1 : 0])
-          const widthRatio = config.kind === 'beeswarm' ? .94 : config.kind === 'jitter-plot' ? .72 : config.kind === 'counts-plot' ? .42 : .28
-          const maximum = config.kind === 'beeswarm' ? 72 : config.kind === 'jitter-plot' ? 56 : config.kind === 'counts-plot' ? 44 : 28
-          const half = (config.kind === 'barcode-plot' ? barcodeHalf(band) : Math.min(maximum / 2, Math.max(pointSize * 1.15, band * rowWidth * widthRatio / 2))) * summaryLength
-          return { type: 'line', shape: horizontal ? { x1: x, y1: y - half, x2: x, y2: y + half } : { x1: x - half, y1: y, x2: x + half, y2: y }, style: { stroke: summaryColor, lineWidth: summaryWidth, lineCap: config.kind === 'barcode-plot' ? 'butt' : 'round' } }
-        }, z: 10 })
-      }
-      if (config.kind === 'counts-plot') {
-        const counts = [...group.values.reduce((result, value) => result.set(value, (result.get(value) ?? 0) + 1), new Map<number, number>())]
-        option.series.push({ name: group.name, type: 'scatter', symbol: 'circle', data: counts.map(([value, count]) => {
-          const key = elementKey(group.name, `count:${value}`), override = config.elementStyles[key], labelPosition = override?.labelPosition ?? pointLabelPosition
-          return { value: point(value, group.laneIndex), rawValue: value, groupName: group.displayName, count, elementKey: key, sourceSeriesName: group.name, displayValue: formatChartNumber(value, config), displayCategory: group.displayName, displayLabel: formatChartNumber(value, config), name: override?.label || formatChartNumber(value, config), itemStyle: { ...pointStyle, ...(override?.color ? { color: override.color, borderColor: override.color } : {}), ...(override?.fillOpacity != null ? { opacity: override.fillOpacity } : {}) }, label: override ? { ...pointLabel, show: override.showLabel ?? config.distributionShowLabels ?? false, formatter: override.label || formatChartNumber(value, config), position: labelPosition, ...text(override.valueText ?? config.valueText), ...pointLabelPlacement(labelPosition) } : undefined }
-        }), symbolSize: (_value: unknown, params: { data?: { count?: number } }) => pointSize * Math.sqrt(params.data?.count ?? 1), itemStyle: pointStyle, emphasis: pointEmphasis, label: pointLabel, labelLayout: pointLabelLayout, z: 5 })
-        addSummary()
-        return
-      }
-      if (config.kind === 'barcode-plot') {
-        const data = group.observations.map((observation) => ({ ...observation, value: point(observation.value, lane), rawValue: observation.value, groupName: group.displayName }))
-        option.series.push({ name: group.name, type: 'custom', coordinateSystem: 'cartesian2d', data, renderItem: (params: { dataIndex: number }, api: { coord(value: number[]): number[]; size(value: number[]): number[] }) => {
-          const observation = group.observations[params.dataIndex]
-          const override = config.elementStyles[observation.elementKey]
-          const [x, y] = api.coord(point(observation.value, lane))
-          const band = Math.abs(api.size(horizontal ? [0, 1] : [1, 0])[horizontal ? 1 : 0])
-          const half = barcodeHalf(band)
-          const stroke = override?.color ?? override?.markerFill ?? color
-          const lineWidth = override?.lineWidth ?? config.distributionTickWidth ?? 2
-          const position = override?.labelPosition ?? pointLabelPosition
-          const labelStyle = override?.valueText ?? config.valueText
-          const gap = half + 5
-          const info = { elementKey: observation.elementKey, sourceSeriesName: observation.sourceSeriesName, displayCategory: observation.displayCategory, displayValue: observation.displayValue, displayLabel: observation.displayLabel }
-          const line = { type: 'line', info, shape: horizontal ? { x1: x, y1: y - half, x2: x, y2: y + half } : { x1: x - half, y1: y, x2: x + half, y2: y }, style: { stroke, lineWidth, opacity: override?.fillOpacity ?? pointOpacity } }
-          const label = override?.label || observation.displayLabel
-          const labelX = x + (position === 'right' ? gap : position === 'left' ? -gap : 0)
-          const labelY = y + (position === 'bottom' ? gap : position === 'top' ? -gap : 0)
-          const textLabel = { type: 'text', info, style: { x: labelX, y: labelY, text: label, fill: labelStyle.color, font: `${labelStyle.italic ? 'italic ' : ''}${labelStyle.weight} ${labelStyle.size}px ${labelStyle.fontFamily}`, ...pointLabelPlacement(position) } }
-          return { type: 'group', children: (override?.showLabel ?? config.distributionShowLabels) && label ? [line, textLabel] : [line] }
-        }, z: 5 })
-        addSummary()
-        return
       }
       if (config.kind === 'ridgeline') {
         option.series.push({ name: group.name, type: 'custom', coordinateSystem: 'cartesian2d', itemStyle: { color }, data: [{ value: point(group.values[0], lane), summary: tooltipSummary }], renderItem: (_params: unknown, api: { coord(value: number[]): number[]; size(value: number[]): number[] }) => {
@@ -1946,41 +1857,6 @@ const distribution: LegacyChartPlugin = {
             ...(config.distributionShowMedian ?? true ? [{ type: 'line', shape: { x1: medianBase[0], y1: medianBase[1], x2: medianTip[0], y2: medianTip[1] }, style: { stroke: summaryColor, lineWidth: summaryWidth } }] : []),
           ] }
         }, z: 4 + group.laneIndex })
-        return
-      }
-      if (config.kind === 'beeswarm') {
-        option.series.push({ name: group.name, type: 'custom', coordinateSystem: 'cartesian2d', itemStyle: { color }, labelItems: group.observations, data: [{ value: [group.laneIndex], summary: tooltipSummary }], renderItem: (_params: unknown, api: { coord(value: number[]): number[]; size(value: number[]): number[] }) => {
-          const clouds = [...new Set(groups.map((candidate) => candidate.laneIndex))].map((laneIndex) => {
-            const entries = groups.filter((candidate) => candidate.laneIndex === laneIndex).flatMap((candidate) => candidate.observations.map((observation) => ({ ...observation, seriesKey: candidate.seriesKey })))
-            const coordinates = entries.map((entry) => api.coord(point(entry.value, laneIndex)))
-            return { laneIndex, entries, coordinates, primary: coordinates.map((coordinate) => coordinate[horizontal ? 0 : 1]) }
-          })
-          const band = Math.abs(api.size(horizontal ? [0, 1] : [1, 0])[horizontal ? 1 : 0])
-          const maximumOffset = band * rowWidth / 2
-          const fitted = fitSwarmClouds(clouds.map((cloud) => cloud.primary), pointSize / .9, maximumOffset)
-          const cloudIndex = clouds.findIndex((cloud) => cloud.laneIndex === group.laneIndex)
-          const cloud = clouds[cloudIndex]
-          return { type: 'group', children: cloud.coordinates.flatMap(([x, y], index) => {
-            if (cloud.entries[index].seriesKey !== group.seriesKey) return []
-            const cx = horizontal ? x : x + fitted.offsets[cloudIndex][index], cy = horizontal ? y + fitted.offsets[cloudIndex][index] : y
-            const observation = cloud.entries[index], override = config.elementStyles[observation.elementKey], labelStyle = override?.valueText ?? config.valueText
-            const position = override?.labelPosition ?? pointLabelPosition, markerSize = override?.markerSize ?? pointSize, gap = markerSize / 2 + 5, label = override?.label || observation.displayLabel
-            const labelX = cx + (position === 'right' ? gap : position === 'left' ? -gap : 0)
-            const labelY = cy + (position === 'bottom' ? gap : position === 'top' ? -gap : 0)
-            const info = { elementKey: observation.elementKey, sourceSeriesName: observation.sourceSeriesName, displayCategory: observation.displayCategory, displayValue: observation.displayValue, displayLabel: observation.displayLabel }
-            const markerColor = override?.markerFill ?? override?.color ?? color, markerBorder = override?.markerBorder ?? override?.color ?? color
-            const circle = { type: 'circle', info, shape: { cx, cy, r: markerSize / 2 }, style: { fill: markerColor, stroke: markerBorder, lineWidth: override?.markerBorderWidth ?? 0, opacity: override?.fillOpacity ?? pointOpacity } }
-            const textLabel = { type: 'text', info, style: { x: labelX, y: labelY, text: label, fill: labelStyle.color, font: `${labelStyle.italic ? 'italic ' : ''}${labelStyle.weight} ${labelStyle.size}px ${labelStyle.fontFamily}`, ...pointLabelPlacement(position) } }
-            return (override?.showLabel ?? config.distributionShowLabels) && label ? [circle, textLabel] : [circle]
-          }) }
-        }, z: 5 })
-        addSummary()
-        return
-      }
-      if (config.kind === 'strip-plot' || config.kind === 'jitter-plot') {
-        const data = group.observations.map((observation, index) => ({ ...observationData(observation, point(observation.value, group.laneIndex + (config.kind === 'jitter-plot' ? distributionRandom(index, groupIndex) * (config.distributionJitter ?? .32) * rowWidth : 0))), rawValue: observation.value, groupName: group.displayName }))
-        option.series.push({ name: group.name, type: 'scatter', data, symbol: 'circle', symbolSize: pointSize, itemStyle: pointStyle, emphasis: pointEmphasis, label: pointLabel, labelLayout: pointLabelLayout, z: 5 })
-        addSummary()
         return
       }
       option.series.push({ name: group.name, type: 'custom', coordinateSystem: 'cartesian2d', itemStyle: { color }, data: [{ value: [group.laneIndex], summary: tooltipSummary }], renderItem: (_params: unknown, api: { coord(value: number[]): number[]; size(value: number[]): number[] }) => {
@@ -2029,7 +1905,7 @@ const distribution: LegacyChartPlugin = {
       const individuallyLabelled = group.observations.filter((observation) => config.elementStyles[observation.elementKey]?.showLabel)
       const shownObservations = [...new Map(((config.kind === 'violinplot' || config.kind === 'raincloud') && (config.distributionShowPoints ?? true) ? group.observations : config.kind === 'boxplot' ? config.distributionShowAllPoints ? group.observations : (config.distributionShowOutliers ?? true) ? group.observations.filter((observation) => stat.outliers.includes(observation.value)) : [] : []).concat(individuallyLabelled).map((observation) => [observation.elementKey, observation])).values()]
       if (shownObservations.length) option.series.push({ name: group.name, type: 'scatter', data: shownObservations.map((observation, index) => {
-        const random = distributionRandom(index, groupIndex)
+        const random = deterministicDistributionOffset(index, groupIndex)
         const violinSide = splitViolin ? group.seriesKey === splitFirst ? -1 : 1 : config.kind === 'violinplot' && config.distributionViolinMode === 'half' ? config.distributionViolinHalfSide === 'first' ? -1 : 1 : 0
         const pointLane = config.kind === 'raincloud'
           ? lane + ((config.distributionRaincloudPointMode ?? 'overlay') === 'separate' ? .36 + random * .08 : .16 + random * .1) * shapeWidth
@@ -2041,6 +1917,8 @@ const distribution: LegacyChartPlugin = {
     return option
   },
 }
+
+export const legacyDistributionBuilderGuard = () => { throw new Error('Legacy Strip/Jitter/Beeswarm/Counts/Barcode builder was removed; use the native Distribution compiler.') }
 
 const legacyChartRegistry = [
   ...barChartDefinitions.flatMap(([id, label, category]) => id === 'waterfall' || id === 'lollipop' || id === 'horizontal-lollipop' ? [] : [cartesian(id, label, category)]),
@@ -2057,7 +1935,7 @@ const legacyChartRegistry = [
   ...areaChartDefinitions.map(([id, label]) => cartesian(id, label, 'area')),
   scatter,
   bubble,
-  ...distributionChartDefinitions.map(([id, label]) => ({ ...distribution, ...pluginModel(id), id, label })),
+  ...distributionChartDefinitions.map(([id, label]) => ({ ...distribution, ...pluginModel(id), id, label, buildOption: isNativeDistributionKind(id) ? legacyDistributionBuilderGuard : distribution.buildOption })),
   heatmap,
   treemap,
 ]
@@ -2105,12 +1983,17 @@ const nativeXYCapabilities = (kind: 'scatter' | 'bubble'): ChartPlugin['capabili
   guides: kind === 'bubble' ? ['legend', 'size-scale'] : ['legend'], valueLabels: true, markers: true,
 })
 
+const nativeDistributionCapabilities: ChartPlugin['capabilities'] = {
+  coordinateSystem: 'cartesian', axes: { lane: { placements: ['side'] }, value: { scaleTypes: ['linear'] } },
+  guides: ['legend'], valueLabels: true, markers: true, orientation: ['horizontal', 'vertical'],
+}
+
 export const chartRegistry: ChartPlugin[] = legacyChartRegistry.map((plugin) => {
-  const compiler = isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : isNativeSmoothingKind(plugin.id) ? compileNativeSmoothingScene : isNativeIntervalKind(plugin.id) ? compileNativeIntervalScene : isNativeXYKind(plugin.id) ? compileNativeXYScene : undefined
+  const compiler = isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : isNativeSmoothingKind(plugin.id) ? compileNativeSmoothingScene : isNativeIntervalKind(plugin.id) ? compileNativeIntervalScene : isNativeXYKind(plugin.id) ? compileNativeXYScene : isNativeDistributionKind(plugin.id) ? compileNativeDistributionScene : undefined
   if (compiler) return {
     ...plugin, compilerMode: 'native' as const,
-    capabilities: isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : isNativeSmoothingKind(plugin.id) ? nativeSmoothingCapabilities : isNativeIntervalKind(plugin.id) ? nativeIntervalCapabilities : nativeXYCapabilities(plugin.id as 'scatter' | 'bubble'),
-    validate: isNativeXYKind(plugin.id) ? validateNativeXYMapping : plugin.validate,
+    capabilities: isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : isNativeSmoothingKind(plugin.id) ? nativeSmoothingCapabilities : isNativeIntervalKind(plugin.id) ? nativeIntervalCapabilities : isNativeXYKind(plugin.id) ? nativeXYCapabilities(plugin.id) : nativeDistributionCapabilities,
+    validate: isNativeXYKind(plugin.id) ? validateNativeXYMapping : isNativeDistributionKind(plugin.id) ? validateNativeDistributionMapping : plugin.validate,
     compile: compiler,
     buildOption: (table: DataTable, config: ChartConfig) => renderScene(compiler(table, config)),
   }
@@ -2128,7 +2011,7 @@ export function chartValueLabelSelections(table: DataTable, config: ChartConfig)
     if (!plugin.validate(table, listingConfig).ok) return []
     const scene = plugin.compile(table, listingConfig)
     if (scene.migrationMode !== 'native') throw new Error(`Native plugin ${plugin.id} returned a legacy scene.`)
-    return nativeMarkSelections(scene).filter((mark) => mark.value != null).map((mark) => ({ key: mark.legacyKey, seriesName: mark.seriesName, category: mark.displayCategory, value: mark.displayValue, label: listingConfig.elementStyles[mark.legacyKey]?.label, color: listingConfig.elementStyles[mark.legacyKey]?.color, target: 'value-label' as const }))
+    return nativeMarkSelections(scene).filter((mark) => mark.value != null).map((mark) => ({ key: mark.legacyKey, seriesName: mark.seriesName, category: mark.displayCategory, value: mark.displayValue, label: listingConfig.elementStyles[mark.legacyKey]?.label ?? mark.displayLabel, color: listingConfig.elementStyles[mark.legacyKey]?.color, target: 'value-label' as const }))
   }
   const option = plugin.buildOption(table, listingConfig) as { series?: Array<{ name?: string; data?: unknown[]; labelItems?: unknown[] }> }
   const nestedItems = (items: unknown[]): unknown[] => items.flatMap((raw) => raw && typeof raw === 'object' ? [raw, ...nestedItems((raw as { children?: unknown[] }).children ?? [])] : [])

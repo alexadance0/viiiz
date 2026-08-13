@@ -5,7 +5,7 @@ import type { LayoutReservation } from './reservations'
 export type AxisPlacement = { kind: 'side'; side: 'top' | 'right' | 'bottom' | 'left' } | { kind: 'internal'; anchor: 'center' | 'zero' }
 export interface AxisSpec {
   id: string
-  channel: 'category' | 'value' | 'x' | 'y'
+  channel: 'category' | 'value' | 'lane' | 'x' | 'y'
   orientation: 'horizontal' | 'vertical'
   placement: AxisPlacement
   line: { visible: boolean }

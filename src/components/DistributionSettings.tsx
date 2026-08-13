@@ -1,4 +1,4 @@
-import { getSeriesColor } from '../core/chartRegistry'
+import { getSeriesColor } from '../core/seriesColor'
 import { distributionVisualDefaults } from '../core/chartKinds'
 import type { ChartConfig, DataTable } from '../core/types'
 import { ColorControl } from './PickerControls'
