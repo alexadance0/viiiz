@@ -1386,12 +1386,13 @@ describe('chart composition alignment', () => {
   it('adds scatter reference quadrants, a regression line and confidence band', () => {
     const scatterTable: DataTable = { name: 'scatter', columns: ['x', 'value'], rows: [{ x: 1, value: 2 }, { x: 2, value: 4 }, { x: 3, value: 5 }, { x: 4, value: 8 }] }
     const config = base('scatter'); config.xField = 'x'; config.scatterXReference = 2.5; config.scatterYReference = 4; config.scatterQuadrants = true; config.scatterTrendline = true; config.scatterTrendBand = true
-    const option = getChartPlugin('scatter').buildOption(scatterTable, config) as { series: Array<{ name: string; type: string; data: unknown[]; markLine?: { data: unknown[] }; markArea?: { data: unknown[] } }> }
-    const points = option.series.find((series) => series.type === 'scatter')!
-    expect(points.markLine?.data).toHaveLength(2)
-    expect(points.markArea?.data).toHaveLength(4)
-    expect(option.series.some((series) => series.name === 'Тренд: value' && series.data.length === 31)).toBe(true)
-    expect(option.series.filter((series) => series.name.startsWith('__trend-band:value'))).toHaveLength(2)
+    const scene = getChartPlugin('scatter').compile(scatterTable, config)
+    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'xy') throw new Error('Expected native XY scene')
+    expect(scene.plot.analyticalLayers.filter((layer) => layer.kind === 'reference')).toHaveLength(2)
+    expect(scene.plot.analyticalLayers.find((layer) => layer.kind === 'quadrants' && layer.regions.length === 4)).toBeTruthy()
+    const trend = scene.plot.analyticalLayers.find((layer) => layer.kind === 'trend')
+    expect(trend?.samples).toHaveLength(31)
+    expect(trend?.confidenceBand?.samples).toHaveLength(31)
   })
 
   it('draws scatter trend lines per color group', () => {
@@ -1399,10 +1400,13 @@ describe('chart composition alignment', () => {
       { x: 1, value: 2, group: 'А' }, { x: 2, value: 4, group: 'А' }, { x: 1, value: 5, group: 'Б' }, { x: 2, value: 7, group: 'Б' },
     ] }
     const config = base('scatter'); config.xField = 'x'; config.scatterColorField = 'group'; config.seriesStyles = { А: { scatterTrendline: true, scatterTrendBand: true } }
-    const option = getChartPlugin('scatter').buildOption(scatterTable, config) as { series: Array<{ name: string; lineStyle?: { color?: string } }> }
-    expect(option.series.find((series) => series.name === 'Тренд: А')?.lineStyle?.color).toBe('#6956e8')
-    expect(option.series.some((series) => series.name === 'Тренд: Б')).toBe(false)
-    expect(option.series.filter((series) => series.name.startsWith('__trend-band:А'))).toHaveLength(2)
+    const scene = getChartPlugin('scatter').compile(scatterTable, config)
+    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'xy') throw new Error('Expected native XY scene')
+    const first = scene.plot.series.find((series) => series.name === 'А')!, second = scene.plot.series.find((series) => series.name === 'Б')!
+    const trends = scene.plot.analyticalLayers.filter((layer) => layer.kind === 'trend')
+    expect(trends.find((trend) => trend.sourceSeriesId === first.id)?.stroke.color).toBe('#6956e8')
+    expect(trends.some((trend) => trend.sourceSeriesId === second.id)).toBe(false)
+    expect(trends[0].confidenceBand).toBeTruthy()
   })
 
   it('keeps ordinary scatter markers uniform and scales bubble areas proportionally', () => {
@@ -1412,24 +1416,13 @@ describe('chart composition alignment', () => {
     expect(scatterOption.series.find((series) => series.type === 'scatter')?.data.map((point) => point.bubbleSize)).toEqual([12, 12])
 
     const bubbleConfig = { ...scatterConfig, kind: 'bubble' as const, scatterSizeLegend: true, scatterSizeLegendTitle: 'Население', scatterSizeLegendPosition: 'top-right' as const }
-    const bubbleOption = getChartPlugin('bubble').buildOption(bubbleTable, bubbleConfig) as {
-      series: Array<{
-        name?: string
-        type: string
-        z?: number
-        data: Array<{ bubbleSize?: number }>
-        renderItem?: (params: unknown, api: { value(index: number): number; coord(value: number[]): number[] }) => { x: number; children: Array<{ type: string; y?: number; shape?: { cx?: number; cy?: number; r?: number; x1?: number; y1?: number; width?: number; height?: number }; style?: { text?: string } }> }
-      }>
-    }
+    const bubbleOption = getChartPlugin('bubble').buildOption(bubbleTable, bubbleConfig) as { series: Array<{ type: string; data: Array<{ bubbleSize?: number }> }>; graphic: Array<{ id?: string; x?: number; children?: Array<{ type: string; shape?: { cx?: number; cy?: number; r?: number; x1?: number; y1?: number } }> }> }
     const sizes = bubbleOption.series.find((series) => series.type === 'scatter')!.data.map((point) => point.bubbleSize)
     expect(sizes[1]).toBe(42)
     expect(((sizes[0]! - 6) / (sizes[1]! - 6)) ** 2).toBeCloseTo(.5)
-    const sizeLegend = bubbleOption.series.find((series) => series.name === '__bubble-size-legend')!
-    expect(sizeLegend).toMatchObject({ type: 'custom', z: 100 })
-    const renderedLegend = sizeLegend.renderItem?.({}, { value: (index) => [1, 4][index], coord: () => [250, 250] })
-    const legendChildren = renderedLegend?.children ?? []
-    expect(renderedLegend!.x).toBeGreaterThan(100)
-    expect(legendChildren.find((child) => child.type === 'rect')?.shape).toMatchObject({ width: expect.any(Number), height: expect.any(Number) })
+    const renderedLegend = bubbleOption.graphic.find((item) => item.id === 'guide:size-scale')!
+    const legendChildren = renderedLegend.children ?? []
+    expect(renderedLegend.x).toBeGreaterThan(100)
     const circles = legendChildren.filter((child) => child.type === 'circle')
     expect(circles[0].shape!.r).toBe(sizes[1]! / 2)
     const guides = legendChildren.filter((child) => child.type === 'line')
@@ -1456,10 +1449,11 @@ describe('chart composition alignment', () => {
   it('supports equality diagonals and editable quadrant labels', () => {
     const scatterTable: DataTable = { name: 'scatter', columns: ['x', 'value'], rows: [{ x: 1, value: 2 }, { x: 8, value: 7 }] }
     const config = base('scatter'); config.xField = 'x'; config.scatterXReference = 4; config.scatterYReference = 4; config.scatterQuadrants = true; config.scatterDiagonal = true; config.scatterQuadrantLabels = ['A', 'B', 'C', 'D']
-    const option = getChartPlugin('scatter').buildOption(scatterTable, config) as { series: Array<{ type: string; markLine?: { data: unknown[] }; markArea?: { data: Array<Array<{ label?: { formatter: string } }>> } }> }
-    const points = option.series.find((series) => series.type === 'scatter')!
-    expect(points.markLine?.data.some(Array.isArray)).toBe(true)
-    expect(points.markArea?.data.map((area) => area[0].label?.formatter)).toEqual(['A', 'B', 'C', 'D'])
+    const scene = getChartPlugin('scatter').compile(scatterTable, config)
+    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'xy') throw new Error('Expected native XY scene')
+    expect(scene.plot.analyticalLayers.some((layer) => layer.kind === 'reference' && layer.axis === 'diagonal')).toBe(true)
+    const quadrants = scene.plot.analyticalLayers.find((layer) => layer.kind === 'quadrants')
+    expect(quadrants?.kind === 'quadrants' && quadrants.regions.map((region) => region.label)).toEqual(['A', 'B', 'C', 'D'])
   })
 
   it('builds a sorted dumbbell chart from two explicitly selected measures', () => {

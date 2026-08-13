@@ -19,7 +19,7 @@ describe('native interval compiler', () => {
   it('classifies exactly the three interval variants as native', () => {
     expect(NATIVE_INTERVAL_KINDS).toEqual(['range-line', 'step-range-line', 'confidence-line'])
     for (const kind of NATIVE_INTERVAL_KINDS) expect(getChartPlugin(kind).compilerMode).toBe('native')
-    expect(getChartPlugin('scatter').compilerMode).toBe('legacy')
+    expect(getChartPlugin('scatter').compilerMode).toBe('native')
   })
 
   it('compiles Range with unique real source series, stable group/layer IDs and no seriesField', () => {

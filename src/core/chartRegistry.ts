@@ -2,8 +2,8 @@ import type { ChartConfig, ChartElementSelection, ChartPlugin, DataTable } from 
 import { formatTimeValue, isoWeekParts } from './timeFrequency'
 import { axisAffixApplies, formatChartNumber, formatXAxisNumber, formatYAxisNumber, type AxisTickPosition } from './numberFormat'
 import { measureTextWidth, wrapMeasuredText } from './textMetrics'
-import { axisValue, dateValue, niceNumericScale, orderedBounds, prepareVisibleChartData, slopePositionKey } from './chartScale'
-import { continuousDateLabel, effectiveDateStepUnit, moveDateContextToVisibleLabels, planCategoryDateLabels, stackedContextFormat } from './chartDateAxis'
+import { niceNumericScale, orderedBounds, prepareVisibleChartData, slopePositionKey } from './chartScale'
+import { effectiveDateStepUnit, moveDateContextToVisibleLabels, planCategoryDateLabels, stackedContextFormat } from './chartDateAxis'
 import { isAreaChart, isBarChart, isDistributionChart, isHorizontalBarChart, isNormalizedStackedChart, isStackedBarChart, isStackedChart } from './chartKinds'
 import { barChartDefinitions } from '../features/chart-types/bar'
 import { lineChartDefinitions, intervalChartDefinitions } from '../features/chart-types/line'
@@ -20,12 +20,18 @@ import { compileNativeAreaScene, isNativeAreaKind } from '../features/chart-type
 import { compileNativeSlopeScene } from '../features/chart-types/slope/compiler'
 import { compileNativeSmoothingScene, isNativeSmoothingKind } from '../features/chart-types/smoothing/compiler'
 import { compileNativeIntervalScene, isNativeIntervalKind } from '../features/chart-types/interval/compiler'
+import { compileNativeXYScene, isNativeXYKind, validateNativeXYMapping } from '../features/chart-types/xy/compiler'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 import { nativeMarkSelections } from '../entities/chart/model/sceneVisitors'
 import { repeatedChartCategories } from './chartData'
 import { changeColor as semanticChangeColor, describeChange, formatChange } from './changeSemantics'
 import { absorbedBarLabelPlacement, barSeriesGeometry, denseValueLabelStride, isInsideValueLabel, showDenseValueLabel, valueLabelPosition } from './chartLabels'
 import { hyphenateSync as hyphenateRussian } from 'hyphen/ru'
+import { getSeriesColor } from './seriesColor'
+
+export { getSeriesColor } from './seriesColor'
+
+const PALETTE = ['#6956e8', '#168a72', '#e56b45', '#d0a52b', '#3f8fba', '#a45ca4', '#6f9d45', '#c64f70']
 
 export { niceNumericScale, prepareVisibleChartData } from './chartScale'
 
@@ -97,20 +103,6 @@ const graphicText = (style: ChartConfig['titleText']) => {
   return { ...rest, fill: color }
 }
 const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!)
-const PALETTE = ['#6956e8', '#168a72', '#e56b45', '#d0a52b', '#3f8fba', '#a45ca4', '#6f9d45', '#c64f70']
-export const getSeriesColor = (config: ChartConfig, name: string, index: number) => {
-  const palette = config.palette?.length ? config.palette : [config.color, ...PALETTE.slice(1)]
-  return config.seriesStyles[name]?.color
-    ?? (config.kind === 'seasonal-line' ? config.seasonalAccentYears?.includes(name) ? config.color : config.seasonalMutedColor ?? '#d9d7df' : undefined)
-    ?? (isBarChart(config.kind) ? config.barFillColor : undefined)
-    ?? palette[index % palette.length]
-}
-const niceLegendValue = (value: number) => {
-  if (!Number.isFinite(value) || value <= 0) return value
-  const power = 10 ** Math.floor(Math.log10(value))
-  const candidates = [1, 2, 3, 5, 7, 10].map((factor) => factor * power)
-  return candidates.reduce((best, candidate) => candidate <= value && candidate > best ? candidate : best, candidates[0])
-}
 const CONTENT_LEFT = 32
 const axisTickPosition = (value: number, minimum: number, maximum: number): AxisTickPosition => {
   const tolerance = Math.max(1, Math.abs(maximum - minimum)) * 1e-9
@@ -1564,214 +1556,14 @@ const treemap: LegacyChartPlugin = {
   },
 }
 
-const scatter: LegacyChartPlugin = {
-  ...pluginModel('scatter'),
-  id: 'scatter',
-  label: 'Точечный',
-  category: 'relationship',
-  settings: {
-    sections: ['series', 'annotations', 'grid', 'text', 'headings', 'axes', 'legend-values', 'credits'],
-    series: ['color', 'markers'],
-    features: { directLabels: false, barLayout: false, dataPreparation: false, normalizedStack: false, areaLayout: false, scatterLayout: true, distributionLayout: false, lineVariant: false },
-  },
-  buildOption(table, config) {
-    const xAxisTitleText = config.xAxisTitleText ?? config.axisTitleText
-    const xAxisLabelText = config.xAxisLabelText ?? config.axisLabelText
-    const yFields = config.yFields.length ? config.yFields : [config.yField]
-    const dateAxis = table.rows.some((row) => row[config.xField] instanceof Date)
-    const validRows = table.rows.filter((row) => {
-      const x = row[config.xField]
-      const validX = (typeof x === 'number' && Number.isFinite(x)) || (x instanceof Date && !Number.isNaN(x.getTime()))
-      return validX && yFields.some((field) => typeof row[field] === 'number' && Number.isFinite(row[field] as number))
-    })
-    const xValues = validRows.map((row) => row[config.xField] instanceof Date ? (row[config.xField] as Date).getTime() : row[config.xField] as number)
-    const xScale = niceNumericScale(xValues)
-    const [manualMin, manualMax] = orderedBounds(dateAxis ? dateValue(config.xAxisMin) : axisValue(config.xAxisMin), dateAxis ? dateValue(config.xAxisMax) : axisValue(config.xAxisMax))
-    const effectiveXMin = manualMin ?? (dateAxis ? undefined : xScale.min), effectiveXMax = manualMax ?? (dateAxis ? undefined : xScale.max)
-    const axisLineStyle = { color: config.axisLineColor, width: config.axisLineWidth, type: config.axisLineType }
-    const bubbleMode = config.kind === 'bubble'
-    const sizeValues = bubbleMode && config.scatterSizeField ? validRows.flatMap((row) => typeof row[config.scatterSizeField!] === 'number' && Number.isFinite(row[config.scatterSizeField!] as number) ? [row[config.scatterSizeField!] as number] : []) : []
-    const sizeMagnitudes = sizeValues.map(Math.abs)
-    const sizeMinValue = sizeMagnitudes.length ? Math.min(...sizeMagnitudes) : 0, sizeMaxValue = sizeMagnitudes.length ? Math.max(...sizeMagnitudes) : 1
-    const minimumBubbleSize = Math.min(config.scatterSizeMin ?? 6, config.scatterSizeMax ?? 42)
-    const maximumBubbleSize = Math.max(config.scatterSizeMin ?? 6, config.scatterSizeMax ?? 42)
-    const bubbleSize = (value: unknown) => {
-      if (!bubbleMode || !config.scatterSizeField || typeof value !== 'number' || !Number.isFinite(value)) return config.scatterPointSize ?? 10
-      return minimumBubbleSize + (maximumBubbleSize - minimumBubbleSize) * Math.sqrt(Math.abs(value) / (sizeMaxValue || 1))
-    }
-    const groupValues = config.scatterColorField ? [...new Set(validRows.map((row) => String(row[config.scatterColorField!] ?? 'Без категории')))] : ['']
-    const defaultLabelField = config.scatterLabelField || table.columns.find((column) =>
-      column !== config.xField &&
-      !yFields.includes(column) &&
-      column !== config.scatterSizeField &&
-      column !== config.scatterColorField &&
-      validRows.some((row) => typeof row[column] === 'string' && String(row[column]).trim())
-    )
-    const dataSeries = yFields.flatMap((field, fieldIndex) => groupValues.map((group, groupIndex) => {
-      const baseName = field
-      const seriesName = config.scatterColorField ? (yFields.length === 1 ? group : `${field} · ${group}`) : baseName
-      const seriesStyle = config.seriesStyles[seriesName]
-      const seriesColor = seriesStyle?.color ?? getSeriesColor(config, config.scatterColorField ? group : seriesName, config.scatterColorField ? groupIndex : fieldIndex)
-      return {
-        name: seriesName,
-        type: 'scatter',
-        triggerEvent: true,
-        symbol: seriesStyle?.markerShape ?? 'circle',
-        symbolSize: (_value: unknown, params: { data?: { bubbleSize?: number } }) => params.data?.bubbleSize ?? seriesStyle?.markerSize ?? config.scatterPointSize ?? 10,
-        itemStyle: { color: config.scatterHollow ? 'transparent' : seriesStyle?.markerFill ?? seriesColor, borderColor: seriesStyle?.markerBorder ?? seriesStyle?.color ?? seriesColor, borderWidth: seriesStyle?.markerBorderWidth ?? config.scatterBorderWidth ?? 1, opacity: seriesStyle?.fillOpacity ?? config.scatterOpacity ?? .78 },
-        labelLayout: { hideOverlap: true, moveOverlap: 'shiftY' },
-        emphasis: { focus: 'series', scale: 1.12 },
-        label: { show: config.scatterShowLabels ?? config.showValues, position: config.scatterLabelPosition ?? 'right', distance: 5, ...text(config.valueText), ...pointLabelPlacement(config.scatterLabelPosition ?? 'right'), formatter: (params: { data?: { displayLabel?: string } }) => params.data?.displayLabel ?? '' },
-        data: validRows.flatMap((row) => {
-          if (typeof row[field] !== 'number' || !Number.isFinite(row[field] as number)) return []
-          if (config.scatterColorField && String(row[config.scatterColorField] ?? 'Без категории') !== group) return []
-          const category = row[config.xField], x = category instanceof Date ? category.getTime() : category
-          const base = pointData(config, seriesName, category, row[field] as number)
-          const override = config.elementStyles[base.elementKey]
-          const displayLabel = override?.label || (defaultLabelField ? String(row[defaultLabelField] ?? '') : formatChartNumber(row[field] as number, config))
-          const labelStyle = override?.valueText ?? config.valueText
-          const labelPosition = override?.labelPosition ?? config.scatterLabelPosition ?? 'right'
-          return [{ ...base, value: [x, row[field]], sourceSeriesName: seriesName, displayLabel, bubbleValue: bubbleMode && config.scatterSizeField ? row[config.scatterSizeField] : undefined, symbol: override?.markerShape, bubbleSize: override?.markerSize ?? (bubbleMode ? bubbleSize(config.scatterSizeField ? row[config.scatterSizeField] : undefined) : seriesStyle?.markerSize ?? config.scatterPointSize ?? 10), itemStyle: override ? { color: config.scatterHollow ? 'transparent' : override.markerFill ?? override.color ?? seriesStyle?.markerFill ?? seriesColor, borderColor: override.markerBorder ?? override.color ?? seriesStyle?.markerBorder ?? seriesColor, borderWidth: override.markerBorderWidth ?? config.scatterBorderWidth ?? 1, opacity: override.fillOpacity ?? seriesStyle?.fillOpacity ?? config.scatterOpacity ?? .78 } : undefined, label: override ? { show: override.showLabel ?? config.scatterShowLabels, formatter: override.label || displayLabel, position: labelPosition, ...text(labelStyle), ...pointLabelPlacement(labelPosition) } : undefined }]
-        }),
-      }
-    }))
-    const trendFor = (name: string, points: Array<[number, number]>, seriesColor: string) => {
-      const style = config.seriesStyles[name]
-      const enabled = style?.scatterTrendline ?? config.scatterTrendline
-      if (!enabled || points.length < 2) return []
-      const meanX = points.reduce((sum, [x]) => sum + x, 0) / points.length
-      const meanY = points.reduce((sum, [, y]) => sum + y, 0) / points.length
-      const sxx = points.reduce((sum, [x]) => sum + (x - meanX) ** 2, 0)
-      const slope = sxx ? points.reduce((sum, [x, y]) => sum + (x - meanX) * (y - meanY), 0) / sxx : 0
-      const intercept = meanY - slope * meanX
-      const minX = Math.min(...points.map(([x]) => x), effectiveXMin ?? Infinity), maxX = Math.max(...points.map(([x]) => x), effectiveXMax ?? -Infinity)
-      const samples = Array.from({ length: 31 }, (_, index) => {
-        const x = minX + (maxX - minX) * index / 30, predicted = intercept + slope * x
-        const residual = Math.sqrt(points.reduce((sum, [px, py]) => sum + (py - intercept - slope * px) ** 2, 0) / Math.max(1, points.length - 2))
-        const delta = 1.96 * residual * Math.sqrt(1 / points.length + (sxx ? (x - meanX) ** 2 / sxx : 0))
-        return { x, predicted, lower: predicted - delta, range: delta * 2 }
-      })
-      const color = style?.scatterTrendColor ?? style?.color ?? seriesColor
-      const stack = `__trend-band:${name}`
-      const series: Array<Record<string, unknown>> = []
-      if (style?.scatterTrendBand ?? config.scatterTrendBand) series.push(
-        { name: `${stack}:base`, type: 'line', data: samples.map(({ x, lower }) => [x, lower]), stack, symbol: 'none', silent: true, tooltip: { show: false }, lineStyle: { opacity: 0 }, areaStyle: { opacity: 0 }, z: 0 },
-        { name: `${stack}:fill`, type: 'line', data: samples.map(({ x, range }) => [x, range]), stack, symbol: 'none', silent: true, tooltip: { show: false }, lineStyle: { opacity: 0 }, areaStyle: { color, opacity: style?.scatterTrendBandOpacity ?? config.scatterTrendBandOpacity ?? .12 }, z: 0 },
-      )
-      series.push({ name: `Тренд: ${name}`, type: 'line', data: samples.map(({ x, predicted }) => [x, predicted]), symbol: 'none', silent: true, tooltip: { show: false }, lineStyle: { color, width: style?.scatterTrendWidth ?? config.scatterTrendWidth ?? 2, type: style?.scatterTrendType ?? config.scatterTrendType ?? 'dashed' }, z: 2 })
-      return series
-    }
-    const trendSeries = dataSeries.flatMap((series) => trendFor(series.name, series.data.flatMap((point) => {
-      const value = point.value as unknown[]
-      const x = Number(value[0]), y = Number(value[1])
-      return Number.isFinite(x) && Number.isFinite(y) ? [[x, y] as [number, number]] : []
-    }), (series.itemStyle as { borderColor: string }).borderColor))
-    const baseOption = commonOption(table, config) as { yAxis?: { min?: number; max?: number }; [key: string]: unknown }
-    const firstSeries = dataSeries[0] as Record<string, unknown> | undefined
-    if (firstSeries) {
-      const referenceData: unknown[] = []
-      if (config.scatterXReference != null && Number.isFinite(config.scatterXReference)) referenceData.push({ xAxis: config.scatterXReference })
-      if (config.scatterYReference != null && Number.isFinite(config.scatterYReference)) referenceData.push({ yAxis: config.scatterYReference })
-      if (config.showZeroLine && config.yAxisScaleType !== 'log' && !referenceData.some((item) => typeof item === 'object' && item != null && !Array.isArray(item) && 'yAxis' in item && item.yAxis === 0)) referenceData.push({ yAxis: 0 })
-      if (config.scatterDiagonal) {
-        const diagonalMin = Math.max(effectiveXMin ?? Math.min(...xValues), Number(baseOption.yAxis?.min))
-        const diagonalMax = Math.min(effectiveXMax ?? Math.max(...xValues), Number(baseOption.yAxis?.max))
-        if (Number.isFinite(diagonalMin) && Number.isFinite(diagonalMax)) referenceData.push([{ coord: [diagonalMin, diagonalMin], lineStyle: { color: config.scatterDiagonalColor ?? '#8a8791', width: config.scatterDiagonalWidth ?? 1.5, type: config.scatterDiagonalType ?? 'dashed' } }, { coord: [diagonalMax, diagonalMax] }])
-      }
-      if (referenceData.length) firstSeries.markLine = { silent: true, symbol: 'none', data: referenceData, lineStyle: { color: config.scatterReferenceColor ?? config.zeroLineColor ?? '#8a8791', width: config.scatterReferenceWidth ?? config.zeroLineWidth ?? 1.5, type: config.scatterReferenceType ?? config.zeroLineType ?? 'dashed' }, label: { show: false } }
-    }
-    if (baseOption.legend && typeof baseOption.legend === 'object') {
-      const legend = baseOption.legend as Record<string, unknown>
-      const configuredIcon = ({ circle: 'circle', square: 'rect', line: 'path://M0 4H24V7H0Z', diamond: 'diamond', triangle: 'triangle' } as const)[config.legendMarker as 'circle' | 'square' | 'line' | 'diamond' | 'triangle']
-      legend.data = dataSeries.map((series) => ({ name: series.name, icon: configuredIcon ?? 'circle', itemStyle: { color: (series.itemStyle as { borderColor: string }).borderColor } }))
-      legend.itemWidth = config.legendMarker === 'line' ? 24 : 10
-    }
-    const sizeLegendSeries: Array<Record<string, unknown>> = []
-    if (bubbleMode && config.scatterSizeField && config.scatterSizeLegend !== false && sizeValues.length) {
-      const large = niceLegendValue(sizeMaxValue)
-      const small = sizeMinValue
-      const legendValues = large === small ? [large] : [large, small]
-      const radii = legendValues.map((value) => bubbleSize(value) / 2)
-      const maxRadius = Math.max(...radii)
-      const legendFontSize = config.legendText.size
-      const legendLineHeight = Math.round(legendFontSize * config.legendText.lineHeight / 100)
-      const legendTextStyle = { ...graphicText(config.legendText), fontSize: legendFontSize, lineHeight: legendLineHeight }
-      const titleHeight = legendLineHeight + 10
-      const baseline = titleHeight + maxRadius * 2
-      const legendTitle = config.scatterSizeLegendTitle || config.scatterSizeField
-      const formattedLegendValues = legendValues.map((value) => formatChartNumber(value, config))
-      const titleWidth = measureTextWidth(legendTitle, legendFontSize, config.legendText.fontFamily, 600)
-      const valueWidth = Math.max(...formattedLegendValues.map((value) => measureTextWidth(value, legendFontSize, config.legendText.fontFamily, 600)))
-      const boxWidth = Math.ceil(Math.max(titleWidth, maxRadius * 2 + 20 + valueWidth)), boxHeight = Math.round(baseline + 8)
-      const position = config.scatterSizeLegendPosition ?? 'top-left'
-      const yAxis = baseOption.yAxis ?? {}
-      const legendX = position.endsWith('right') ? effectiveXMax ?? Math.max(...xValues) : effectiveXMin ?? Math.min(...xValues)
-      const legendY = position.startsWith('bottom') ? Number(yAxis.min) : Number(yAxis.max)
-      if (Number.isFinite(legendX) && Number.isFinite(legendY)) sizeLegendSeries.push({
-        name: '__bubble-size-legend', type: 'custom', coordinateSystem: 'cartesian2d', silent: true, tooltip: { show: false }, clip: false, z: 100,
-        data: [[legendX, legendY]],
-        renderItem: (_params: unknown, api: { value(index: number): number; coord(value: number[]): number[] }) => {
-          const [anchorX, anchorY] = api.coord([api.value(0), api.value(1)])
-          const x = position.endsWith('right') ? anchorX - boxWidth - 6 : anchorX + 6
-          const y = position.startsWith('bottom') ? anchorY - boxHeight - 6 : anchorY + 6
-          return { type: 'group', x, y, children: [
-            { type: 'rect', shape: { x: 0, y: 0, width: boxWidth, height: boxHeight }, style: { fill: 'transparent', stroke: 'transparent' }, silent: true },
-            { type: 'text', x: 0, y: 0, style: { text: legendTitle, ...legendTextStyle, fontWeight: 600 } },
-            ...legendValues.flatMap((_value, index) => {
-              const radius = radii[index]
-              const cy = baseline - radius
-              const guideY = cy - radius
-              return [
-                { type: 'circle', shape: { cx: maxRadius, cy, r: radius }, style: { fill: 'transparent', stroke: config.legendText.color, lineWidth: 1 } },
-                { type: 'line', shape: { x1: maxRadius, y1: guideY, x2: maxRadius * 2 + 14, y2: guideY }, style: { stroke: config.legendText.color, opacity: .55, lineWidth: 1, lineDash: [3, 3] } },
-                { type: 'text', x: maxRadius * 2 + 20, y: guideY, style: { text: formattedLegendValues[index], ...legendTextStyle, fontWeight: 600, align: 'left', verticalAlign: 'middle' } },
-              ]
-            }),
-          ] }
-        },
-      })
-    }
-    if (firstSeries && config.scatterQuadrants && config.scatterXReference != null && config.scatterYReference != null) {
-      const xmin = effectiveXMin ?? Math.min(...xValues), xmax = effectiveXMax ?? Math.max(...xValues)
-      const ymin = Number(baseOption.yAxis?.min), ymax = Number(baseOption.yAxis?.max)
-      const [tl, tr, br, bl] = config.scatterQuadrantColors ?? ['#dfeee8','#e7eef8','#f8e5e3','#f2eadb']
-      const labels = config.scatterQuadrantLabels ?? ['', '', '', '']
-      if ([xmin, xmax, ymin, ymax].every(Number.isFinite)) firstSeries.markArea = { silent: true, label: { show: false }, data: [
-        [{ xAxis: xmin, yAxis: config.scatterYReference, itemStyle: { color: tl, opacity: .22 }, label: { show: Boolean(labels[0]), formatter: labels[0], position: 'insideTopLeft', ...text(config.valueText) } }, { xAxis: config.scatterXReference, yAxis: ymax }],
-        [{ xAxis: config.scatterXReference, yAxis: config.scatterYReference, itemStyle: { color: tr, opacity: .22 }, label: { show: Boolean(labels[1]), formatter: labels[1], position: 'insideTopRight', ...text(config.valueText) } }, { xAxis: xmax, yAxis: ymax }],
-        [{ xAxis: config.scatterXReference, yAxis: ymin, itemStyle: { color: br, opacity: .22 }, label: { show: Boolean(labels[2]), formatter: labels[2], position: 'insideBottomRight', ...text(config.valueText) } }, { xAxis: xmax, yAxis: config.scatterYReference }],
-        [{ xAxis: xmin, yAxis: ymin, itemStyle: { color: bl, opacity: .22 }, label: { show: Boolean(labels[3]), formatter: labels[3], position: 'insideBottomLeft', ...text(config.valueText) } }, { xAxis: config.scatterXReference, yAxis: config.scatterYReference }],
-      ] }
-    }
-    return {
-      ...baseOption,
-      tooltip: { trigger: 'item', formatter: (params: unknown) => {
-        const item = params as { seriesName?: string; value?: unknown; marker?: string; data?: { bubbleValue?: unknown } }
-        const values = Array.isArray(item.value) ? item.value : [item.value]
-        const coordinates = values.map((value, index) => escapeHtml(index === 0 ? dateAxis ? formatTimeValue(new Date(Number(value)), table.timeProfiles?.[config.xField], config.dateLabelFormat) : formatXAxisNumber(value, config) : formatChartNumber(value, config))).join(' · ')
-        const size = bubbleMode && config.scatterSizeField && typeof item.data?.bubbleValue === 'number' && Number.isFinite(item.data.bubbleValue)
-          ? `<br/>${escapeHtml(config.scatterSizeField)}: <b>${escapeHtml(formatChartNumber(item.data.bubbleValue, config))}</b>`
-          : ''
-        return `${item.marker ?? ''}${escapeHtml(item.seriesName ?? '')}<br/><b>${coordinates}</b>${size}`
-      } },
-      xAxis: {
-        type: dateAxis ? 'time' : 'value', min: effectiveXMin, max: effectiveXMax,
-        interval: dateAxis ? undefined : config.xAxisStep ?? xScale.step,
-        position: config.xAxisPosition, name: config.showXAxisTitle && config.axisTitleMode !== 'editorial' ? config.xAxisTitle : '', nameLocation: 'middle',
-        nameTextStyle: { ...text(xAxisTitleText), align: config.axisTitleMode === 'editorial' ? 'right' : config.xAxisTitleText?.align },
-        nameGap: ((config.showXAxisLabels ?? true) ? Math.round(xAxisLabelText.size * xAxisLabelText.lineHeight / 100) + (config.xAxisLabelGap ?? 8) : 0) + (config.showXTicks ? config.tickLength : 0) + config.xAxisTitleGap,
-        triggerEvent: true,
-        axisLabel: { ...text(xAxisLabelText), show: config.showXAxisLabels ?? true, margin: config.xAxisLabelGap ?? 8, inside: false, hideOverlap: true, rotate: typeof config.xAxisLabelRotate === 'number' ? config.xAxisLabelRotate : 0, formatter: dateAxis ? (value: number, index: number) => continuousDateLabel(new Date(value), table.timeProfiles?.[config.xField], config.dateLabelFormat, index === 0) : (value: number) => { const position = axisTickPosition(value, effectiveXMin ?? xScale.min, effectiveXMax ?? xScale.max); return usesXAxisEdgeOverlay(config) && axisAffixApplies(config.xAxisAffixScope, position) ? '' : formatXAxisNumber(value, config, position) } },
-        axisLine: { show: config.showXAxisLine, onZero: false, lineStyle: axisLineStyle },
-        axisTick: { show: config.showXTicks, inside: false, alignWithLabel: true, length: config.tickLength, lineStyle: axisLineStyle },
-        splitLine: { show: config.showVerticalGrid, lineStyle: { color: config.gridColor, width: config.gridWidth, type: config.gridType } },
-      },
-      series: [...trendSeries.filter((series) => String(series.name ?? '').startsWith('__trend-band:')), ...dataSeries, ...trendSeries.filter((series) => !String(series.name ?? '').startsWith('__trend-band:')), ...sizeLegendSeries, ...yAxisEdgeAffixSeries(config, Number(baseOption.yAxis?.min), Number(baseOption.yAxis?.max)), ...(!dateAxis ? xAxisEdgeAffixSeries(config, [{ coordinate: effectiveXMin ?? xScale.min, cross: Number(baseOption.yAxis?.min), value: effectiveXMin ?? xScale.min, position: 'first' }, { coordinate: effectiveXMax ?? xScale.max, cross: Number(baseOption.yAxis?.min), value: effectiveXMax ?? xScale.max, position: 'last' }]) : [])],
-    }
-  },
+const relationshipSettings: LegacyChartPlugin['settings'] = {
+  sections: ['series', 'annotations', 'grid', 'text', 'headings', 'axes', 'legend-values', 'credits'],
+  series: ['color', 'markers'],
+  features: { directLabels: false, barLayout: false, dataPreparation: false, normalizedStack: false, areaLayout: false, scatterLayout: true, distributionLayout: false, lineVariant: false },
 }
-
-const bubble: LegacyChartPlugin = { ...scatter, ...pluginModel('bubble'), id: 'bubble', label: relationshipChartDefinitions[1][1] }
+export const legacyRelationshipBuilderGuard = () => { throw new Error('Legacy Scatter/Bubble builder was removed; use the native XY compiler.') }
+const scatter: LegacyChartPlugin = { ...pluginModel('scatter'), id: 'scatter', label: relationshipChartDefinitions[0][1], category: 'relationship', settings: relationshipSettings, buildOption: legacyRelationshipBuilderGuard }
+const bubble: LegacyChartPlugin = { ...pluginModel('bubble'), id: 'bubble', label: relationshipChartDefinitions[1][1], category: 'relationship', settings: relationshipSettings, buildOption: legacyRelationshipBuilderGuard }
 
 const quantile = (values: number[], position: number) => {
   if (!values.length) return 0
@@ -2308,11 +2100,17 @@ const nativeIntervalCapabilities: ChartPlugin['capabilities'] = {
   guides: ['legend', 'direct-series'], valueLabels: true, markers: true,
 }
 
+const nativeXYCapabilities = (kind: 'scatter' | 'bubble'): ChartPlugin['capabilities'] => ({
+  coordinateSystem: 'cartesian', axes: { x: { scaleTypes: ['linear', 'date'] }, y: { scaleTypes: ['linear', 'log'] } },
+  guides: kind === 'bubble' ? ['legend', 'size-scale'] : ['legend'], valueLabels: true, markers: true,
+})
+
 export const chartRegistry: ChartPlugin[] = legacyChartRegistry.map((plugin) => {
-  const compiler = isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : isNativeSmoothingKind(plugin.id) ? compileNativeSmoothingScene : isNativeIntervalKind(plugin.id) ? compileNativeIntervalScene : undefined
+  const compiler = isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : isNativeSmoothingKind(plugin.id) ? compileNativeSmoothingScene : isNativeIntervalKind(plugin.id) ? compileNativeIntervalScene : isNativeXYKind(plugin.id) ? compileNativeXYScene : undefined
   if (compiler) return {
     ...plugin, compilerMode: 'native' as const,
-    capabilities: isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : isNativeSmoothingKind(plugin.id) ? nativeSmoothingCapabilities : nativeIntervalCapabilities,
+    capabilities: isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : isNativeSmoothingKind(plugin.id) ? nativeSmoothingCapabilities : isNativeIntervalKind(plugin.id) ? nativeIntervalCapabilities : nativeXYCapabilities(plugin.id as 'scatter' | 'bubble'),
+    validate: isNativeXYKind(plugin.id) ? validateNativeXYMapping : plugin.validate,
     compile: compiler,
     buildOption: (table: DataTable, config: ChartConfig) => renderScene(compiler(table, config)),
   }

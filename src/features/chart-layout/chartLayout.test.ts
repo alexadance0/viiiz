@@ -88,7 +88,7 @@ describe('guide contracts', () => {
   it('keeps guide strategies distinct', () => {
     expect(guideReservation({ id: 'legend', kind: 'categorical-legend', visible: true, coordinateSpace: 'content', position: 'top', items: [] }, 30, 12)).toMatchObject({ side: 'top' })
     expect(guideReservation({ id: 'direct', kind: 'direct-series', visible: true, coordinateSpace: 'plot', side: 'right', items: [{ seriesId: 'series:a', label: 'A', visible: true, style: defaultChartTextStyle(14), color: '#000', leaderLine: true }] }, 80, 16)).toMatchObject({ side: 'right' })
-    expect(guideReservation({ id: 'size', kind: 'size-scale', visible: true, coordinateSpace: 'plot', position: 'top-left', minimum: 1, maximum: 10 }, 50, 8)).toBeUndefined()
+    expect(guideReservation({ id: 'size', kind: 'size-scale', visible: true, coordinateSpace: 'plot', position: 'top-left', title: 'Size', items: [{ value: 10, label: '10', diameter: 20 }], style: defaultChartTextStyle(14), marker: { stroke: '#202027', strokeWidth: 1 } }, 50, 8)).toBeUndefined()
   })
 })
 

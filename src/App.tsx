@@ -16,6 +16,7 @@ import { createDefaultChartConfig } from './entities/chart/model/defaultChartCon
 import { useEditorHistory } from './features/editor/model/useEditorHistory'
 import { EditorHeader } from './features/editor/ui/EditorHeader'
 import { EditorStepper, type EditorStep } from './features/editor/ui/EditorStepper'
+import { inferBubbleSizeField } from './features/chart-types/xy/inference'
 import { CircleX, FileUp, History, Minus, Plus, RotateCcw, RotateCw, Sheet, ShieldCheck, SlidersHorizontal } from 'lucide-react'
 
 const loadChartCanvas = () => import('./components/ChartCanvas')
@@ -404,7 +405,7 @@ function App() {
       const preservedMeasures = compatibleMeasureSelection(value.yFields, measures, value.yField)
       const pair = [value.yFields.find((field) => measures.includes(field)), ...measures].filter((field, index, fields): field is string => Boolean(field) && fields.indexOf(field) === index).slice(0, 2)
       const triple = [...value.yFields.filter((field) => measures.includes(field)), ...measures].filter((field, index, fields) => fields.indexOf(field) === index).slice(0, 3)
-      const bubbleSizeField = value.scatterSizeField && measures.includes(value.scatterSizeField) ? value.scatterSizeField : measures.find((field) => !preservedMeasures.includes(field)) ?? measures[0]
+      const bubbleSizeField = inferBubbleSizeField(table, targetXField, preservedMeasures, value.scatterSizeField)
       const roleDefaults = kind === 'seasonal-line'
         ? { xField: targetXField, yFields: preservedMeasures, yField: preservedMeasures[0] }
         : kind === 'bubble'

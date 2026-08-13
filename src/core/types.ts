@@ -471,7 +471,7 @@ export interface ChartPlugin {
 
 export interface ChartCapabilities {
   coordinateSystem: 'cartesian' | 'hierarchy' | 'matrix' | 'custom'
-  axes: false | { category?: { placements: Array<'side' | 'internal'> }; value?: { scaleTypes: Array<'linear' | 'log' | 'date'> } }
+  axes: false | { category?: { placements: Array<'side' | 'internal'> }; value?: { scaleTypes: Array<'linear' | 'log' | 'date'> }; x?: { scaleTypes: Array<'linear' | 'date'> }; y?: { scaleTypes: Array<'linear' | 'log'> } }
   guides: Array<'legend' | 'direct-series' | 'color-scale' | 'size-scale'>
   endpointLabels?: boolean
   valueLabels?: boolean

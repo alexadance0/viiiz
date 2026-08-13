@@ -9,14 +9,16 @@ Phase 7 stabilization started from: `a264fc3e2056939e27ba042f9cf52fda295159b3`.
 Phase 7 stabilization completed in: `521224f`.
 Full E2E verification: three consecutive runs passed (44/44 each), `--repeat-each=3` passed (132/132), and the visual file passed five times (35/35).
 
-Migrated kinds: the six ordinary bar kinds plus `line`, `spline`, `step-line`, `indexed-line`, `seasonal-line`, `area`, `stacked-area`, `normalized-stacked-area`, `slope`, `moving-average-line`, `moving-average-scatter`, `range-line`, `step-range-line`, and `confidence-line`.
+Phase 8 started from `b089ab3b5a0eeda0d242ae10482f91496340b82b`; completion is the current `refactor/native-scatter-bubble` working tree (commit pending).
+
+Migrated kinds: the six ordinary bar kinds plus `line`, `spline`, `step-line`, `indexed-line`, `seasonal-line`, `area`, `stacked-area`, `normalized-stacked-area`, `slope`, `moving-average-line`, `moving-average-scatter`, `range-line`, `step-range-line`, `confidence-line`, `scatter`, and `bubble`.
 
 ## Render path
 
 ```text
 legacy ChartConfig adapter
   → native bar, prepared-line, area, dedicated Slope/smoothing, or interval semantic compiler
-  → NativeChartScene (discriminated bar/line/area/slope/smoothing/interval plot, axes, guides, stable IDs)
+  → NativeChartScene (discriminated bar/line/area/slope/smoothing/interval/xy plot, axes, guides, stable IDs)
   → shared frame/text/axis/reservation layout plus family-local Slope geometry
   → ResolvedScene
   → native ECharts adapter selected by semantic plot kind
@@ -45,7 +47,7 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 - `buildOption` remains on the plugin interface for unmigrated callers. For ordinary bars its implementation is a native compile/layout/render compatibility facade, not the legacy cartesian builder.
 - Slope keeps persisted `slopeXValues`, family flags, change-label/direction-color settings, legend/direct settings, series styles, callback keys, annotations, and decorations. Old documents omit the new optional fields and retain the previous appearance because change labels and direction colors default off. It does not expose ordinary legend/direct guides, and its local guide/label graphics never create fake semantic or renderer series.
 - Interval groups retain persisted field triples, fill settings, `showBounds`, source styles, element override keys, and auto-grouping. Hidden Confidence bounds remain in domains and band validation but are absent from guides, value-label targets, tooltips, and selection visitors. Bands are silent derived layers and are never editable data rows.
-- Waterfall, butterfly, lollipop, dumbbell, scatter/bubble, distribution, heatmap, and treemap retain their legacy compilers.
+- Waterfall, butterfly, lollipop, dumbbell, distribution, heatmap, and treemap retain their legacy compilers.
 
 ## Tests added
 
@@ -61,7 +63,15 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 
 The shared legacy `cartesian()` source still contains unreachable migrated-family generic code because remaining specialized comparison/relationship charts share the function. The moving-average branches and the complete interval builder—including fake Confidence stacks and custom Range bands—have been deleted. The next safe removal is to split the remaining specialized builders, then delete unreachable generic conditions and compatibility option-shape tests.
 
-Waterfall, butterfly, lollipop, dumbbell, scatter/bubble, distribution, heatmap, and treemap remain separate migrations.
+Waterfall, butterfly, lollipop, dumbbell, distribution, heatmap, and treemap remain separate migrations.
+
+## Phase 8 native XY
+
+`scatter` and `bubble` now compile a dedicated `CartesianXYPlotScene`. Continuous X/Y scales, final point marker/label styles, tooltip display values, categorical grouping, size encoding, and all analytical decisions are complete before the ECharts adapter. Layout measures continuous tick labels with the actual numeric/date formatters and resolves the Bubble size guide relative to the authoritative plot rectangle.
+
+Linear regression is a pure transform. The trend uses the existing least-squares slope/intercept, 31 deterministic samples, and the existing 95% mean-band delta `1.96 × residualStandardError × sqrt(1/n + (x-xMean)^2/Sxx)`. References, diagonal, quadrants, confidence bands, and size guides are typed layers/guides rather than `markLine`, `markArea`, stacked fake bands, or fake source series.
+
+Native `ElementId` uses source-row/measure identity and therefore does not collapse duplicate X rows. Persisted `legacyKey = series + X` remains readable for overrides; duplicate-X overrides retain their historical shared-key limitation. The legacy relationship builder was removed and replaced by a throwing guard.
 
 ## Phase 7.1 render lifecycle
 

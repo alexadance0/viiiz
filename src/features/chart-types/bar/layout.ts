@@ -154,7 +154,7 @@ export function resolveNativeCartesianScene(sourceScene: NativeChartScene): Reso
       elements[`category-label:${category.id}`] = { x: categoryRail.x, y: frame.plot.y + index * height, width: categoryRail.width, height }
     }
   })
-  return { ...scene, plot: { ...scene.plot, categoryAxis, valueAxis }, resolvedReservations: frame.resolvedReservations, geometry: { canvas: frame.canvas, content: frame.content, plot: frame.plot, reservations: reservationGeometry, axes, elements } }
+  return { ...scene, plot: { ...scene.plot, categoryAxis, valueAxis }, resolvedReservations: frame.resolvedReservations, geometry: { canvas: frame.canvas, content: frame.content, plot: frame.plot, reservations: reservationGeometry, axes, elements, guides: {} } }
 }
 
 export const resolveNativeBarScene = resolveNativeCartesianScene

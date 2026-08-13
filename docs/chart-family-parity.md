@@ -6,6 +6,8 @@ Phase 7 stabilization started from: `a264fc3e2056939e27ba042f9cf52fda295159b3`.
 Phase 7 stabilization completed in: `521224f`.
 Full E2E verification: three consecutive runs passed (44/44 each), `--repeat-each=3` passed (132/132), and visual `--repeat-each=5` passed (35/35).
 
+Phase 8 started from `b089ab3b5a0eeda0d242ae10482f91496340b82b`; completion is the current `refactor/native-scatter-bubble` working tree (commit pending).
+
 | Kind | Family | Compiler | Layout | Interaction | Export | Legacy `buildOption` reachable? |
 |---|---|---|---|---|---|---|
 | bar | bar | native | native frame/axes | native metadata → callback adapter | existing SVG/PNG boundary | no |
@@ -29,7 +31,8 @@ Full E2E verification: three consecutive runs passed (44/44 each), `--repeat-eac
 | dumbbell | dumbbell | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | range-line / step-range-line / confidence-line | interval | native | shared native Cartesian frame/axes | visible source point metadata; derived bands excluded | shared SVG/PNG boundary | no |
 | moving-average-line / moving-average-scatter | smoothing transform | native | shared native Cartesian frame/axes | raw native point metadata; derived layer non-editable | shared SVG/PNG boundary | no |
-| scatter / bubble / distribution | corresponding semantic family | legacy | legacy/hybrid | legacy | existing legacy path | yes |
+| scatter / bubble | continuous XY relationship | native | dedicated continuous XY layout inside shared frame | unique native point IDs; derived analytics excluded | shared SVG/PNG boundary | no |
+| distribution family | distribution | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | heatmap / treemap | matrix / hierarchy | legacy | specialized hybrid | legacy/specialized | existing legacy path | yes |
 
 ## Bar characterization coverage
@@ -58,6 +61,14 @@ The transform pipelines are explicit and source-preserving:
 indexed: raw table → filtering/sorting/aggregation → percent/missing policy → index-to-base → semantic Line scene
 seasonal: raw dated rows → year/month buckets → monthly aggregation → missing policy → semantic Line scene
 ```
+
+## Phase 8 continuous XY parity
+
+Scatter and Bubble compile `plot.kind = 'xy'`: X is linear/time, Y is linear/log, and neither axis is represented as a category. Visible series are the Y-field × optional stringified color-group product. A point ID includes source-row/measure identity, so duplicate X values remain distinct; the old `series + X` key remains only for saved `elementStyles` compatibility and is intentionally ambiguous.
+
+Bubble uses semantic `sqrt-absolute` size encoding. Zero maps to the minimum diameter, maximum absolute magnitude maps to the maximum, negative values use magnitude, reversed configured bounds are ordered without mutation, and invalid per-row sizes use the ordinary point diameter. Its size-scale guide is an inside-plot overlay with resolved pixel geometry and coexists with the outside categorical legend.
+
+Regression, 95% confidence envelopes, references, the clipped X=Y diagonal, and quadrants are derived semantic layers. They are silent, absent from legends/tooltips/selections/value-label listings, and never become fake source series. The old Scatter/Bubble builder is permanently throwing and its ECharts option construction has been removed.
 
 Seasonal emphasis and identification are independent: `Seasonal accent ≠ legend mode`. With no legend, accent changes only stroke presentation. The standard Seasonal legend contains individual accent-year items plus one semantic `Остальные` group for ordinary muted non-accent years; a non-accent year with an explicit color remains an individual truthful item. Direct mode uses the shared direct-series guide, defaults accent years on and non-accent years off, and respects explicit per-series overrides.
 
@@ -97,4 +108,4 @@ Stable `IntervalGroupId` values derive from participating `SeriesId` values and 
 
 ## Phase 7.1 integration checkpoint
 
-The interval semantic migration and its integration quality are tracked separately. Integration now uses an explicit revision-aware final-frame contract for preview, transitions, resize/font completion, and export restoration. Full-suite and repeated visual verification capture only `settled` revisions; no expected snapshot was updated. Unmigrated legacy families remain Waterfall, Butterfly, Lollipop, Dumbbell, Scatter/Bubble, Distribution, Heatmap, and Treemap.
+The interval semantic migration and its integration quality are tracked separately. Integration now uses an explicit revision-aware final-frame contract for preview, transitions, resize/font completion, and export restoration. Full-suite and repeated visual verification capture only `settled` revisions. Unmigrated legacy families remain Waterfall, Butterfly, Lollipop, Dumbbell, Distribution, Heatmap, and Treemap; Phase 8 moved Scatter/Bubble to native XY.

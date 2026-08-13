@@ -166,7 +166,7 @@ export function resolveNativeSlopeScene(scene: NativeSlopeChartScene): ResolvedS
   })
   return {
     ...scene, plot: { ...scene.plot, categoryAxis, valueAxis }, resolvedReservations: frame.resolvedReservations,
-    geometry: { canvas: frame.canvas, content: frame.content, plot, reservations: reservationGeometry, axes, elements },
+    geometry: { canvas: frame.canvas, content: frame.content, plot, reservations: reservationGeometry, axes, elements, guides: {} },
     slopeGeometry: { firstX, lastX, guideLeft, guideRight, axisY, leftEndpointLabelRail, rightEndpointLabelRail, valueScaleLabelRail, endpointLabels, changeLabels },
   }
 }

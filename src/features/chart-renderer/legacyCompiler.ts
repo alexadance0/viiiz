@@ -28,5 +28,5 @@ export function compileLegacyScene(table: DataTable, config: ChartConfig, buildO
 
 export function resolveScene(scene: ChartScene): ResolvedScene {
   const frame = resolveFrame({ canvas: scene.document.canvas, spacing: scene.document.composition })
-  return { ...scene, geometry: { canvas: frame.canvas, content: frame.content, plot: frame.plot, reservations: {}, axes: {}, elements: {} } } as ResolvedScene
+  return { ...scene, geometry: { canvas: frame.canvas, content: frame.content, plot: frame.plot, reservations: {}, axes: {}, elements: {}, guides: {} } } as ResolvedScene
 }

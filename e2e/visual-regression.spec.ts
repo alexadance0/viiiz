@@ -50,9 +50,11 @@ const updateChart = async (page: Page, canvas: Locator, action: () => Promise<un
 
 const waitForLayout = (page: Page) => waitForChartSettled(page)
 
-const openDemoChart = async (page: Page, demo: string, chart?: string) => {
+const openDemoChart = async (page: Page, demo: string, chart?: string, preloadFont = false) => {
   await page.goto('/editor')
+  if (preloadFont) await page.evaluate(() => document.fonts.load('18px Onest'))
   await page.getByRole('button', { name: demo, exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Проверьте данные' })).toBeVisible()
   await page.getByRole('button', { name: /Выбрать график/ }).click()
   if (chart) {
     const canvas = page.locator('.chart-canvas-shell')
@@ -71,6 +73,36 @@ const openSettings = async (page: Page, name: string) => {
   const summary = page.locator('summary').filter({ hasText: new RegExp(`^${name}$`) })
   if (!(await summary.evaluate((element) => (element.parentElement as HTMLDetailsElement).open))) await summary.click()
 }
+
+test('native Scatter and Bubble semantics stay visually stable', async ({ page }) => {
+  test.setTimeout(120_000)
+  await openDemoChart(page, 'Временной ряд', 'Точечный', true)
+  const canvas = page.locator('.chart-canvas-shell')
+  await expect(canvas).toHaveAttribute('data-plot-kind', 'xy')
+  await expect(canvas).toHaveScreenshot('scatter-default.png')
+
+  await updateChart(page, canvas, () => setCheckbox(page.getByRole('checkbox', { name: 'orders', exact: true }), true))
+  await expect(canvas).toHaveScreenshot('scatter-multiple-series.png')
+  await openDesign(page)
+  const scatter = page.locator('.scatter-settings')
+  await updateChart(page, canvas, () => setCheckbox(scatter.getByRole('checkbox', { name: 'Показывать' }), true))
+  await expect(canvas).toHaveScreenshot('scatter-labels-date-x.png')
+  await updateChart(page, canvas, () => setCheckbox(scatter.getByRole('checkbox', { name: 'Показать линию тренда' }), true))
+  await updateChart(page, canvas, () => setCheckbox(scatter.getByRole('checkbox', { name: 'Доверительная полоса 95%' }), true))
+  await expect(canvas).toHaveScreenshot('scatter-trend-band.png')
+
+  await page.getByRole('button', { name: '← Тип графика' }).click()
+  await updateChart(page, canvas, () => page.getByRole('button', { name: 'Пузырьковая диаграмма' }).click())
+  await openDesign(page)
+  const bubble = page.locator('.scatter-settings')
+  await updateChart(page, canvas, () => setCheckbox(bubble.getByRole('checkbox', { name: 'Показывать' }), false))
+  await updateChart(page, canvas, () => setCheckbox(bubble.getByRole('checkbox', { name: 'Показать линию тренда' }), false))
+  await expect(canvas).toHaveScreenshot('bubble-default-size-guide.png')
+  await openSettings(page, 'Оси, шкалы и подписи')
+  await updateChart(page, canvas, () => page.getByLabel('Положение оси Y').selectOption('right'))
+  await updateChart(page, canvas, () => page.getByLabel('Положение оси X').selectOption('top'))
+  await expect(canvas).toHaveScreenshot('bubble-axis-top-right.png')
+})
 
 test('native smoothing semantics stay visually stable', async ({ page }) => {
   test.setTimeout(90_000)

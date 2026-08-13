@@ -126,10 +126,10 @@ describe('native ECharts Slope adapter', () => {
     expect(source).toMatchObject({ showLegend: true, showDirectLabels: true })
   })
 
-  it.each(['scatter'] as const)('supports slope → legacy %s → slope', (kind) => {
+  it.each(['scatter'] as const)('supports slope → native %s → slope', (kind) => {
     const legacyConfig = slopeConfig({ kind, rangeLowerField: 'actual', rangeUpperField: 'plan' })
     const first = nativeSlope(), legacy = getChartPlugin(kind).compile(slopeTable, legacyConfig), last = nativeSlope()
-    expect([first.migrationMode, legacy.migrationMode, last.migrationMode]).toEqual(['native', 'legacy', 'native'])
+    expect([first.migrationMode, legacy.migrationMode, last.migrationMode]).toEqual(['native', 'native', 'native'])
     expect((renderScene(first) as unknown as RenderedSlope).graphic.some((item) => item.id?.startsWith('slope-'))).toBe(true)
     expect((renderScene(last) as unknown as RenderedSlope).series.some((series) => series.name === '__slope-guides__')).toBe(false)
   })

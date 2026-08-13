@@ -9,8 +9,11 @@ const setCheckbox = async (checkbox: Locator, selected: boolean) => {
 async function failOnRuntimeErrors(page: Page) {
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
+  page.on('response', (response) => {
+    if (response.status() >= 400 && !response.url().startsWith('https://fonts.gstatic.com/')) errors.push(`${response.status()} ${response.url()}`)
+  })
   page.on('console', (message) => {
-    if (message.type() === 'error' || message.type() === 'warning' && message.text().includes("Can't get DOM width or height")) errors.push(message.text())
+    if (message.type() === 'error' && !message.text().startsWith('Failed to load resource:') || message.type() === 'warning' && message.text().includes("Can't get DOM width or height")) errors.push(message.text())
   })
   return () => expect(errors).toEqual([])
 }
@@ -1037,6 +1040,49 @@ test('scatter and bubble defaults keep axis/grid controls available on the edito
   await page.locator('summary').filter({ hasText: /^Оси, шкалы и подписи$/ }).click()
   await expect(page.getByLabel('Стиль заголовков осей')).toBeVisible()
 
+  assertNoErrors()
+})
+
+test('native XY transitions, analytical layers, history and exports stay settled', async ({ page }) => {
+  test.setTimeout(180_000)
+  await page.route('https://fonts.googleapis.com/**', (route) => route.fulfill({ contentType: 'text/css', body: '' }))
+  const assertNoErrors = await failOnRuntimeErrors(page)
+  await loadDemo(page)
+  const canvas = page.locator('.chart-canvas-shell')
+  for (const name of ['Линия', 'Точечный', 'Линия', 'Точечный', 'Пузырьковая диаграмма', 'Точечный', 'Линия + среднее', 'Точечный', 'Линия + среднее', 'Диапазон между линиями', 'Пузырьковая диаграмма', 'Диапазон между линиями', 'Наклонный график', 'Точечный', 'Наклонный график', 'Точечный', 'Box plot', 'Точечный', 'Пузырьковая диаграмма', 'Тепловая карта', 'Пузырьковая диаграмма', 'Точечный', 'Treemap', 'Точечный']) {
+    const previous = Number(await canvas.getAttribute('data-render-revision') ?? 0)
+    await page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: new RegExp(`^${escaped(name)}$`) }) }).click()
+    await waitForSettledRevision(page, previous)
+  }
+  await expect(canvas).toHaveAttribute('data-plot-kind', 'xy')
+  await page.getByRole('button', { name: /Настроить оформление/ }).click()
+  const settings = page.locator('.scatter-settings')
+  let revision = Number(await canvas.getAttribute('data-render-revision') ?? 0)
+  await setCheckbox(settings.getByRole('checkbox', { name: 'Показать линию тренда' }), true)
+  revision = await waitForSettledRevision(page, revision)
+  await setCheckbox(settings.getByRole('checkbox', { name: 'Доверительная полоса 95%' }), true)
+  revision = await waitForSettledRevision(page, revision)
+  await settings.getByRole('spinbutton', { name: 'Значение X', exact: true }).fill('6')
+  await settings.getByRole('spinbutton', { name: 'Значение X', exact: true }).blur()
+  revision = await waitForSettledRevision(page, revision)
+  await settings.getByRole('spinbutton', { name: 'Значение Y', exact: true }).fill('6')
+  await settings.getByRole('spinbutton', { name: 'Значение Y', exact: true }).blur()
+  revision = await waitForSettledRevision(page, revision)
+  await setCheckbox(settings.getByRole('checkbox', { name: 'Подсветить квадранты' }), true)
+  await waitForSettledRevision(page, revision)
+  await expect(page.getByRole('button', { name: 'Отменить', exact: true })).toBeEnabled()
+  await page.getByRole('button', { name: 'Отменить', exact: true }).click()
+  await page.getByRole('button', { name: 'Повторить', exact: true }).click()
+  await expectRenderedChart(page)
+  await openExport(page)
+  const svgDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Скачать SVG' }).click()
+  const svg = await readFile(await (await svgDownload).path()!, 'utf8')
+  expect(svg).toContain('<svg')
+  expect(svg).not.toContain('__bubble-size-legend')
+  const pngDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Скачать PNG' }).click()
+  expect((await readFile(await (await pngDownload).path()!)).byteLength).toBeGreaterThan(1000)
   assertNoErrors()
 })
 

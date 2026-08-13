@@ -1,6 +1,7 @@
 import type { ChartConfig } from '../core/types'
 import type { DataTable } from '../core/types'
-import { getSeriesColor } from '../core/chartRegistry'
+import { getSeriesColor } from '../core/seriesColor'
+import { inferScatterLabelField } from '../features/chart-types/xy/inference'
 import { NumberInput, OptionalNumberInput } from './NumberInput'
 import { ColorControl } from './PickerControls'
 import { SettingsCheckbox } from './SettingsCheckbox'
@@ -20,7 +21,7 @@ export function ScatterSettings({ config, columns, numericColumns, table, onChan
   const patch = (values: Partial<ChartConfig>) => onChange({ ...config, ...values })
   const patchSeries = (name: string, values: Partial<ChartConfig['seriesStyles'][string]>) => patch({ seriesStyles: { ...config.seriesStyles, [name]: { ...config.seriesStyles[name], ...values } } })
   const yFields = config.yFields.length ? config.yFields : [config.yField]
-  const automaticLabelField = columns.find((column) => column !== config.xField && !yFields.includes(column) && column !== config.scatterSizeField && column !== config.scatterColorField && table.rows.some((row) => typeof row[column] === 'string' && String(row[column]).trim()))
+  const automaticLabelField = inferScatterLabelField(table, config.xField, yFields, config.scatterSizeField, config.scatterColorField)
   const validRows = table.rows.filter((row) => {
     const x = row[config.xField]
     return ((typeof x === 'number' && Number.isFinite(x)) || (x instanceof Date && !Number.isNaN(x.getTime()))) && yFields.some((field) => typeof row[field] === 'number' && Number.isFinite(row[field] as number))

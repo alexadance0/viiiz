@@ -28,7 +28,7 @@ export type GuideSpec =
   | GuideBase & { kind: 'categorical-legend'; position: 'top' | 'right' | 'bottom' | 'left'; items: CategoricalLegendItem[] }
   | GuideBase & { kind: 'direct-series'; side: 'left' | 'right'; items: DirectSeriesGuideItem[] }
   | GuideBase & { kind: 'color-scale'; position: 'top' | 'right' | 'bottom' | 'left'; minimum: number; maximum: number; colors: string[] }
-  | GuideBase & { kind: 'size-scale'; position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'; minimum: number; maximum: number }
+  | GuideBase & { kind: 'size-scale'; position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'; title: string; items: Array<{ value: number; label: string; diameter: number }>; style: ChartTextStyle; marker: { stroke: string; strokeWidth: number } }
 
 export function guideReservation(guide: GuideSpec, size: number, gap: number, priority = 40): LayoutReservation | undefined {
   if (!guide.visible || guide.kind === 'size-scale') return undefined

@@ -1,4 +1,4 @@
-import type { ChartConfig, ChartTextStyle, DataValue } from '../../../core/types'
+import type { ChartConfig, ChartTextStyle, DataValue, TimeProfile } from '../../../core/types'
 import type { ChangeDescriptor } from '../../../core/changeSemantics'
 import type { AxisSpec } from '../../../features/chart-layout/axisLayout'
 import type { Rect } from '../../../features/chart-layout/geometry'
@@ -259,7 +259,101 @@ export interface CartesianSlopePlotScene {
   endpointLabels: { distance: number; collision: 'shift-y'; hideOverlap: false; items: SlopeEndpointLabelScene[] }
 }
 
-export type NativePlotScene = CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene
+export interface XYScaleSpec {
+  type: 'linear' | 'log' | 'time'
+  minimum?: number
+  maximum?: number
+  step?: number
+  timeProfile?: TimeProfile
+  dateLabelFormat?: ChartConfig['dateLabelFormat']
+  automaticDomain: { minimum: number; maximum: number; step?: number }
+}
+
+export interface XYPointScene {
+  type: 'xy-point'
+  id: ElementId
+  datumId: DatumId
+  seriesId: SeriesId
+  legacyKey: string
+  x: number
+  y: number
+  sourceX: DataValue
+  sourceY: number
+  displayX: string
+  displayY: string
+  marker: { shape: 'circle' | 'rect' | 'roundRect' | 'triangle' | 'diamond'; size: number; fill: string; stroke: string; strokeWidth: number; opacity: number }
+  label: { visible: boolean; text: string; position: 'top' | 'right' | 'bottom' | 'left'; style: ChartTextStyle; collision: 'shift-y-hide-overlap' }
+  sizeValue?: number
+  displaySizeValue?: string
+  colorGroup?: string
+}
+
+export interface XYSeriesScene {
+  id: SeriesId
+  name: string
+  yField: string
+  colorGroup?: string
+  color: string
+  visible: boolean
+  points: XYPointScene[]
+}
+
+export interface SizeEncodingSpec {
+  field: string
+  domain: { minimumMagnitude: number; maximumMagnitude: number }
+  range: { minimumDiameter: number; maximumDiameter: number }
+  scale: 'sqrt-absolute'
+  missingDiameter: number
+}
+
+export interface XYConfidenceBandScene {
+  id: LayerId
+  sourceSeriesId: SeriesId
+  fillColor: string
+  fillOpacity: number
+  samples: Array<{ x: number; lower: number; upper: number }>
+}
+
+export interface XYTrendLayerScene {
+  id: LayerId
+  kind: 'trend'
+  sourceSeriesId: SeriesId
+  regression: { slope: number; intercept: number }
+  stroke: { color: string; width: number; type: 'solid' | 'dashed' | 'dotted'; opacity: number }
+  samples: Array<{ x: number; y: number }>
+  confidenceBand?: XYConfidenceBandScene
+}
+
+export type XYReferenceLineScene = {
+  id: LayerId
+  kind: 'reference'
+  axis: 'x' | 'y' | 'diagonal'
+  value?: number
+  segment?: [{ x: number; y: number }, { x: number; y: number }]
+  stroke: { color: string; width: number; type: 'solid' | 'dashed' | 'dotted'; opacity: number }
+}
+
+export interface XYQuadrantLayerScene {
+  id: LayerId
+  kind: 'quadrants'
+  xReference: number
+  yReference: number
+  regions: Array<{ position: 'top-left' | 'top-right' | 'bottom-right' | 'bottom-left'; xMinimum: number; xMaximum: number; yMinimum: number; yMaximum: number; fillColor: string; fillOpacity: number; label: string; labelStyle: ChartTextStyle }>
+}
+
+export interface CartesianXYPlotScene {
+  kind: 'xy'
+  variant: 'scatter' | 'bubble'
+  xAxis: AxisSpec
+  yAxis: AxisSpec
+  xScale: XYScaleSpec
+  yScale: XYScaleSpec
+  series: XYSeriesScene[]
+  sizeEncoding?: SizeEncodingSpec
+  analyticalLayers: Array<XYTrendLayerScene | XYReferenceLineScene | XYQuadrantLayerScene>
+}
+
+export type NativePlotScene = CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene
 
 export interface NativeChartScene extends ChartSceneBase {
   migrationMode: 'native'
@@ -276,6 +370,7 @@ export type NativeAreaChartScene = NativeChartScene & { plot: CartesianAreaPlotS
 export type NativeSlopeChartScene = NativeChartScene & { plot: CartesianSlopePlotScene }
 export type NativeSmoothingChartScene = NativeChartScene & { plot: CartesianSmoothingPlotScene }
 export type NativeIntervalChartScene = NativeChartScene & { plot: CartesianIntervalPlotScene }
+export type NativeXYChartScene = NativeChartScene & { plot: CartesianXYPlotScene }
 
 export type ChartScene = LegacyChartScene | NativeChartScene
 
@@ -286,6 +381,7 @@ export interface ResolvedSceneGeometry {
   reservations: Record<string, Rect>
   axes: Record<string, Rect>
   elements: Record<ElementId, Rect>
+  guides: Record<string, Rect>
 }
 
 export interface ResolvedSlopeGeometry {
