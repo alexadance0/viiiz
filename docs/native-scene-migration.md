@@ -49,7 +49,7 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 - `buildOption` remains on the plugin interface for unmigrated callers. For ordinary bars its implementation is a native compile/layout/render compatibility facade, not the legacy cartesian builder.
 - Slope keeps persisted `slopeXValues`, family flags, change-label/direction-color settings, legend/direct settings, series styles, callback keys, annotations, and decorations. Old documents omit the new optional fields and retain the previous appearance because change labels and direction colors default off. It does not expose ordinary legend/direct guides, and its local guide/label graphics never create fake semantic or renderer series.
 - Interval groups retain persisted field triples, fill settings, `showBounds`, source styles, element override keys, and auto-grouping. Hidden Confidence bounds remain in domains and band validation but are absent from guides, value-label targets, tooltips, and selection visitors. Bands are silent derived layers and are never editable data rows.
-- Waterfall, butterfly, lollipop, dumbbell, the six density/statistical-shape Distribution kinds, heatmap, and treemap retain their legacy compilers.
+- Waterfall, butterfly, lollipop, dumbbell, Histogram/KDE frequency Distribution, heatmap, and treemap retain their legacy compilers.
 
 ## Tests added
 
@@ -65,7 +65,7 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 
 The shared legacy `cartesian()` source still contains unreachable migrated-family generic code because remaining specialized comparison/relationship charts share the function. The moving-average branches and the complete interval builder—including fake Confidence stacks and custom Range bands—have been deleted. The next safe removal is to split the remaining specialized builders, then delete unreachable generic conditions and compatibility option-shape tests.
 
-Waterfall, butterfly, lollipop, dumbbell, the remaining Distribution shapes/density variants, heatmap, and treemap remain separate migrations.
+Waterfall, butterfly, lollipop, dumbbell, Histogram/KDE frequency Distribution, heatmap, and treemap remain separate migrations.
 
 ## Phase 8 native XY
 
@@ -85,7 +85,7 @@ The migrated five legacy branches were removed and their legacy entry point thro
 
 ## Phase 9B native Distribution shapes
 
-Phase 9B started from `ccd66becf9b7fd293081055675d5295ba1bff026`; implementation completed in `cf3ec028ec87b74cbeb9e9eabb5b7cb6072c4aae`.
+Phase 9B started from `ccd66becf9b7fd293081055675d5295ba1bff026`; implementation completed in `cf3ec028ec87b74cbeb9e9eabb5b7cb6072c4aae`, migrated legacy shape geometry was deleted in `09b480b`, and the documentation checkpoint is `05f13ed4cb45a1b7a1a9e969ac4d9e70343bb172`.
 
 `prepareDistributionGroups` is now the single pure source of selected fields, categories, stable groups/lanes, raw observations, colors, and interpolated-quartile/1.5-IQR statistics for native Distribution and the temporary legacy Histogram/KDE builder. The pure density transform preserves `Σ exp(-0.5 × ((sample-observation)/bandwidth)²)`, peak normalization, legacy bandwidth fallback, 81 samples, 1.75-bandwidth tails, zero endpoints, and direct Q1/median/Q3 kernel evaluation.
 

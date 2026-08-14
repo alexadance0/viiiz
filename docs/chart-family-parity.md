@@ -8,7 +8,7 @@ Full E2E verification: three consecutive runs passed (44/44 each), `--repeat-eac
 
 Phase 8 started from `b089ab3b5a0eeda0d242ae10482f91496340b82b` and completed in `70bb42f6aa024a92e6f765d08b200fd7e723e85c`.
 Phase 9A started from that completion and its implementation completed in `abef01b4d646512ead007420b62ec7b308694ed5`.
-Phase 9B started from `ccd66becf9b7fd293081055675d5295ba1bff026` and its implementation completed in `cf3ec028ec87b74cbeb9e9eabb5b7cb6072c4aae`.
+Phase 9B started from `ccd66becf9b7fd293081055675d5295ba1bff026`; implementation completed in `cf3ec028ec87b74cbeb9e9eabb5b7cb6072c4aae`, migrated legacy shape geometry was deleted in `09b480b`, and the documentation checkpoint is `05f13ed4cb45a1b7a1a9e969ac4d9e70343bb172`.
 
 | Kind | Family | Compiler | Layout | Interaction | Export | Legacy `buildOption` reachable? |
 |---|---|---|---|---|---|---|
