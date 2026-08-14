@@ -22,7 +22,6 @@ import { compileNativeSmoothingScene, isNativeSmoothingKind } from '../features/
 import { compileNativeIntervalScene, isNativeIntervalKind } from '../features/chart-types/interval/compiler'
 import { compileNativeXYScene, isNativeXYKind, validateNativeXYMapping } from '../features/chart-types/xy/compiler'
 import { compileNativeDistributionScene, isNativeDistributionKind, validateNativeDistributionMapping } from '../features/chart-types/distribution/compiler'
-import { deterministicDistributionOffset } from '../features/chart-types/distribution/jitter'
 import { distributionStatistics } from '../features/chart-types/distribution/statistics'
 import { prepareDistributionGroups } from '../features/chart-types/distribution/prepare'
 export { fitSwarmClouds, fitSwarmOffsets, packSwarmOffsets } from '../features/chart-types/distribution/swarm'
@@ -117,11 +116,6 @@ const axisTickPosition = (value: number, minimum: number, maximum: number): Axis
 }
 const alignedLeft = (align: ChartConfig['titleText']['align'], left = CONTENT_LEFT) => align === 'left' ? left : align === 'center' ? 'center' : undefined
 const elementKey = (series: string, category: unknown) => `${series}\u001f${category instanceof Date ? category.toISOString() : `${typeof category}:${String(category)}`}`
-const pointLabelPlacement = (position: 'top' | 'right' | 'bottom' | 'left') => ({
-  align: position === 'left' ? 'right' : position === 'right' ? 'left' : 'center',
-  verticalAlign: position === 'top' ? 'bottom' : position === 'bottom' ? 'top' : 'middle',
-  opacity: 1,
-})
 const treemapLabelPosition = (position: NonNullable<ChartConfig['treemapLabelPosition']>) => ({
   'top-left': 'insideTopLeft', 'top-center': 'insideTop', 'top-right': 'insideTopRight',
   'center-left': 'insideLeft', center: 'inside', 'center-right': 'insideRight',
@@ -1586,31 +1580,19 @@ const distribution: LegacyChartPlugin = {
       ? config.distributionCategoryStyles?.[String(group.category)]?.color ?? getSeriesColor(config, group.seriesKey, group.categoryIndex)
       : getSeriesColor(config, group.field, group.fieldIndex)
     const laneLabels = prepared.laneLabels
-    const legendGroups = [...new Map(groups.map((group) => [group.name, group])).values()]
     const values = groups.flatMap((group) => group.values)
     const rawMin = prepared.rawMinimum, rawMax = prepared.rawMaximum, rawSpan = prepared.rawSpan
     const bandwidthRatio = config.distributionBandwidth ?? .14
-    const densityShape = config.kind === 'violinplot' || config.kind === 'raincloud' || config.kind === 'kde-plot' || config.kind === 'ridgeline'
-    const violinTail = densityShape ? Math.max(...groups.map((group) => (group.values.at(-1)! - group.values[0]) * bandwidthRatio), rawSpan / 1000) * 1.75 : 0
-    const scale = niceNumericScale(violinTail ? [...values, rawMin - violinTail, rawMax + violinTail] : values)
+    const densityTail = config.kind === 'kde-plot' ? Math.max(...groups.map((group) => (group.values.at(-1)! - group.values[0]) * bandwidthRatio), rawSpan / 1000) * 1.75 : 0
+    const scale = niceNumericScale(densityTail ? [...values, rawMin - densityTail, rawMax + densityTail] : values)
     const horizontal = (config.distributionOrientation ?? 'horizontal') === 'horizontal'
     const duplicateYAxisTitle = horizontal && laneLabels.some((label) => label.trim() === config.yAxisTitle.trim())
     const base = commonOption(table, duplicateYAxisTitle ? { ...config, showYAxisTitle: false } : config) as Record<string, unknown>
     const axisLineStyle = { color: config.axisLineColor, width: config.axisLineWidth, type: config.axisLineType }
     const baseXAxis = base.xAxis as Record<string, unknown>, baseYAxis = base.yAxis as Record<string, unknown>
-    const pointSize = config.distributionPointSize ?? 9, pointOpacity = config.distributionPointOpacity ?? .4
-    const point = (value: number, group: number) => horizontal ? [value, group] : [group, value]
-    const pointLabelPosition = config.distributionLabelPosition ?? (horizontal ? 'right' : 'top')
-    const pointLabel = { show: config.distributionShowLabels ?? false, position: pointLabelPosition, distance: 5, ...text(config.valueText), ...pointLabelPlacement(pointLabelPosition), formatter: '{b}' }
-    const pointLabelLayout = { hideOverlap: config.valueLabelHideOverlap ?? false, moveOverlap: horizontal ? 'shiftY' : 'shiftX' }
     const configuredLegendIcon = ({ circle: 'circle', square: 'rect', line: 'path://M0 4H24V7H0Z', diamond: 'diamond', triangle: 'triangle' } as const)[config.legendMarker as 'circle' | 'square' | 'line' | 'diamond' | 'triangle']
     const stats = groups.map((group) => { const result = distributionStatistics(group.observations.map((observation) => ({ value: observation.value, datumId: observation.elementKey }))); return { min: result.minimumInlier, q1: result.q1, median: result.median, mean: result.mean, q3: result.q3, max: result.maximumInlier, outliers: group.observations.filter((observation) => result.outlierDatumIds.includes(observation.elementKey)).map((observation) => observation.value) } })
-    const splitOptions = layoutMode === 'measures' ? categories.filter((category): category is string => category != null) : selectedFields
-    const splitFirst = splitOptions.includes(config.distributionViolinSplitFirst ?? '') ? config.distributionViolinSplitFirst! : splitOptions[0]
-    const splitSecond = splitOptions.includes(config.distributionViolinSplitSecond ?? '') && config.distributionViolinSplitSecond !== splitFirst ? config.distributionViolinSplitSecond! : splitOptions.find((option) => option !== splitFirst)
-    const splitSelection = new Set([splitFirst, splitSecond].filter((value): value is string => Boolean(value)))
-    if (config.kind === 'histogram' || config.kind === 'kde-plot') {
-      const histogram = config.kind === 'histogram'
+    const histogram = config.kind === 'histogram'
       const [requestedHistogramMin, requestedHistogramMax] = orderedBounds(config.distributionHistogramMin, config.distributionHistogramMax)
       const automaticDomainMin = histogram && rawMin === rawMax ? rawMin - .5 : histogram ? rawMin : scale.min
       const automaticDomainMax = histogram && rawMin === rawMax ? rawMax + .5 : histogram ? rawMax : scale.max
@@ -1749,144 +1731,7 @@ const distribution: LegacyChartPlugin = {
           z: 20,
         })
       })
-      return standardOption
-    }
-    const valueAxis = { ...baseYAxis, type: 'value', min: config.yAxisMin ?? scale.min, max: config.yAxisMax ?? scale.max, interval: config.yAxisStep ?? scale.step, name: '', axisLine: { show: config.showYAxisLine, onZero: false, lineStyle: axisLineStyle }, axisTick: { show: config.showYTicks, length: config.tickLength, lineStyle: axisLineStyle }, splitLine: { show: horizontal ? config.showVerticalGrid : config.showHorizontalGrid, lineStyle: { color: config.gridColor, width: config.gridWidth, type: config.gridType } } }
-    // A numeric lane axis keeps fractional offsets intact. ECharts rounds fractional
-    // coordinates on a category axis, which made strip, jitter and swarm identical.
-    const fullGrid = config.showHorizontalGrid && config.showVerticalGrid
-    const ridgeExtent = Math.min(1.6, Math.max(.15, (config.distributionWidth ?? 72) / 100) * (1 + (config.distributionRidgelineOverlap ?? 35) / 100))
-    const singleLanePadding = laneLabels.length === 1 ? 1 : .5
-    const categoryMin = config.kind === 'ridgeline' && horizontal ? -Math.ceil(ridgeExtent) : fullGrid ? -1 : -singleLanePadding
-    const categoryMax = config.kind === 'ridgeline' && !horizontal ? laneLabels.length - 1 + Math.ceil(ridgeExtent) : fullGrid ? laneLabels.length : laneLabels.length - 1 + singleLanePadding
-    const categoryAxis = { ...baseXAxis, type: 'value', data: laneLabels, min: categoryMin, max: categoryMax, interval: fullGrid ? 1 : .5, boundaryGap: false, name: '', axisLabel: { ...(baseXAxis.axisLabel as object), formatter: (value: number) => Number.isInteger(value) ? laneLabels[value] ?? '' : '' }, axisLine: { show: config.showXAxisLine, onZero: false, lineStyle: axisLineStyle }, axisTick: { show: config.showXTicks, alignWithLabel: true, length: config.tickLength, lineStyle: axisLineStyle }, splitLine: { show: horizontal ? config.showHorizontalGrid : config.showVerticalGrid, lineStyle: { color: config.gridColor, width: config.gridWidth, type: config.gridType } } }
-    const categoryGridOnly = horizontal ? config.showHorizontalGrid && !config.showVerticalGrid : config.showVerticalGrid && !config.showHorizontalGrid
-    const option = {
-      ...base,
-      animationDuration: 180,
-      animationDurationUpdate: 180,
-      legend: { ...(base.legend as object), show: Boolean(groupField && config.showLegend), data: groupField ? legendGroups.map((group) => ({ name: group.name, icon: configuredLegendIcon ?? 'circle', itemStyle: { color: groupColor(group), borderWidth: 0 } })) : undefined, itemWidth: configuredLegendIcon === 'path://M0 4H24V7H0Z' ? 24 : 10 },
-      grid: { ...(base.grid as object), containLabel: true },
-      xAxis: { ...(horizontal ? valueAxis : categoryAxis), position: config.xAxisPosition, axisLine: { ...(horizontal ? valueAxis : categoryAxis).axisLine, show: config.showXAxisLine }, axisTick: { ...(horizontal ? valueAxis : categoryAxis).axisTick, show: config.showXTicks }, splitLine: { ...(horizontal ? valueAxis : categoryAxis).splitLine, show: horizontal ? config.showVerticalGrid : config.showVerticalGrid && config.showHorizontalGrid } },
-      yAxis: { ...(horizontal ? categoryAxis : valueAxis), position: config.yAxisPosition, ...(horizontal ? { inverse: true } : {}), axisLine: { ...(horizontal ? categoryAxis : valueAxis).axisLine, show: config.showYAxisLine }, axisTick: { ...(horizontal ? categoryAxis : valueAxis).axisTick, show: config.showYTicks }, splitLine: { ...(horizontal ? categoryAxis : valueAxis).splitLine, show: horizontal ? config.showHorizontalGrid && config.showVerticalGrid : config.showHorizontalGrid } },
-      tooltip: { trigger: 'item', formatter: (params: { data?: { rawValue?: number; groupName?: string; displayLabel?: string; summary?: string; count?: number } }) => params.data?.summary ?? (params.data?.rawValue != null ? `${config.distributionLabelField && params.data.displayLabel ? `<b>${escapeHtml(params.data.displayLabel)}</b><br/>` : ''}${escapeHtml(params.data.groupName)}<br/>${escapeHtml(formatChartNumber(params.data.rawValue, config))}${params.data.count ? `<br/>Наблюдений: <b>${params.data.count}</b>` : ''}` : '') },
-      series: [] as Array<Record<string, unknown>>,
-    }
-    if (categoryGridOnly) option.series.push({ name: '__distribution-grid', type: 'custom', coordinateSystem: 'cartesian2d', silent: true, tooltip: { show: false }, data: [point(Number(valueAxis.min), 0)], renderItem: (_params: unknown, api: { coord(value: number[]): number[] }) => ({ type: 'group', children: laneLabels.map((_label, laneIndex) => {
-      const start = api.coord(point(Number(valueAxis.min), laneIndex)), end = api.coord(point(Number(valueAxis.max), laneIndex))
-      return { type: 'line', shape: { x1: start[0], y1: start[1], x2: end[0], y2: end[1] }, style: { stroke: config.gridColor, lineWidth: config.gridWidth, lineDash: config.gridType === 'dashed' ? [6, 4] : config.gridType === 'dotted' ? [2, 3] : undefined } }
-    }) }), z: 0 })
-    groups.forEach((group, groupIndex) => {
-      const color = groupColor(group), stat = stats[groupIndex]
-      const summaryColor = config.seriesStyles[group.name]?.distributionSummaryColor ?? config.seriesStyles[group.seriesKey]?.distributionSummaryColor ?? color
-      const summaryWidth = config.seriesStyles[group.name]?.distributionSummaryWidth ?? config.seriesStyles[group.seriesKey]?.distributionSummaryWidth ?? config.distributionSummaryWidth ?? 3
-      const summaryLength = (config.seriesStyles[group.name]?.distributionSummaryLength ?? config.seriesStyles[group.seriesKey]?.distributionSummaryLength ?? config.distributionSummaryLength ?? 100) / 100
-      const tooltipSummary = `<b>${escapeHtml(group.displayName)}</b><br/>n = ${group.values.length}<br/>Медиана: ${escapeHtml(formatChartNumber(stat.median, config))}<br/>Среднее: ${escapeHtml(formatChartNumber(stat.mean, config))}<br/>Q1–Q3: ${escapeHtml(formatChartNumber(stat.q1, config))}–${escapeHtml(formatChartNumber(stat.q3, config))}`
-      const rowWidth = Math.min(config.kind === 'ridgeline' ? 1.6 : .9, Math.max(.15, (config.distributionWidth ?? 72) / 100) * (config.kind === 'ridgeline' ? 1 + (config.distributionRidgelineOverlap ?? 35) / 100 : 1))
-      const splitViolin = config.kind === 'violinplot' && config.distributionViolinMode === 'split' && splitSelection.size === 2
-      const groupedShape = Boolean(groupField && (config.kind === 'boxplot' || config.kind === 'violinplot' || config.kind === 'raincloud' || config.kind === 'histogram'))
-      const categorySlot = rowWidth / Math.max(1, group.subgroupCount)
-      const laneOffset = groupedShape && !splitViolin ? (group.subgroupIndex - (group.subgroupCount - 1) / 2) * categorySlot : 0
-      const lane = group.laneIndex + laneOffset
-      const shapeWidth = groupedShape && !splitViolin ? categorySlot * .84 : rowWidth
-      const pointStyle = { color: config.kind === 'raincloud' ? config.canvasBackground ?? '#ffffff' : color, opacity: pointOpacity, borderColor: color, borderWidth: config.kind === 'raincloud' ? 1.25 : 0 }
-      const pointEmphasis = { disabled: true, scale: false }
-      const observationData = (observation: typeof group.observations[number], value: number[]) => {
-        const override = config.elementStyles[observation.elementKey]
-        const labelStyle = override?.valueText ?? config.valueText
-        const labelPosition = override?.labelPosition ?? pointLabelPosition
-        return {
-          ...observation,
-          name: override?.label || observation.displayLabel,
-          value,
-          symbol: override?.markerShape,
-          symbolSize: override?.markerSize,
-          itemStyle: { ...pointStyle, ...(override?.color ? { color: override.color, borderColor: override.color } : {}), ...(override?.markerFill ? { color: override.markerFill } : {}), ...(override?.markerBorder ? { borderColor: override.markerBorder } : {}), ...(override?.markerBorderWidth != null ? { borderWidth: override.markerBorderWidth } : {}), ...(override?.fillOpacity != null ? { opacity: override.fillOpacity } : {}) },
-          label: override ? { ...pointLabel, show: override.showLabel ?? config.distributionShowLabels ?? false, formatter: override.label || observation.displayLabel, position: labelPosition, ...text(labelStyle), ...pointLabelPlacement(labelPosition) } : undefined,
-        }
-      }
-      if (config.kind === 'ridgeline') {
-        option.series.push({ name: group.name, type: 'custom', coordinateSystem: 'cartesian2d', itemStyle: { color }, data: [{ value: point(group.values[0], lane), summary: tooltipSummary }], renderItem: (_params: unknown, api: { coord(value: number[]): number[]; size(value: number[]): number[] }) => {
-          const min = group.values[0], max = group.values.at(-1)!
-          const bandwidth = Math.max((max - min) * bandwidthRatio, rawSpan / 1000)
-          const start = min - bandwidth * 1.75, end = max + bandwidth * 1.75
-          const samples = Array.from({ length: 81 }, (_, sample) => start + (end - start) * sample / 80)
-          const density = samples.map((value) => group.values.reduce((sum, current) => sum + Math.exp(-.5 * ((value - current) / bandwidth) ** 2), 0))
-          const peak = Math.max(...density, 1)
-          density[0] = 0; density[density.length - 1] = 0
-          const band = Math.abs(api.size(horizontal ? [0, 1] : [1, 0])[horizontal ? 1 : 0])
-          const thickness = Math.max(8, band * shapeWidth)
-          const baseline = samples.map((value) => api.coord(point(value, lane)))
-          const curve = baseline.map(([x, y], index) => horizontal ? [x, y - density[index] / peak * thickness] : [x + density[index] / peak * thickness, y])
-          const polygon = [...baseline, ...[...curve].reverse()]
-          const medianBase = api.coord(point(stat.median, lane))
-          const medianDensity = group.values.reduce((sum, current) => sum + Math.exp(-.5 * ((stat.median - current) / bandwidth) ** 2), 0) / peak * thickness * summaryLength
-          const medianTip = horizontal ? [medianBase[0], medianBase[1] - medianDensity] : [medianBase[0] + medianDensity, medianBase[1]]
-          return { type: 'group', children: [
-            { type: 'polygon', shape: { points: polygon }, style: { fill: color, opacity: config.distributionDensityFillOpacity ?? .2 } },
-            { type: 'polyline', shape: { points: curve }, style: { fill: 'none', stroke: color, lineWidth: config.seriesStyles[group.name]?.lineWidth ?? config.seriesStyles[group.seriesKey]?.lineWidth ?? 2 } },
-            { type: 'line', shape: { x1: baseline[0][0], y1: baseline[0][1], x2: baseline.at(-1)![0], y2: baseline.at(-1)![1] }, style: { stroke: color, lineWidth: 1.25 } },
-            ...(config.distributionShowMedian ?? true ? [{ type: 'line', shape: { x1: medianBase[0], y1: medianBase[1], x2: medianTip[0], y2: medianTip[1] }, style: { stroke: summaryColor, lineWidth: summaryWidth } }] : []),
-          ] }
-        }, z: 4 + group.laneIndex })
-        return
-      }
-      option.series.push({ name: group.name, type: 'custom', coordinateSystem: 'cartesian2d', itemStyle: { color }, data: [{ value: [group.laneIndex], summary: tooltipSummary }], renderItem: (_params: unknown, api: { coord(value: number[]): number[]; size(value: number[]): number[] }) => {
-        const coord = (value: number, category = lane) => api.coord(point(value, category)), band = Math.abs(api.size(horizontal ? [0, 1] : [1, 0])[horizontal ? 1 : 0])
-        const maximumThickness = config.kind === 'boxplot' ? 56 : config.kind === 'raincloud' ? 84 : 88
-        const thickness = Math.min(maximumThickness, Math.max(8, band * shapeWidth))
-        if (config.kind === 'boxplot') {
-          const low = coord(stat.min), q1 = coord(stat.q1), median = coord(stat.median), q3 = coord(stat.q3), high = coord(stat.max), half = thickness / 2, medianHalf = half * summaryLength
-          const line = (a: number[], b: number[], width = 1.5, stroke = color) => ({ type: 'line', shape: { x1: a[0], y1: a[1], x2: b[0], y2: b[1] }, style: { stroke, lineWidth: width } })
-          const children = horizontal
-            ? [line(low, q1), line(q3, high), line([low[0], low[1] - half * .55], [low[0], low[1] + half * .55]), line([high[0], high[1] - half * .55], [high[0], high[1] + half * .55]), { type: 'rect', shape: { x: q1[0], y: q1[1] - half, width: Math.max(1, q3[0] - q1[0]), height: thickness, r: 0 }, style: { fill: color, opacity: .42, stroke: color, lineWidth: 1.5 } }, ...(config.distributionShowMedian ?? true ? [line([median[0], median[1] - medianHalf], [median[0], median[1] + medianHalf], summaryWidth, summaryColor)] : [])]
-            : [line(low, q1), line(q3, high), line([low[0] - half * .55, low[1]], [low[0] + half * .55, low[1]]), line([high[0] - half * .55, high[1]], [high[0] + half * .55, high[1]]), { type: 'rect', shape: { x: q1[0] - half, y: q3[1], width: thickness, height: Math.max(1, q1[1] - q3[1]), r: 0 }, style: { fill: color, opacity: .42, stroke: color, lineWidth: 1.5 } }, ...(config.distributionShowMedian ?? true ? [line([median[0] - medianHalf, median[1]], [median[0] + medianHalf, median[1]], summaryWidth, summaryColor)] : [])]
-          return { type: 'group', children }
-        }
-        const min = group.values[0], max = group.values.at(-1)!, bandwidth = Math.max((max - min) * bandwidthRatio, rawSpan / 1000), start = min - bandwidth * 1.75, end = max + bandwidth * 1.75, samples = Array.from({ length: 81 }, (_, sample) => start + (end - start) * sample / 80)
-        const density = samples.map((value) => group.values.reduce((sum, current) => sum + Math.exp(-.5 * ((value - current) / bandwidth) ** 2), 0)), peak = Math.max(...density, 1)
-        density[0] = 0; density[density.length - 1] = 0
-        const center = samples.map((value) => coord(value))
-        const side = center.map(([x, y], index) => horizontal ? [x, y - density[index] / peak * thickness / 2] : [x - density[index] / peak * thickness / 2, y])
-        const other = [...center].reverse().map(([x, y], reversed) => { const index = center.length - reversed - 1; return horizontal ? [x, y + density[index] / peak * thickness / 2] : [x + density[index] / peak * thickness / 2, y] })
-        const violinSide = config.kind === 'raincloud' ? -1 : splitViolin ? group.seriesKey === splitFirst ? -1 : 1 : config.distributionViolinMode === 'half' ? config.distributionViolinHalfSide === 'first' ? -1 : 1 : 0
-        const polygonPoints = violinSide < 0 ? [...side, ...[...center].reverse()] : violinSide > 0 ? [...center, ...other] : [...side, ...other]
-        const summaryLane = config.kind === 'raincloud' ? lane + shapeWidth * .16 : lane
-        const summarySide = config.kind === 'raincloud' ? 0 : violinSide
-        const q1 = coord(stat.q1, summaryLane), q3 = coord(stat.q3, summaryLane), median = coord(stat.median, summaryLane), boxThickness = Math.max(config.kind === 'raincloud' ? 12 : 6, pointSize * (config.kind === 'raincloud' ? 1.45 : 1)), medianLength = boxThickness * summaryLength
-        const summaryLine = (value: number, lineWidth: number, lineDash?: number[]) => {
-          const [x, y] = coord(value, summaryLane)
-          const extent = group.values.reduce((sum, current) => sum + Math.exp(-.5 * ((value - current) / bandwidth) ** 2), 0) / peak * thickness / 2 * summaryLength
-          return { type: 'line', shape: horizontal
-            ? { x1: x, y1: y + (summarySide > 0 ? 0 : -extent), x2: x, y2: y + (summarySide < 0 ? 0 : extent) }
-            : { x1: x + (summarySide > 0 ? 0 : -extent), y1: y, x2: x + (summarySide < 0 ? 0 : extent), y2: y },
-          style: { stroke: summaryColor, lineWidth, lineDash } }
-        }
-        const whiskerStart = coord(stat.min, summaryLane), whiskerEnd = coord(stat.max, summaryLane)
-        const whisker = { type: 'line', shape: { x1: whiskerStart[0], y1: whiskerStart[1], x2: whiskerEnd[0], y2: whiskerEnd[1] }, style: { stroke: summaryColor, lineWidth: Math.max(1, summaryWidth * .55) } }
-        const box = horizontal
-          ? { type: 'rect', shape: { x: q1[0], y: q1[1] + (summarySide < 0 ? -boxThickness / 2 : summarySide > 0 ? 0 : -boxThickness / 2), width: Math.max(1, q3[0] - q1[0]), height: summarySide ? boxThickness / 2 : boxThickness, r: 0 }, style: { fill: config.canvasBackground ?? '#ffffff', opacity: .78, stroke: color, lineWidth: 1.5 } }
-          : { type: 'rect', shape: { x: q1[0] + (summarySide < 0 ? -boxThickness / 2 : summarySide > 0 ? 0 : -boxThickness / 2), y: q3[1], width: summarySide ? boxThickness / 2 : boxThickness, height: Math.max(1, q1[1] - q3[1]), r: 0 }, style: { fill: config.canvasBackground ?? '#ffffff', opacity: .78, stroke: color, lineWidth: 1.5 } }
-        const medianMark = horizontal
-          ? { type: 'line', shape: { x1: median[0], y1: median[1] + (summarySide > 0 ? 0 : -medianLength / 2), x2: median[0], y2: median[1] + (summarySide < 0 ? 0 : medianLength / 2) }, style: { stroke: summaryColor, lineWidth: summaryWidth } }
-          : { type: 'line', shape: { x1: median[0] + (summarySide > 0 ? 0 : -medianLength / 2), y1: median[1], x2: median[0] + (summarySide < 0 ? 0 : medianLength / 2), y2: median[1] }, style: { stroke: summaryColor, lineWidth: summaryWidth } }
-        const lineSummary = [summaryLine(stat.q1, Math.max(1, summaryWidth * .55), [4, 3]), ...(config.distributionShowMedian ?? true ? [summaryLine(stat.median, summaryWidth)] : []), summaryLine(stat.q3, Math.max(1, summaryWidth * .55), [4, 3])]
-        const summary = (config.distributionViolinSummaryMode ?? 'box') === 'lines' ? lineSummary : [box, ...(config.distributionShowMedian ?? true ? [medianMark] : [])]
-        return { type: 'group', children: [{ type: 'polygon', shape: { points: polygonPoints }, style: { fill: color, opacity: config.distributionDensityFillOpacity ?? .2, stroke: color, lineWidth: 1.25 } }, ...(config.distributionViolinShowWhiskers ?? true ? [whisker] : []), ...summary] }
-      }, z: 3 })
-      const individuallyLabelled = group.observations.filter((observation) => config.elementStyles[observation.elementKey]?.showLabel)
-      const shownObservations = [...new Map(((config.kind === 'violinplot' || config.kind === 'raincloud') && (config.distributionShowPoints ?? true) ? group.observations : config.kind === 'boxplot' ? config.distributionShowAllPoints ? group.observations : (config.distributionShowOutliers ?? true) ? group.observations.filter((observation) => stat.outliers.includes(observation.value)) : [] : []).concat(individuallyLabelled).map((observation) => [observation.elementKey, observation])).values()]
-      if (shownObservations.length) option.series.push({ name: group.name, type: 'scatter', data: shownObservations.map((observation, index) => {
-        const random = deterministicDistributionOffset(index, groupIndex)
-        const violinSide = splitViolin ? group.seriesKey === splitFirst ? -1 : 1 : config.kind === 'violinplot' && config.distributionViolinMode === 'half' ? config.distributionViolinHalfSide === 'first' ? -1 : 1 : 0
-        const pointLane = config.kind === 'raincloud'
-          ? lane + ((config.distributionRaincloudPointMode ?? 'overlay') === 'separate' ? .36 + random * .08 : .16 + random * .1) * shapeWidth
-          : lane + (violinSide ? violinSide * (.08 + Math.abs(random) * .12) : random * .1) * shapeWidth
-        return { ...observationData(observation, point(observation.value, pointLane)), rawValue: observation.value, groupName: group.displayName }
-      }), symbol: 'circle', symbolSize: pointSize, itemStyle: pointStyle, emphasis: pointEmphasis, label: pointLabel, labelLayout: pointLabelLayout, z: 6 })
-    })
-    if (!horizontal) option.series.push(...yAxisEdgeAffixSeries(config, Number((option.yAxis as { min?: number }).min), Number((option.yAxis as { max?: number }).max)))
-    return option
+    return standardOption
   },
 }
 
