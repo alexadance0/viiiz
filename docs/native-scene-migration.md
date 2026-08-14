@@ -81,7 +81,15 @@ Native `ElementId` uses source-row/measure identity and therefore does not colla
 
 The compiler produces observations, exact-value Counts aggregates, Barcode strokes, full interpolated-quartile/1.5-IQR statistics, and mean/median summary intent. Layout owns the continuous value projection, semantic numeric lane axis, measured label rails, deterministic legacy jitter, cross-group-per-lane swarm packing, Barcode endpoints, summary extents, and lane-grid lines. The dedicated renderer consumes resolved geometry without a `DataTable`, statistics, jitter, swarm, or fake grid series. `DistributionSettings` now imports the neutral series-color helper directly.
 
-The migrated five legacy branches were removed and their legacy entry point throws. `boxplot`, `violinplot`, `raincloud`, `histogram`, `kde-plot`, and `ridgeline` remain legacy for Phase 9B/9C and reuse the extracted pure statistics/jitter helpers where applicable. Verification passed 618 unit tests, 47/47 full E2E, 141/141 at `--repeat-each=3`, and the focused Distribution visual scenario 5/5. Seven macOS Chromium Distribution baselines were added.
+The migrated five legacy branches were removed and their legacy entry point throws. Phase 9B subsequently migrated Box, Violin, Raincloud, and Ridgeline; only `histogram` and `kde-plot` remain legacy. Phase 9A verification passed 618 unit tests, 47/47 full E2E, 141/141 at `--repeat-each=3`, and the focused Distribution visual scenario 5/5. Seven macOS Chromium Distribution baselines were added.
+
+## Phase 9B native Distribution shapes
+
+Phase 9B started from `ccd66becf9b7fd293081055675d5295ba1bff026`; implementation completed in `cf3ec028ec87b74cbeb9e9eabb5b7cb6072c4aae`.
+
+`prepareDistributionGroups` is now the single pure source of selected fields, categories, stable groups/lanes, raw observations, colors, and interpolated-quartile/1.5-IQR statistics for native Distribution and the temporary legacy Histogram/KDE builder. The pure density transform preserves `Σ exp(-0.5 × ((sample-observation)/bandwidth)²)`, peak normalization, legacy bandwidth fallback, 81 samples, 1.75-bandwidth tails, zero endpoints, and direct Q1/median/Q3 kernel evaluation.
+
+Box summary and density layers have stable `LayerId`s. Layout resolves grouped boxes, full/half/split violins, line/box summaries, one-sided Raincloud composition, hollow point rows, and orientation-specific Ridgeline overlap/domain extension. The ECharts adapter consumes resolved rectangles, lines and polygons without table, statistics, KDE, subgroup, or side decisions. Source observations remain editable through semantic visitors even when their marks are hidden; derived shapes remain non-editable. Histogram and KDE are deliberately deferred to Phase 9C.
 
 ## Phase 7.1 render lifecycle
 

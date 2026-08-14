@@ -84,3 +84,11 @@ Phase 9A started from the Phase 8 completion `70bb42f6aa024a92e6f765d08b200fd7e7
 Strip, Jitter, Beeswarm, Counts, and Barcode share one semantic `plot.kind = 'distribution'`: continuous numeric observations plus stable semantic lanes. Compiler-owned groups use measure × optional category identity; observations use raw row/field identity; exact Counts aggregates use aggregate identity; all retain their historical override keys separately. Pure statistics preserve interpolated quartiles and 1.5 IQR, while pure jitter preserves the legacy deterministic index seed.
 
 The dedicated layout resolves frame/axes, measured lane labels, lane/value projection, cross-group swarm packing, jitter, Barcode endpoints, summaries, and semantic lane grids. The ECharts adapter receives final geometry and never reads the table or computes statistics/offsets. The five old renderer branches were deleted and guarded; Box, Violin, Raincloud, Histogram, KDE, and Ridgeline deliberately remain legacy.
+
+## Phase 9B checkpoint — native Distribution shapes
+
+Phase 9B started from `ccd66becf9b7fd293081055675d5295ba1bff026`; implementation completed in `cf3ec028ec87b74cbeb9e9eabb5b7cb6072c4aae`.
+
+Boxplot, Violin, Raincloud, and Ridgeline now extend `plot.kind = 'distribution'` with discriminated box and density layers. Shared preparation owns stable source groups/observations and is also used by the remaining legacy Histogram/KDE boundary. A pure Gaussian shape transform owns the legacy peak-normalized density profile; layout owns every subgroup slot, side, polygon, summary primitive, raincloud offset, and ridge overlap/domain extension.
+
+The renderer remains `DataTable`/statistics/KDE-free, source observations remain editable independently of visibility, and derived shapes never enter value-label selections. The four migrated kinds are explicitly native and their legacy entry point throws. Distribution is not yet fully native: Histogram and KDE remain the Phase 9C frequency-axis migration.

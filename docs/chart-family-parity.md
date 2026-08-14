@@ -8,6 +8,7 @@ Full E2E verification: three consecutive runs passed (44/44 each), `--repeat-eac
 
 Phase 8 started from `b089ab3b5a0eeda0d242ae10482f91496340b82b` and completed in `70bb42f6aa024a92e6f765d08b200fd7e723e85c`.
 Phase 9A started from that completion and its implementation completed in `abef01b4d646512ead007420b62ec7b308694ed5`.
+Phase 9B started from `ccd66becf9b7fd293081055675d5295ba1bff026` and its implementation completed in `cf3ec028ec87b74cbeb9e9eabb5b7cb6072c4aae`.
 
 | Kind | Family | Compiler | Layout | Interaction | Export | Legacy `buildOption` reachable? |
 |---|---|---|---|---|---|---|
@@ -36,7 +37,9 @@ Phase 9A started from that completion and its implementation completed in `abef0
 | strip-plot / jitter-plot / beeswarm | observation distribution | native | dedicated lane/value layout; deterministic offsets | stable raw observation metadata | shared SVG/PNG boundary | no |
 | counts-plot | exact-value distribution aggregate | native | dedicated lane/value layout | stable aggregate metadata | shared SVG/PNG boundary | no |
 | barcode-plot | observation tick distribution | native | dedicated lane/value/tick layout | stable raw observation metadata | shared SVG/PNG boundary | no |
-| boxplot / violinplot / raincloud / histogram / kde-plot / ridgeline | distribution shapes/density | legacy | legacy/hybrid | legacy | existing legacy path | yes |
+| boxplot | distribution summary shape | native | dedicated lane/value box geometry | raw observations editable; derived box excluded | shared SVG/PNG boundary | no |
+| violinplot / raincloud / ridgeline | statistical density shapes | native | dedicated lane/value density geometry | raw observations editable; derived density excluded | shared SVG/PNG boundary | no |
+| histogram / kde-plot | distribution frequency/density | legacy | legacy continuous frequency axis | legacy | existing legacy path | yes |
 | heatmap / treemap | matrix / hierarchy | legacy | specialized hybrid | legacy/specialized | existing legacy path | yes |
 
 ## Bar characterization coverage
@@ -79,6 +82,12 @@ Regression, 95% confidence envelopes, references, the clipped X=Y diagonal, and 
 All five migrated variants share stable semantic groups, lanes, observations, full summary statistics, orientation mapping, value-domain persistence, lane labels, legend membership, and mean/median summary marks. Strip permits overplotting. Jitter uses the exact deterministic legacy hash. Beeswarm packs every category subgroup sharing a lane as one pixel-space cloud. Counts groups by exact numeric value and resolves `baseSize × sqrt(count)` before rendering. Barcode compiles strokes and resolves perpendicular endpoints in layout.
 
 Raw and Barcode selections expose every source observation without ECharts introspection; Counts exposes only stable exact-value aggregate marks. Historical `elementStyles`, label fields, category labels/colors/order/visibility, series ordering, point/tick opacity, marker overrides, and summary precedence remain compatible through separate legacy keys. Compiler/layout contain no ECharts vocabulary, renderer contains no `DataTable`, and lane grid/summary marks are silent graphics rather than fake series.
+
+## Phase 9B Distribution shape parity
+
+Box, Violin, Raincloud, and Ridgeline extend the same stable groups, lanes, observations, statistics, axes, grids, legends, and visitors. Box layers carry actual 1.5-IQR inlier whiskers, Q1/Q3, median styling, and source-ID outlier visibility. Density layers use the legacy peak-normalized Gaussian sum, bandwidth `max(groupSpan × ratio, globalSpan / 1000)`, 81 samples, and 1.75-bandwidth tails with zero endpoints.
+
+Layout owns subgroup slots, full/half/split sides, density polygons, statistic extents, raincloud offsets and point modes, and asymmetric ridge overlap. The shared renderer draws only resolved primitives and structured summary tooltips. Raw observation IDs and legacy override keys do not depend on orientation, bandwidth, side, overlap, or canvas size. Histogram and KDE remain the only legacy Distribution variants.
 
 Seasonal emphasis and identification are independent: `Seasonal accent ≠ legend mode`. With no legend, accent changes only stroke presentation. The standard Seasonal legend contains individual accent-year items plus one semantic `Остальные` group for ordinary muted non-accent years; a non-accent year with an explicit color remains an individual truthful item. Direct mode uses the shared direct-series guide, defaults accent years on and non-accent years off, and respects explicit per-series overrides.
 
