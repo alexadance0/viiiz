@@ -41,4 +41,20 @@ describe('native Distribution layout', () => {
     expect(short.distributionGeometry.marks.every((mark) => mark.line)).toBe(true)
     expect(short.distributionGeometry.summaries).toHaveLength(1)
   })
+
+  it('resolves box, half-side, raincloud and ridge geometry in both orientations', () => {
+    for (const distributionOrientation of ['horizontal', 'vertical'] as const) {
+      const box = resolveNativeDistributionScene(compileNativeDistributionScene(table, config('boxplot', { distributionOrientation })))
+      expect(box.distributionGeometry.boxShapes[0].box.width).toBeGreaterThan(0)
+      expect(box.distributionGeometry.boxShapes[0].box.height).toBeGreaterThan(0)
+      const first = resolveNativeDistributionScene(compileNativeDistributionScene(table, config('violinplot', { distributionOrientation, distributionViolinMode: 'half', distributionViolinHalfSide: 'first' })))
+      const second = resolveNativeDistributionScene(compileNativeDistributionScene(table, config('violinplot', { distributionOrientation, distributionViolinMode: 'half', distributionViolinHalfSide: 'second' })))
+      const firstShape = first.distributionGeometry.densityShapes[0], secondShape = second.distributionGeometry.densityShapes[0]
+      const center = distributionOrientation === 'horizontal' ? firstShape.baseline?.y1 ?? first.distributionGeometry.marks[0]?.laneCenterPixel : firstShape.baseline?.x1 ?? first.distributionGeometry.marks[0]?.laneCenterPixel
+      expect(firstShape.polygon).not.toEqual(secondShape.polygon)
+      expect(center).toBeDefined()
+      expect(resolveNativeDistributionScene(compileNativeDistributionScene(table, config('raincloud', { distributionOrientation }))).distributionGeometry.densitySummaries).toHaveLength(1)
+      expect(resolveNativeDistributionScene(compileNativeDistributionScene(table, config('ridgeline', { distributionOrientation }))).distributionGeometry.densityShapes[0].baseline).toBeDefined()
+    }
+  })
 })

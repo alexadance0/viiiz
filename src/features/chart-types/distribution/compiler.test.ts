@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { createDefaultChartConfig } from '../../../entities/chart/model/defaultChartConfig'
 import { nativeMarkSelections, nativePointSeries } from '../../../entities/chart/model/sceneVisitors'
 import type { ChartConfig, DataTable } from '../../../core/types'
@@ -11,10 +12,22 @@ const table: DataTable = { name: 'distribution', columns: ['group', 'value', 'ot
 ] }
 
 describe('native Distribution compiler', () => {
-  it('registers exactly the five observation variants and keeps later shapes legacy', () => {
-    expect(NATIVE_DISTRIBUTION_KINDS.map((kind) => getChartPlugin(kind).compilerMode)).toEqual(Array(5).fill('native'))
-    expect(['boxplot', 'violinplot', 'raincloud', 'histogram', 'kde-plot', 'ridgeline'].map((kind) => getChartPlugin(kind as ChartConfig['kind']).compilerMode)).toEqual(Array(6).fill('legacy'))
-    expect(legacyDistributionBuilderGuard).toThrow('Legacy Strip/Jitter/Beeswarm/Counts/Barcode builder was removed')
+  it('registers nine native variants and keeps only Histogram/KDE legacy', () => {
+    expect(NATIVE_DISTRIBUTION_KINDS.map((kind) => getChartPlugin(kind).compilerMode)).toEqual(Array(9).fill('native'))
+    expect(['histogram', 'kde-plot'].map((kind) => getChartPlugin(kind as ChartConfig['kind']).compilerMode)).toEqual(Array(2).fill('legacy'))
+    expect(legacyDistributionBuilderGuard).toThrow('Legacy Distribution observation/shape builder was removed')
+  })
+
+  it('compiles stable box and density layers without renderer vocabulary', () => {
+    const box = compileNativeDistributionScene(table, config('boxplot'))
+    expect(box.plot.layers.find((layer) => layer.kind === 'boxes')).toMatchObject({ marks: [{ minimumInlier: 2, maximumInlier: 8 }] })
+    for (const kind of ['violinplot', 'raincloud', 'ridgeline'] as const) {
+      const scene = compileNativeDistributionScene(table, config(kind))
+      const density = scene.plot.layers.find((layer) => layer.kind === 'density')
+      expect(density?.kind === 'density' && density.groups[0].profile.samples).toHaveLength(81)
+      expect(density?.kind === 'density' && density.groups[0].id).toContain(':density')
+    }
+    expect(JSON.stringify(box.plot)).not.toMatch(/renderItem|itemStyle|coordinateSystem/)
   })
 
   it('compiles semantic lanes, groups and stable raw observation identities', () => {
@@ -58,5 +71,12 @@ describe('native Distribution compiler', () => {
 
   it('preserves the mapping validation message', () => {
     expect(validateNativeDistributionMapping({ name: 'empty', columns: ['value'], rows: [{ value: null }] }, config('strip-plot'))).toEqual({ ok: false, errors: [{ field: 'yFields', message: 'Выберите хотя бы один числовой показатель для распределения.' }] })
+  })
+
+  it('keeps compiler, preparation, statistics and density renderer-neutral', () => {
+    for (const file of ['compiler.ts', 'prepare.ts', 'statistics.ts', 'density.ts', 'layout.ts']) {
+      const source = readFileSync(new URL(file, import.meta.url), 'utf8')
+      expect(source).not.toMatch(/echarts|zrender|ChartCanvas/)
+    }
   })
 })

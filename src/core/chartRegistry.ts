@@ -24,6 +24,7 @@ import { compileNativeXYScene, isNativeXYKind, validateNativeXYMapping } from '.
 import { compileNativeDistributionScene, isNativeDistributionKind, validateNativeDistributionMapping } from '../features/chart-types/distribution/compiler'
 import { deterministicDistributionOffset } from '../features/chart-types/distribution/jitter'
 import { distributionStatistics } from '../features/chart-types/distribution/statistics'
+import { prepareDistributionGroups } from '../features/chart-types/distribution/prepare'
 export { fitSwarmClouds, fitSwarmOffsets, packSwarmOffsets } from '../features/chart-types/distribution/swarm'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 import { nativeMarkSelections } from '../entities/chart/model/sceneVisitors'
@@ -1577,50 +1578,17 @@ const distribution: LegacyChartPlugin = {
     return fields.length ? { ok: true, errors: [] } : { ok: false, errors: [{ field: 'yFields', message: 'Выберите хотя бы один числовой показатель для распределения.' }] }
   },
   buildOption(table, config) {
-    const fields = config.yFields.filter((field) => table.rows.some((row) => typeof row[field] === 'number' && Number.isFinite(row[field])))
-    const fieldOrder = new Map((config.seriesOrder ?? []).map((field, index) => [field, index]))
-    const selectedFields = [...(fields.length ? fields : [config.yField])].sort((left, right) => (fieldOrder.get(left) ?? Number.MAX_SAFE_INTEGER) - (fieldOrder.get(right) ?? Number.MAX_SAFE_INTEGER))
-    const groupField = config.distributionGroupField
-    const discoveredCategories = groupField ? [...new Set(table.rows.flatMap((row) => selectedFields.some((field) => typeof row[field] === 'number' && Number.isFinite(row[field])) ? [String(row[groupField] ?? 'Без категории')] : []))] : []
-    const orderedCategories = [...(config.distributionCategoryOrder ?? []).filter((category) => discoveredCategories.includes(category)), ...discoveredCategories.filter((category) => !(config.distributionCategoryOrder ?? []).includes(category))]
-    const visibleCategories = orderedCategories.filter((category) => config.distributionCategoryStyles?.[category]?.visible !== false)
-    const categories: Array<string | null> = groupField ? (visibleCategories.length ? visibleCategories : orderedCategories.slice(0, 1)) : [null]
-    const categoryLabel = (category: string | null) => category == null ? '' : config.distributionCategoryStyles?.[category]?.label?.trim() || category
-    const layoutMode = groupField ? config.distributionLayoutMode ?? 'measures' : 'measures'
-    const splitOptions = layoutMode === 'measures' ? categories.filter((category): category is string => category != null) : selectedFields
-    const splitFirst = splitOptions.includes(config.distributionViolinSplitFirst ?? '') ? config.distributionViolinSplitFirst! : splitOptions[0]
-    const splitSecond = splitOptions.includes(config.distributionViolinSplitSecond ?? '') && config.distributionViolinSplitSecond !== splitFirst ? config.distributionViolinSplitSecond! : splitOptions.find((option) => option !== splitFirst)
-    const splitSelection = new Set([splitFirst, splitSecond].filter((value): value is string => Boolean(value)))
-    const groups = selectedFields.flatMap((field, fieldIndex) => categories.map((category, categoryIndex) => {
-      const name = layoutMode === 'measures' ? groupField ? categoryLabel(category) : field : field
-      const observations = table.rows.flatMap((row, rowIndex) => {
-        const value = row[field]
-        if ((groupField && String(row[groupField] ?? 'Без категории') !== category) || typeof value !== 'number' || !Number.isFinite(value)) return []
-        const displayLabel = config.distributionLabelField ? String(row[config.distributionLabelField] ?? '') : formatChartNumber(value, config)
-        return [{ value, displayLabel, displayValue: formatChartNumber(value, config), displayCategory: displayLabel || (groupField ? categoryLabel(category) : field), elementKey: elementKey(name, `row:${rowIndex}:${field}`), sourceSeriesName: name }]
-      }).sort((left, right) => left.value - right.value)
-      return {
-        field,
-        fieldIndex,
-        category,
-        categoryIndex,
-        laneIndex: layoutMode === 'measures' ? fieldIndex : categoryIndex,
-        subgroupIndex: layoutMode === 'measures' ? categoryIndex : fieldIndex,
-        subgroupCount: layoutMode === 'measures' ? categories.length : selectedFields.length,
-        seriesKey: layoutMode === 'measures' ? String(category ?? field) : field,
-        name,
-        displayName: groupField ? `${categoryLabel(category)} · ${field}` : field,
-        observations,
-        values: observations.map((observation) => observation.value),
-      }
-    })).filter((group) => group.values.length && (config.kind !== 'violinplot' || config.distributionViolinMode !== 'split' || splitSelection.size < 2 || splitSelection.has(group.seriesKey)))
+    if (!(['histogram', 'kde-plot'] as ChartConfig['kind'][]).includes(config.kind)) throw new Error(`Legacy Distribution builder cannot render ${config.kind}.`)
+    const prepared = prepareDistributionGroups(table, config)
+    const { selectedFields, groupField, categories, layoutMode } = prepared
+    const groups = prepared.groups.map((group) => ({ field: group.field, fieldIndex: selectedFields.indexOf(group.field), category: group.categoryKey ?? null, categoryIndex: categories.indexOf(group.categoryKey ?? null), laneIndex: prepared.lanes.find((lane) => lane.id === group.laneId)!.index, subgroupIndex: group.subgroupIndex, subgroupCount: group.subgroupCount, seriesKey: group.seriesKey, name: group.sourceSeriesName, displayName: group.displayName, observations: group.observations.map((item) => ({ value: item.value, displayLabel: item.displayLabel, displayValue: item.displayValue, displayCategory: item.displayCategory, elementKey: item.legacyKey, sourceSeriesName: group.sourceSeriesName })), values: group.observations.map(({ value }) => value) }))
     const groupColor = (group: typeof groups[number]) => layoutMode === 'measures' && groupField
       ? config.distributionCategoryStyles?.[String(group.category)]?.color ?? getSeriesColor(config, group.seriesKey, group.categoryIndex)
       : getSeriesColor(config, group.field, group.fieldIndex)
-    const laneLabels = layoutMode === 'measures' ? selectedFields : categories.map(categoryLabel)
+    const laneLabels = prepared.laneLabels
     const legendGroups = [...new Map(groups.map((group) => [group.name, group])).values()]
     const values = groups.flatMap((group) => group.values)
-    const rawMin = Math.min(...values), rawMax = Math.max(...values), rawSpan = Math.max(1e-9, rawMax - rawMin)
+    const rawMin = prepared.rawMinimum, rawMax = prepared.rawMaximum, rawSpan = prepared.rawSpan
     const bandwidthRatio = config.distributionBandwidth ?? .14
     const densityShape = config.kind === 'violinplot' || config.kind === 'raincloud' || config.kind === 'kde-plot' || config.kind === 'ridgeline'
     const violinTail = densityShape ? Math.max(...groups.map((group) => (group.values.at(-1)! - group.values[0]) * bandwidthRatio), rawSpan / 1000) * 1.75 : 0
@@ -1637,6 +1605,10 @@ const distribution: LegacyChartPlugin = {
     const pointLabelLayout = { hideOverlap: config.valueLabelHideOverlap ?? false, moveOverlap: horizontal ? 'shiftY' : 'shiftX' }
     const configuredLegendIcon = ({ circle: 'circle', square: 'rect', line: 'path://M0 4H24V7H0Z', diamond: 'diamond', triangle: 'triangle' } as const)[config.legendMarker as 'circle' | 'square' | 'line' | 'diamond' | 'triangle']
     const stats = groups.map((group) => { const result = distributionStatistics(group.observations.map((observation) => ({ value: observation.value, datumId: observation.elementKey }))); return { min: result.minimumInlier, q1: result.q1, median: result.median, mean: result.mean, q3: result.q3, max: result.maximumInlier, outliers: group.observations.filter((observation) => result.outlierDatumIds.includes(observation.elementKey)).map((observation) => observation.value) } })
+    const splitOptions = layoutMode === 'measures' ? categories.filter((category): category is string => category != null) : selectedFields
+    const splitFirst = splitOptions.includes(config.distributionViolinSplitFirst ?? '') ? config.distributionViolinSplitFirst! : splitOptions[0]
+    const splitSecond = splitOptions.includes(config.distributionViolinSplitSecond ?? '') && config.distributionViolinSplitSecond !== splitFirst ? config.distributionViolinSplitSecond! : splitOptions.find((option) => option !== splitFirst)
+    const splitSelection = new Set([splitFirst, splitSecond].filter((value): value is string => Boolean(value)))
     if (config.kind === 'histogram' || config.kind === 'kde-plot') {
       const histogram = config.kind === 'histogram'
       const [requestedHistogramMin, requestedHistogramMax] = orderedBounds(config.distributionHistogramMin, config.distributionHistogramMax)
@@ -1918,7 +1890,7 @@ const distribution: LegacyChartPlugin = {
   },
 }
 
-export const legacyDistributionBuilderGuard = () => { throw new Error('Legacy Strip/Jitter/Beeswarm/Counts/Barcode builder was removed; use the native Distribution compiler.') }
+export const legacyDistributionBuilderGuard = () => { throw new Error('Legacy Distribution observation/shape builder was removed; use the native Distribution compiler.') }
 
 const legacyChartRegistry = [
   ...barChartDefinitions.flatMap(([id, label, category]) => id === 'waterfall' || id === 'lollipop' || id === 'horizontal-lollipop' ? [] : [cartesian(id, label, category)]),
@@ -2005,7 +1977,7 @@ export function getChartPlugin(id: ChartConfig['kind']) {
 }
 
 export function chartValueLabelSelections(table: DataTable, config: ChartConfig): ChartElementSelection[] {
-  const listingConfig = isDistributionChart(config.kind) ? { ...config, distributionShowAllPoints: true, distributionShowPoints: true } : config
+  const listingConfig = isDistributionChart(config.kind) && !isNativeDistributionKind(config.kind) ? { ...config, distributionShowAllPoints: true, distributionShowPoints: true } : config
   const plugin = getChartPlugin(config.kind)
   if (plugin.compilerMode === 'native') {
     if (!plugin.validate(table, listingConfig).ok) return []

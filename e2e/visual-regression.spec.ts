@@ -103,6 +103,49 @@ test('native Distribution observation semantics stay visually stable', async ({ 
   await expect(canvas).toHaveScreenshot('distribution-barcode-vertical.png')
 })
 
+test('native Distribution statistical shapes stay visually stable', async ({ page }) => {
+  test.setTimeout(180_000)
+  await openDemoChart(page, 'Распределения', 'Box plot', true)
+  const canvas = page.locator('.chart-canvas-shell')
+  await expect(canvas).toHaveAttribute('data-plot-kind', 'distribution')
+  await expect(canvas).toHaveScreenshot('distribution-boxplot-default.png')
+  await updateChart(page, canvas, () => page.getByLabel('Разбить цветом по категории').selectOption('region'))
+  await expect(canvas).toHaveScreenshot('distribution-boxplot-grouped.png')
+  await openDesign(page)
+  await openSettings(page, 'Форма распределения')
+  const settings = page.locator('.distribution-settings')
+  await updateChart(page, canvas, () => setCheckbox(settings.getByRole('checkbox', { name: 'Показывать все наблюдения' }), true))
+  await expect(canvas).toHaveScreenshot('distribution-boxplot-all-points.png')
+
+  const choose = async (name: string) => {
+    await page.getByRole('button', { name: '← Тип графика' }).click()
+    await updateChart(page, canvas, () => page.getByRole('button', { name, exact: true }).click())
+    await openDesign(page)
+    await openSettings(page, 'Форма распределения')
+  }
+  await choose('Violin plot')
+  await expect(canvas).toHaveScreenshot('distribution-violin-full.png')
+  await updateChart(page, canvas, () => page.getByLabel('Форма скрипки').selectOption('half'))
+  await updateChart(page, canvas, () => page.getByLabel('Сторона половины').selectOption('first'))
+  await expect(canvas).toHaveScreenshot('distribution-violin-half.png')
+  await updateChart(page, canvas, () => page.getByLabel('Форма скрипки').selectOption('split'))
+  await expect(canvas).toHaveScreenshot('distribution-violin-split.png')
+  await updateChart(page, canvas, () => page.getByLabel('Медиана и IQR').selectOption('lines'))
+  await expect(canvas).toHaveScreenshot('distribution-violin-lines-summary.png')
+
+  await choose('Raincloud plot')
+  await expect(canvas).toHaveScreenshot('distribution-raincloud-overlay.png')
+  await updateChart(page, canvas, () => page.getByLabel('Расположение точек').selectOption('separate'))
+  await expect(canvas).toHaveScreenshot('distribution-raincloud-separate.png')
+
+  await choose('Ridgeline plot')
+  await expect(canvas).toHaveScreenshot('distribution-ridgeline-default.png')
+  await updateChart(page, canvas, () => page.getByLabel('Перекрытие рядов, %').fill('80'))
+  await expect(canvas).toHaveScreenshot('distribution-ridgeline-overlap.png')
+  await updateChart(page, canvas, () => page.getByLabel('Ориентация').selectOption('vertical'))
+  await expect(canvas).toHaveScreenshot('distribution-shapes-vertical.png')
+})
+
 test('native Scatter and Bubble semantics stay visually stable', async ({ page }) => {
   test.setTimeout(120_000)
   await openDemoChart(page, 'Временной ряд', 'Точечный', true)

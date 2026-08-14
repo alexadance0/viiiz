@@ -4,6 +4,7 @@ import type { ChartConfig, DataTable } from '../core/types'
 import { ColorControl } from './PickerControls'
 import { NumberInput, OptionalNumberInput } from './NumberInput'
 import { SettingsCheckbox } from './SettingsCheckbox'
+import { resolveDistributionViolinSplitSelection } from '../features/chart-types/distribution/splitSelection'
 import './DistributionSettings.css'
 
 interface Props { config: ChartConfig; table: DataTable; onChange(config: ChartConfig): void }
@@ -22,10 +23,11 @@ export function DistributionSettings({ config, table, onChange }: Props) {
   const categoryStyles = config.distributionCategoryStyles ?? {}
   const visibleCategories = categories.filter((category) => categoryStyles[category]?.visible !== false)
   const layoutMode = config.distributionLayoutMode ?? 'measures'
-  const splitOptions = layoutMode === 'measures' ? visibleCategories : config.yFields
+  const split = resolveDistributionViolinSplitSelection(layoutMode, visibleCategories, config.yFields, config.distributionViolinSplitFirst, config.distributionViolinSplitSecond)
+  const splitOptions = split.options
   const optionLabel = (value: string) => layoutMode === 'measures' ? categoryStyles[value]?.label?.trim() || value : value
-  const splitFirst = splitOptions.includes(config.distributionViolinSplitFirst ?? '') ? config.distributionViolinSplitFirst! : splitOptions[0] ?? ''
-  const splitSecond = splitOptions.includes(config.distributionViolinSplitSecond ?? '') && config.distributionViolinSplitSecond !== splitFirst ? config.distributionViolinSplitSecond! : splitOptions.find((option) => option !== splitFirst) ?? ''
+  const splitFirst = split.first
+  const splitSecond = split.second
   const patchCategory = (category: string, values: Partial<NonNullable<ChartConfig['distributionCategoryStyles']>[string]>) => set({ distributionCategoryStyles: { ...categoryStyles, [category]: { ...categoryStyles[category], ...values } } })
   const moveCategory = (category: string, nextIndex: number) => {
     const order = [...categories], current = order.indexOf(category)

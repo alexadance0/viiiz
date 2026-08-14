@@ -29,8 +29,13 @@ describe('native Distribution renderer', () => {
     expect(option.yAxis.type).toBe('value')
   })
 
+  it('draws pre-resolved box and density shapes in the shared native renderer', () => {
+    expect(render('boxplot').series.some((series) => series.type === 'custom')).toBe(true)
+    for (const kind of ['violinplot', 'raincloud', 'ridgeline'] as const) expect(render(kind).series[0].type).toBe('custom')
+  })
+
   it('does not import or inspect a DataTable and leaves placement work outside renderer', () => {
     const source = readFileSync(new URL('./renderDistributionScene.ts', import.meta.url), 'utf8')
-    expect(source).not.toMatch(/DataTable|Math\.random|fitSwarm|deterministicDistributionOffset|distributionStatistics/)
+    expect(source).not.toMatch(/DataTable|Math\.random|fitSwarm|deterministicDistributionOffset|distributionStatistics|distributionDensity|distributionQuantile|bandwidth/)
   })
 })

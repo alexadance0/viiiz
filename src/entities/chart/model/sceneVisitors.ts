@@ -24,6 +24,7 @@ export function nativeMarkSelections(scene: NativeChartScene): NativeMarkSelecti
   case 'xy': return scene.plot.series.flatMap((series) => series.points.map((point) => ({ legacyKey: point.legacyKey, seriesName: series.name, displayCategory: point.displayX, displayValue: point.displayY, value: point.y, color: series.color })))
   case 'distribution': {
     const groups = new Map(scene.plot.groups.map((group) => [group.id, group]))
+    if (scene.plot.variant === 'box' || scene.plot.variant === 'violin' || scene.plot.variant === 'raincloud' || scene.plot.variant === 'ridgeline') return scene.plot.groups.flatMap((group) => group.observations.map((mark) => ({ legacyKey: mark.legacyKey, seriesName: group.sourceSeriesName, displayCategory: mark.displayCategory, displayValue: mark.displayValue, displayLabel: mark.displayLabel, value: mark.value, color: mark.marker.fill })))
     return scene.plot.layers.flatMap((layer) => layer.kind === 'observations' || layer.kind === 'counts' || layer.kind === 'barcodes' ? layer.groups.flatMap((entry) => { const group = groups.get(entry.groupId); return entry.marks.map((mark) => ({ legacyKey: mark.legacyKey, seriesName: group?.sourceSeriesName ?? '', displayCategory: mark.displayCategory, displayValue: mark.displayValue, displayLabel: mark.displayLabel, value: mark.value, color: 'marker' in mark ? mark.marker.fill : mark.stroke.color })) }) : [])
   }
   case 'line':

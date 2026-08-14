@@ -444,15 +444,48 @@ export interface DistributionLaneScene {
   groupIds: DistributionGroupId[]
 }
 
+export interface DistributionSummaryStyle { color: string; width: number; lengthRatio: number }
+export interface DistributionDensityProfile { bandwidth: number; minimum: number; maximum: number; samples: Array<{ value: number; density: number; relativeDensity: number }>; peak: number; statisticDensity: { q1: number; median: number; q3: number } }
+export interface DistributionBoxMarkScene {
+  id: LayerId
+  groupId: DistributionGroupId
+  minimumInlier: number
+  q1: number
+  median: number
+  q3: number
+  maximumInlier: number
+  boxStyle: { fillColor: string; fillOpacity: number; strokeColor: string; strokeWidth: number }
+  whiskerStyle: { color: string; width: number }
+  medianStyle: DistributionSummaryStyle & { visible: boolean }
+  tooltip: { group: string; count: number; median: string; mean: string; quartiles: string }
+}
+
+export interface DistributionDensityLayerScene {
+  kind: 'density'
+  groups: Array<{
+    id: LayerId
+    groupId: DistributionGroupId
+    mode: 'full' | 'half-first' | 'half-second' | 'ridge'
+    profile: DistributionDensityProfile
+    fill: { color: string; opacity: number }
+    outline: { color: string; width: number }
+    widthRatio: number
+    summary: { mode: 'box' | 'lines' | 'ridge'; showWhiskers: boolean; showMedian: boolean; style: DistributionSummaryStyle; boxFill: string; boxThickness: number }
+    tooltip: DistributionBoxMarkScene['tooltip']
+  }>
+}
+
 export type DistributionLayerScene =
   | { kind: 'observations'; groups: Array<{ groupId: DistributionGroupId; marks: DistributionObservationScene[] }> }
   | { kind: 'counts'; groups: Array<{ groupId: DistributionGroupId; marks: DistributionCountMarkScene[] }> }
   | { kind: 'barcodes'; groups: Array<{ groupId: DistributionGroupId; marks: DistributionBarcodeMarkScene[] }> }
   | { kind: 'summaries'; marks: Array<{ id: ElementId; groupId: DistributionGroupId; value: number; visible: boolean; statistic: 'median' | 'mean'; color: string; width: number; lengthRatio: number }> }
+  | { kind: 'boxes'; marks: DistributionBoxMarkScene[] }
+  | DistributionDensityLayerScene
 
 export interface DistributionPlotScene {
   kind: 'distribution'
-  variant: 'strip' | 'jitter' | 'beeswarm' | 'counts' | 'barcode'
+  variant: 'strip' | 'jitter' | 'beeswarm' | 'counts' | 'barcode' | 'box' | 'violin' | 'raincloud' | 'ridgeline'
   orientation: 'horizontal' | 'vertical'
   layoutMode: 'measures' | 'categories'
   valueAxis: AxisSpec

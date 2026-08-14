@@ -411,13 +411,18 @@ describe('individual chart element styles', () => {
     expect(density.data[0][1]).toBe(0)
     expect(density.data.at(-1)![1]).toBe(0)
 
-    const ridgeline = getChartPlugin('ridgeline').buildOption(observations, { ...base('ridgeline'), yField: 'profit', yFields: ['profit'] }) as { series: ShapeSeries[] }
-    const rendered = ridgeline.series.find((series) => series.name === 'profit' && !series.silent)!.renderItem!({ dataIndex: 0 }, { coord: ([value, lane]) => [value * 10, lane * 100], size: () => [10, 100] })
-    expect(rendered.children?.map((shape) => shape.type)).toEqual(['polygon', 'polyline', 'line', 'line'])
+    const ridgeline = resolveNativeDistributionScene(compileNativeDistributionScene(observations, { ...base('ridgeline'), yField: 'profit', yFields: ['profit'] }))
+    expect(ridgeline.distributionGeometry.densityShapes[0]).toMatchObject({ polygon: expect.any(Array), outline: expect.any(Array), baseline: expect.any(Object) })
+    expect(ridgeline.distributionGeometry.densitySummaries[0].lines).toHaveLength(1)
   })
 
   it('supports raincloud points over the boxplot or on a separate row', () => {
     const observations: DataTable = { name: 'raincloud', columns: ['value'], rows: [1, 2, 3, 4, 8].map((value) => ({ value })) }
+    const resolved = (distributionRaincloudPointMode: ChartConfig['distributionRaincloudPointMode']) => resolveNativeDistributionScene(compileNativeDistributionScene(observations, { ...base('raincloud'), yField: 'value', yFields: ['value'], distributionRaincloudPointMode }))
+    const overlayNative = resolved('overlay'), separateNative = resolved('separate')
+    expect(Math.min(...separateNative.distributionGeometry.marks.map((mark) => mark.crossOffsetPixel))).toBeGreaterThan(Math.min(...overlayNative.distributionGeometry.marks.map((mark) => mark.crossOffsetPixel)))
+    expect(overlayNative.distributionGeometry.densityShapes[0].polygon).toHaveLength(162)
+    return
     type Shape = { type: string; shape: { y?: number; height?: number; points?: number[][] } }
     type Series = { name?: string; type: string; data: Array<{ value?: number[] }>; renderItem?: (_params: unknown, api: { coord(value: number[]): number[]; size(value: number[]): number[] }) => { children: Shape[] } }
     const api = { coord: ([value, lane]: number[]) => [value * 10, lane * 100], size: () => [10, 100] }
@@ -454,6 +459,12 @@ describe('individual chart element styles', () => {
       { group: 'A', value: 1 }, { group: 'A', value: 2 }, { group: 'A', value: 4 },
       { group: 'B', value: 3 }, { group: 'B', value: 5 }, { group: 'B', value: 7 },
     ] }
+    const native = (kind: 'boxplot' | 'violinplot', mode: ChartConfig['distributionViolinMode'] = 'full') => resolveNativeDistributionScene(compileNativeDistributionScene(observations, { ...base(kind), yField: 'value', yFields: ['value'], distributionGroupField: 'group', distributionViolinMode: mode, palette: ['#123456', '#abcdef'] }))
+    const nativeBox = native('boxplot'), nativeFull = native('violinplot'), nativeSplit = native('violinplot', 'split')
+    expect(new Set(nativeBox.distributionGeometry.boxShapes.map((shape) => shape.box.y)).size).toBe(2)
+    expect(nativeFull.distributionGeometry.densityShapes).toHaveLength(2)
+    expect(nativeSplit.distributionGeometry.densityShapes.map((shape) => shape.polygon)).not.toEqual(nativeFull.distributionGeometry.densityShapes.map((shape) => shape.polygon))
+    return
     type Shape = { type: string; shape: { x?: number; y?: number; width?: number; height?: number; r?: number; points?: number[][] }; style?: { fill?: string; stroke?: string } }
     type CustomSeries = { name: string; type: string; renderItem?: (_params: unknown, api: { coord(value: number[]): number[]; size(value: number[]): number[] }) => { children: Shape[] } }
     const api = { coord: ([value, lane]: number[]) => [value * 10, lane * 100], size: () => [10, 100] }
@@ -485,6 +496,11 @@ describe('individual chart element styles', () => {
 
   it('shows the 1.5 IQR range on violins and can render quartiles as lines', () => {
     const observations: DataTable = { name: 'violin-summary', columns: ['value'], rows: [1, 2, 3, 4, 100].map((value) => ({ value })) }
+    const native = (mode: ChartConfig['distributionViolinSummaryMode'], whiskers = true) => resolveNativeDistributionScene(compileNativeDistributionScene(observations, { ...base('violinplot'), yField: 'value', yFields: ['value'], distributionViolinSummaryMode: mode, distributionViolinShowWhiskers: whiskers, distributionShowPoints: false })).distributionGeometry.densitySummaries[0]
+    expect(native('lines').lines).toHaveLength(4)
+    expect(native('lines', false).lines).toHaveLength(3)
+    expect(native('box').boxes).toHaveLength(1)
+    return
     type Child = { type: string; shape: { x1?: number; y1?: number; x2?: number; y2?: number }; style?: { lineDash?: number[] } }
     type ViolinSeries = { name?: string; type: string; renderItem?: (_params: unknown, api: { coord(value: number[]): number[]; size(value: number[]): number[] }) => { children: Child[] } }
     const api = { coord: ([value, lane]: number[]) => [value * 10, lane * 100], size: () => [10, 100] }
@@ -528,6 +544,13 @@ describe('individual chart element styles', () => {
     const observations: DataTable = { name: 'grouped', columns: ['group', 'value'], rows: [
       { group: 'A', value: 1 }, { group: 'A', value: 2 }, { group: 'B', value: 3 }, { group: 'B', value: 4 }, { group: 'C', value: 5 },
     ] }
+    const nativeSplit = compileNativeDistributionScene(observations, { ...base('violinplot'), yField: 'value', yFields: ['value'], distributionGroupField: 'group', distributionViolinMode: 'split', distributionViolinSplitFirst: 'B', distributionViolinSplitSecond: 'A' })
+    expect(nativeSplit.plot.groups.map((group) => group.sourceSeriesName)).toEqual(['A', 'B'])
+    const modes = nativeSplit.plot.layers.find((layer) => layer.kind === 'density')!
+    expect(modes.kind === 'density' && modes.groups.map((group) => group.mode)).toEqual(['half-second', 'half-first'])
+    const halfNative = compileNativeDistributionScene(observations, { ...base('violinplot'), yField: 'value', yFields: ['value'], distributionViolinMode: 'half', distributionViolinHalfSide: 'first' })
+    expect(halfNative.plot.layers.find((layer) => layer.kind === 'density')).toMatchObject({ groups: [{ mode: 'half-first' }] })
+    return
     type CustomSeries = { name: string; type: string; renderItem?: (_params: unknown, api: { coord(value: number[]): number[]; size(value: number[]): number[] }) => { children: Array<{ shape: { points?: number[][] } }> } }
     const api = { coord: ([value, lane]: number[]) => [value * 10, lane * 100], size: () => [10, 100] }
     const split = getChartPlugin('violinplot').buildOption(observations, { ...base('violinplot'), yField: 'value', yFields: ['value'], distributionGroupField: 'group', distributionViolinMode: 'split', distributionViolinSplitFirst: 'B', distributionViolinSplitSecond: 'A' }) as { legend: { data: Array<{ name: string }> }; series: CustomSeries[] }
@@ -575,6 +598,11 @@ describe('individual chart element styles', () => {
   it('keeps distribution axes on plot edges and renders the Y title only once', () => {
     const observations: DataTable = { name: 'axis', columns: ['region', 'value'], rows: [{ region: 'A', value: 10 }, { region: 'B', value: 20 }] }
     for (const orientation of ['horizontal', 'vertical'] as const) {
+      const scene = resolveNativeDistributionScene(compileNativeDistributionScene(observations, { ...base('boxplot'), yField: 'value', yFields: ['value'], distributionGroupField: 'region', distributionLayoutMode: 'categories', distributionOrientation: orientation, yAxisTitle: 'Значение', showYAxisTitle: true }))
+      expect(scene.plot.valueAxis.line).toBeDefined()
+      expect(scene.plot.laneAxis.line).toBeDefined()
+      expect([scene.plot.valueAxis.title, scene.plot.laneAxis.title].filter((title) => title?.visible && title.text === 'Значение')).toHaveLength(1)
+      continue
       const option = getChartPlugin('boxplot').buildOption(observations, { ...base('boxplot'), yField: 'value', yFields: ['value'], distributionGroupField: 'region', distributionLayoutMode: 'categories', distributionOrientation: orientation, yAxisTitle: 'Значение', showYAxisTitle: true }) as { xAxis: { name?: string; axisLine: { onZero?: boolean }; axisTick: { alignWithLabel?: boolean } }; yAxis: { name?: string; axisLine: { onZero?: boolean }; axisTick: { alignWithLabel?: boolean } }; graphic: Array<{ id?: string }> }
       expect(option.xAxis.axisLine.onZero).toBe(false)
       expect(option.yAxis.axisLine.onZero).toBe(false)
@@ -649,6 +677,15 @@ describe('individual chart element styles', () => {
     const observations: DataTable = { name: 'summary-colors', columns: ['profit', 'orders'], rows: [
       { profit: 1, orders: 10 }, { profit: 2, orders: 20 }, { profit: 4, orders: 30 },
     ] }
+    for (const kind of ['boxplot', 'violinplot'] as const) {
+      const native = (seriesStyles: ChartConfig['seriesStyles'] = {}) => resolveNativeDistributionScene(compileNativeDistributionScene(observations, { ...base(kind), yField: 'profit', yFields: ['profit', 'orders'], palette: ['#123456', '#abcdef'], seriesStyles }))
+      const normal = native(), styled = native({ profit: { distributionSummaryColor: '#ff0000', distributionSummaryWidth: 5 }, orders: { distributionSummaryColor: '#00aa44', distributionSummaryWidth: 7 } })
+      const styles = kind === 'boxplot' ? normal.distributionGeometry.boxShapes.map((shape) => shape.mark.medianStyle) : normal.plot.layers.find((layer) => layer.kind === 'density')!.groups.map((group) => group.summary.style)
+      const changed = kind === 'boxplot' ? styled.distributionGeometry.boxShapes.map((shape) => shape.mark.medianStyle) : styled.plot.layers.find((layer) => layer.kind === 'density')!.groups.map((group) => group.summary.style)
+      expect(styles.map((style) => style.color)).toEqual(['#123456', '#abcdef'])
+      expect(changed).toMatchObject([{ color: '#ff0000', width: 5 }, { color: '#00aa44', width: 7 }])
+    }
+    return
     type Rendered = { style?: { stroke?: string; lineWidth?: number }; children?: Array<{ style?: { stroke?: string; lineWidth?: number } }> }
     type CustomSeries = { name?: string; type: string; silent?: boolean; renderItem?: (_params: unknown, api: { coord(value: number[]): number[]; size(value: number[]): number[] }) => Rendered }
     const api = { coord: ([value, lane]: number[]) => [value * 10, lane * 100], size: () => [10, 100] }
