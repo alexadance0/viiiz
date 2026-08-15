@@ -13,7 +13,7 @@ Phase 8 started from `b089ab3b5a0eeda0d242ae10482f91496340b82b` and completed in
 
 Phase 9A started from `70bb42f6aa024a92e6f765d08b200fd7e723e85c` and its native Distribution implementation completed in `abef01b4d646512ead007420b62ec7b308694ed5`.
 
-Migrated kinds: the six ordinary bar kinds plus `line`, `spline`, `step-line`, `indexed-line`, `seasonal-line`, `area`, `stacked-area`, `normalized-stacked-area`, `slope`, `moving-average-line`, `moving-average-scatter`, `range-line`, `step-range-line`, `confidence-line`, `scatter`, `bubble`, `strip-plot`, `jitter-plot`, `beeswarm`, `counts-plot`, and `barcode-plot`.
+Migrated kinds: the six ordinary bar kinds plus `waterfall`, `butterfly`, `line`, `spline`, `step-line`, `indexed-line`, `seasonal-line`, `area`, `stacked-area`, `normalized-stacked-area`, `slope`, `moving-average-line`, `moving-average-scatter`, `range-line`, `step-range-line`, `confidence-line`, `scatter`, `bubble`, and all eleven Distribution kinds.
 
 ## Render path
 
@@ -49,7 +49,7 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 - `buildOption` remains on the plugin interface for unmigrated callers. For ordinary bars its implementation is a native compile/layout/render compatibility facade, not the legacy cartesian builder.
 - Slope keeps persisted `slopeXValues`, family flags, change-label/direction-color settings, legend/direct settings, series styles, callback keys, annotations, and decorations. Old documents omit the new optional fields and retain the previous appearance because change labels and direction colors default off. It does not expose ordinary legend/direct guides, and its local guide/label graphics never create fake semantic or renderer series.
 - Interval groups retain persisted field triples, fill settings, `showBounds`, source styles, element override keys, and auto-grouping. Hidden Confidence bounds remain in domains and band validation but are absent from guides, value-label targets, tooltips, and selection visitors. Bands are silent derived layers and are never editable data rows.
-- Waterfall, butterfly, lollipop, dumbbell, heatmap, and treemap retain their legacy compilers.
+- Lollipop, dumbbell, heatmap, and treemap retain their legacy compilers.
 
 ## Tests added
 
@@ -65,7 +65,13 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 
 The shared legacy `cartesian()` source still contains unreachable migrated-family generic code because remaining specialized comparison/relationship charts share the function. The moving-average branches and the complete interval builder—including fake Confidence stacks and custom Range bands—have been deleted. The next safe removal is to split the remaining specialized builders, then delete unreachable generic conditions and compatibility option-shape tests.
 
-Waterfall, butterfly, lollipop, dumbbell, heatmap, and treemap remain separate migrations.
+Lollipop, dumbbell, heatmap, and treemap remain separate migrations.
+
+## Wave 3 native Waterfall and Butterfly
+
+Wave 3 started from `57a9357`; implementation completed in `db638ea`. Waterfall and Butterfly have distinct semantic plot discriminants, compilers, authoritative layouts, and ECharts adapters. Waterfall resolves cumulative floating bars, a stable synthetic total, connectors, and labels. Butterfly resolves independent side stacks, symmetric magnitude axes, mirrored rectangles, and center/left/right category rails. The outer canvas consumes resolved mark-hit rectangles for callback compatibility; it no longer reconstructs either family's bars, connectors, or split axes.
+
+Focused verification covers compiler identity/semantics, layout determinism, renderer isolation, existing interaction parity, production build, and six visual baselines (three per family). Both legacy entry points are throwing guards.
 
 ## Phase 8 native XY
 

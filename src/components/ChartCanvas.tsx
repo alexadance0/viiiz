@@ -12,7 +12,7 @@ import {
 } from 'echarts/components'
 import { SVGRenderer } from 'echarts/renderers'
 import { loadEchartsForKind } from './echarts/loadEchartsForKind'
-import { getChartPlugin, getSeriesColor, hyphenateTreemapText, prepareButterflyChartData, prepareVisibleChartData, waterfallLabelPlacement, waterfallSteps, waterfallValueLabel } from '../core/chartRegistry'
+import { getChartPlugin, getSeriesColor, hyphenateTreemapText, prepareVisibleChartData } from '../core/chartRegistry'
 import { barSeriesGeometry, valueLabelBoxPlacement } from '../core/chartLabels'
 import { nearestPixelIndex, prepareChartData, segmentEndpointIndex } from '../core/chartData'
 import { sanitizeAnnotationHtml } from '../core/annotationHtml'
@@ -173,9 +173,8 @@ function directLabelWidth(config: ChartConfig, names: string[]) {
 // oxlint-disable-next-line react/only-export-components -- exported for a renderer regression test
 export function directLegendGraphics(instance: echarts.ECharts, table: DataTable, config: ChartConfig, onFocus?: (section: ChartSettingsSection) => void, selected = false) {
   if (!config.showDirectLabels || config.kind === 'scatter' || config.kind === 'bubble') return []
-  const preparedRaw = config.kind === 'butterfly' ? prepareButterflyChartData(table, config) : prepareVisibleChartData(table, config)
+  const preparedRaw = prepareVisibleChartData(table, config)
   const directSeries = preparedRaw.series.map((series, seriesIndex) => ({ series, seriesIndex }))
-  const butterflyLeftFields = new Set(config.butterflyLeftFields?.length ? config.butterflyLeftFields : config.yFields.slice(0, 1))
   const visibleSeries = directSeries.filter(({ series }) => config.seriesStyles[series.name]?.showDirectLabel !== false)
   if (!visibleSeries.length) return []
   if (isHorizontalBar(config)) {
@@ -198,11 +197,10 @@ export function directLegendGraphics(instance: echarts.ECharts, table: DataTable
       if (value == null) return []
       const previousValue = stacked ? preparedRaw.series.slice(0, seriesIndex).reduce((sum, candidate) => {
         const part = candidate.data[index] ?? 0
-        const sameSide = config.kind === 'butterfly' ? butterflyLeftFields.has(candidate.name) === butterflyLeftFields.has(series.name) : Math.sign(part) === Math.sign(value)
-        return sameSide ? sum + part : sum
+        return Math.sign(part) === Math.sign(value) ? sum + part : sum
       }, 0) : 0
       const plottedValue = stacked ? previousValue + value : value
-      const axisIndex = config.kind === 'butterfly' && !butterflyLeftFields.has(series.name) ? 1 : 0
+      const axisIndex = 0
       let startX: unknown, endX: unknown, categoryY: unknown
       try { startX = instance.convertToPixel({ xAxisIndex: axisIndex }, previousValue); endX = instance.convertToPixel({ xAxisIndex: axisIndex }, plottedValue); categoryY = instance.convertToPixel({ yAxisIndex: axisIndex }, index) } catch { return [] }
       if (typeof startX !== 'number' || typeof endX !== 'number' || typeof categoryY !== 'number' || !Number.isFinite(startX) || !Number.isFinite(endX) || !Number.isFinite(categoryY)) return []
@@ -306,82 +304,10 @@ export function directLegendGraphics(instance: echarts.ECharts, table: DataTable
   })
 }
 const nativeFamilyOwnsGeometry = (kind: ChartConfig['kind']): boolean => kind === 'waterfall' || kind === 'butterfly'
-function valueLabelHitGraphics(instance: echarts.ECharts, table: DataTable, config: ChartConfig, allSelected: boolean, onSelect?: (selection: ChartElementSelection) => void, onFocus?: (section: ChartSettingsSection) => void, selectedElementKey?: string | null, selectedElementTarget?: ChartElementSelection['target']) {
+function valueLabelHitGraphics(instance: echarts.ECharts, table: DataTable, config: ChartConfig, allSelected: boolean, onSelect?: (selection: ChartElementSelection) => void, onFocus?: (section: ChartSettingsSection) => void) {
   if (nativeFamilyOwnsGeometry(config.kind)) return []
-  if (config.kind === 'waterfall') {
-    const prepared = prepareVisibleChartData(table, config), source = prepared.series[0]
-    if (!source) return []
-    const totalLabel = config.waterfallTotalLabel?.trim() || 'Итого'
-    const { steps, total } = waterfallSteps(source.data)
-    const entries = [
-      ...steps.map((step, index) => ({ ...step, category: prepared.categories[index], label: String(prepared.categories[index] ?? ''), total: false })),
-      ...((config.waterfallShowTotal ?? true) ? [{ delta: total, start: 0, end: total, category: totalLabel, label: totalLabel, total: true }] : []),
-    ]
-    const categoryPixels = entries.flatMap((_, index) => {
-      try {
-        const pixel = Number(instance.convertToPixel({ xAxisIndex: 0 }, index))
-        return Number.isFinite(pixel) ? [pixel] : []
-      } catch { return [] }
-    })
-    const plot = chartPlotBounds(instance, table, config)
-    const band = categoryPixels.length > 1
-      ? Math.min(...categoryPixels.slice(1).map((pixel, index) => Math.abs(pixel - categoryPixels[index])).filter((value) => value > 0))
-      : ((plot?.right ?? instance.getWidth()) - (plot?.left ?? 0)) / Math.max(1, entries.length)
-    const width = Math.max(1, band * Math.max(.1, Math.min(1, (config.barWidth ?? 68) / 100)))
-    return entries.flatMap((entry, index) => {
-      if (entry.delta == null) return []
-      const key = `${source.name}\u001f${entry.category instanceof Date ? entry.category.toISOString() : `${typeof entry.category}:${String(entry.category)}`}`
-      const color = config.elementStyles[key]?.color ?? (entry.total ? config.waterfallTotalColor ?? '#6956e8' : entry.delta >= 0 ? config.waterfallIncreaseColor ?? '#36a476' : config.waterfallDecreaseColor ?? '#db5a5a')
-      let x: number, startY: number, endY: number
-      try {
-        x = Number(instance.convertToPixel({ xAxisIndex: 0 }, index))
-        startY = Number(instance.convertToPixel({ yAxisIndex: 0 }, entry.start))
-        endY = Number(instance.convertToPixel({ yAxisIndex: 0 }, entry.end))
-      } catch { return [] }
-      if (![x, startY, endY].every(Number.isFinite)) return []
-      const select = (target?: ChartElementSelection['target']) => {
-        onSelect?.({ key, seriesName: source.name, category: entry.label, value: waterfallValueLabel(entry.delta!, entry.end, entry.total, config), color, target })
-        onFocus?.('element')
-      }
-      const graphics: Record<string, unknown>[] = [{
-        id: `waterfall-hit-${index}`,
-        type: 'rect',
-        z: 130,
-        cursor: 'pointer',
-        shape: { x: x - width / 2, y: Math.min(startY, endY), width, height: Math.max(1, Math.abs(startY - endY)) },
-        style: { fill: 'rgba(0,0,0,0)' },
-        onclick: () => select(),
-      }]
-      const element = config.elementStyles[key]
-      const showLabel = (element?.showLabel ?? config.showValues) && (!entry.total || (config.waterfallShowTotalValue ?? true))
-      if (!showLabel) return graphics
-      const style = element?.valueText ?? config.valueText
-      const label = element?.label || waterfallValueLabel(entry.delta, entry.end, entry.total, config)
-      const lineHeight = Math.round(style.size * style.lineHeight / 100)
-      const labelWidth = Math.max(...label.split('\n').map((line) => measureTextWidth(line, style.size, style.fontFamily, style.weight)))
-      const labelHeight = lineHeight * label.split('\n').length
-      const labelStride = Math.max(1, Math.ceil((labelWidth + 8) / Math.max(1, band)))
-      if (element?.showLabel !== true && (config.valueLabelHideOverlap ?? false) && !entry.total && index % labelStride !== 0) return graphics
-      const requestedPosition = element?.waterfallLabelPosition ?? config.valueLabelPosition ?? 'auto'
-      const position = entry.total ? requestedPosition === 'bottom' ? 'top' : requestedPosition === 'inside-bottom' ? 'inside-top' : requestedPosition : requestedPosition
-      const placement = waterfallLabelPlacement(startY, endY, width, labelWidth, labelHeight, position, config.waterfallLabelGap ?? 6)
-      const y = placement.verticalAlign === 'top' ? placement.y : placement.verticalAlign === 'bottom' ? placement.y - labelHeight : placement.y - labelHeight / 2
-      graphics.push({
-        id: `value-label-hit-waterfall-${index}`,
-        type: 'rect',
-        z: 131,
-        cursor: 'pointer',
-        shape: { x: x - labelWidth / 2 - 4, y: y - 2, width: labelWidth + 8, height: labelHeight + 4, r: 5 },
-        style: selectedElementKey === key && selectedElementTarget === 'value-label'
-          ? { fill: 'rgba(0,0,0,0)', stroke: '#6956e8', lineWidth: 1 }
-          : { fill: 'rgba(0,0,0,0)' },
-        onclick: () => select('value-label'),
-      })
-      return graphics
-    })
-  }
   if (config.kind === 'treemap' || !config.showValues && !Object.values(config.elementStyles).some((style) => style.showLabel)) return []
-  const prepared = config.kind === 'butterfly' ? prepareButterflyChartData(table, config) : prepareVisibleChartData(table, config), horizontal = isHorizontalBar(config)
+  const prepared = prepareVisibleChartData(table, config), horizontal = isHorizontalBar(config)
   const configured = config.valueLabelPosition ?? 'auto'
   const absorption = isBarChart(config.kind) && config.kind !== 'lollipop' && config.kind !== 'horizontal-lollipop' && Boolean(config.barValueLabelAbsorption)
   const categoryPixels = absorption ? prepared.categories.flatMap((_, index) => {
@@ -402,15 +328,13 @@ function valueLabelHitGraphics(instance: echarts.ECharts, table: DataTable, conf
     const category = prepared.categories[dataIndex], key = `${series.name}\u001f${category instanceof Date ? category.toISOString() : `${typeof category}:${String(category)}`}`
     const override = config.elementStyles[key]
     if (!(override?.showLabel ?? config.showValues)) return []
-    const style = override?.valueText ?? config.valueText, label = override?.label || formatChartNumber(config.kind === 'butterfly' ? Math.abs(value) : value, config)
+    const style = override?.valueText ?? config.valueText, label = override?.label || formatChartNumber(value, config)
     const previousValue = isStackedChart(config.kind) ? prepared.series.slice(0, seriesIndex).reduce((sum, candidate) => {
       const part = candidate.data[dataIndex] ?? 0
-      const leftFields = config.butterflyLeftFields?.length ? config.butterflyLeftFields : config.yFields.slice(0, 1)
-      const sameSide = config.kind === 'butterfly' ? leftFields.includes(candidate.name) === leftFields.includes(series.name) : Math.sign(part) === Math.sign(value)
-      return sameSide ? sum + part : sum
+      return Math.sign(part) === Math.sign(value) ? sum + part : sum
     }, 0) : 0
     const plottedValue = isStackedChart(config.kind) ? previousValue + value : value
-    const axisIndex = config.kind === 'butterfly' && !(config.butterflyLeftFields?.length ? config.butterflyLeftFields : config.yFields.slice(0, 1)).includes(series.name) ? 1 : 0
+    const axisIndex = 0
     let categoryPixel: number, valuePixel: number
     try {
       categoryPixel = Number(instance.convertToPixel(horizontal ? { yAxisIndex: axisIndex } : { xAxisIndex: 0 }, dataIndex))
@@ -448,188 +372,6 @@ export function butterflyCategoryLayout(table: DataTable, config: ChartConfig) {
   const maximumGap = Math.max(60, (config.canvasWidth ?? 1000) * .34)
   const gap = Math.min(naturalGap, maximumGap)
   return { prepared, style, labels, gap, wrapped: naturalGap > maximumGap }
-}
-export function splitCenteredButterflyAxes(option: Record<string, unknown>, table: DataTable, config: ChartConfig) {
-  if (config.kind !== 'butterfly' || (config.butterflyCategoryPosition ?? 'center') !== 'center' || Array.isArray(option.grid)) return
-  const grid = option.grid as { left?: number; right?: number; top?: number; bottom?: number; containLabel?: boolean } | undefined
-  const xAxis = option.xAxis as Record<string, unknown> | undefined
-  const yAxis = option.yAxis as Record<string, unknown> | undefined
-  if (!grid || !xAxis || !yAxis) return
-  const canvasWidth = config.canvasWidth ?? 1000
-  const valueLabelStyle = config.yAxisLabelText ?? config.axisLabelText
-  const axisFormatter = (xAxis.axisLabel as { formatter?: (value: number) => string } | undefined)?.formatter
-  const extent = Math.max(Math.abs(Number(xAxis.min) || 0), Math.abs(Number(xAxis.max) || 0), 1)
-  const extentLabel = (direction: -1 | 1) => {
-    const value = direction * extent
-    return axisFormatter ? String(axisFormatter(value)) : String(Math.abs(value))
-  }
-  const edgeLabelHalf = (direction: -1 | 1) => (config.showYAxisLabels ?? true)
-    ? Math.ceil(measureTextWidth(extentLabel(direction), valueLabelStyle.size, valueLabelStyle.fontFamily, valueLabelStyle.weight) / 2)
-    : 0
-  const left = Number(grid.left ?? 0) + edgeLabelHalf(-1), right = Number(grid.right ?? 0) + edgeLabelHalf(1)
-  const gap = butterflyCategoryLayout(table, config).gap
-  const half = Math.max(1, (canvasWidth - left - right - gap) / 2)
-  const rightGridLeft = left + half + gap
-  const leftNames = new Set(config.butterflyLeftFields?.length ? config.butterflyLeftFields : config.yFields.slice(0, 1))
-  option.grid = [
-    { ...grid, left, right: canvasWidth - left - half },
-    { ...grid, left: rightGridLeft, right },
-  ]
-  option.xAxis = [
-    { ...xAxis, gridIndex: 0, min: 0, max: extent, inverse: true },
-    { ...xAxis, gridIndex: 1, min: 0, max: extent },
-  ]
-  option.yAxis = [
-    { ...yAxis, gridIndex: 0, position: 'right', axisLabel: { ...(yAxis.axisLabel as object), show: false }, axisLine: { ...(yAxis.axisLine as object), onZero: true } },
-    { ...yAxis, gridIndex: 1, position: 'left', axisLabel: { ...(yAxis.axisLabel as object), show: false }, axisLine: { ...(yAxis.axisLine as object), onZero: true } },
-  ]
-  const stackedBars: Array<{ sourceName: string; axisIndex: number; values: Array<number | null> }> = []
-  ;(option.series as Array<Record<string, unknown>> | undefined)?.forEach((series) => {
-    const firstPoint = (series.data as Array<{ sourceSeriesName?: string }> | undefined)?.[0]
-    const sourceName = String(series.segmentOf ?? firstPoint?.sourceSeriesName ?? series.name ?? '').replace(/^__bar-value-labels:/, '')
-    const axisIndex = leftNames.has(sourceName) ? 0 : 1
-    series.xAxisIndex = axisIndex
-    series.yAxisIndex = axisIndex
-    if (series.type === 'bar') {
-      const points = (series.data as Array<Record<string, unknown> | null> | undefined) ?? []
-      const values = points.map((point) => typeof point?.value === 'number' ? point.value : null)
-      const previous = values.map((_value, index) => stackedBars.filter((item) => item.axisIndex === axisIndex).reduce((sum, item) => sum + (item.values[index] ?? 0), 0))
-      const seriesStyle = series.itemStyle as Record<string, unknown> | undefined
-      const seriesLabel = series.label as Record<string, unknown> | undefined
-      series.type = 'custom'
-      series.coordinateSystem = 'cartesian2d'
-      series.stack = undefined
-      series.renderItem = (params: { dataIndex: number }, api: { value(index: number): number; coord(value: [number, number]): [number, number]; size(value: [number, number]): [number, number] }) => {
-        const index = params.dataIndex, value = api.value(1)
-        if (!Number.isFinite(value)) return null
-        const start = api.coord([previous[index], index]), end = api.coord([previous[index] + value, index])
-        const band = Math.abs(api.size([0, 1])[1])
-        const height = Math.max(1, band * Math.max(.1, Math.min(1, (config.barWidth ?? 68) / 100)))
-        const point = points[index] ?? {}, itemStyle = point.itemStyle as Record<string, unknown> | undefined
-        const rect = {
-          type: 'rect',
-          shape: { x: Math.min(start[0], end[0]), y: end[1] - height / 2, width: Math.max(0, Math.abs(end[0] - start[0])), height, r: config.barBorderRadius ?? 0 },
-          style: { fill: itemStyle?.color ?? seriesStyle?.color, opacity: itemStyle?.opacity ?? seriesStyle?.opacity ?? 1, stroke: itemStyle?.borderColor ?? seriesStyle?.borderColor, lineWidth: itemStyle?.borderWidth ?? seriesStyle?.borderWidth ?? 0 },
-        }
-        const label = (point.label as Record<string, unknown> | undefined) ?? seriesLabel
-        if (!label?.show) return rect
-        const formatter = label.formatter
-        const text = typeof formatter === 'function' ? String(formatter({ value: [index, value], dataIndex: index })) : typeof formatter === 'string' ? formatter : String(point.displayValue ?? value)
-        const position = String(label.position ?? (axisIndex === 0 ? 'left' : 'right')), distance = Number(label.distance ?? 5)
-        const inside = position.startsWith('inside')
-        const x = position === 'left' || position === 'insideLeft' ? Math.min(start[0], end[0]) + (inside ? distance : -distance)
-          : position === 'right' || position === 'insideRight' ? Math.max(start[0], end[0]) + (inside ? -distance : distance)
-          : (start[0] + end[0]) / 2
-        const align = position === 'left' ? 'right' : position === 'right' ? 'left' : position === 'insideLeft' ? 'left' : position === 'insideRight' ? 'right' : 'center'
-        return { type: 'group', children: [rect, { type: 'text', style: { x, y: end[1], text, fill: label.color, fontFamily: label.fontFamily, fontSize: label.fontSize, fontWeight: label.fontWeight, fontStyle: label.fontStyle, lineHeight: label.lineHeight, align, verticalAlign: 'middle' } }] }
-      }
-      series.data = points.map((point, index) => ({ ...point, value: [index, values[index]] }))
-      stackedBars.push({ sourceName, axisIndex, values })
-    }
-  })
-}
-export function butterflyCategoryGraphics(instance: echarts.ECharts, table: DataTable, config: ChartConfig, selectedSettingsSection?: ChartSettingsSection | null, onSelect?: (selection: ChartElementSelection) => void, onFocus?: (section: ChartSettingsSection) => void, selectedCategory?: string | null, clean = false) {
-  if (config.kind !== 'butterfly' || config.showXAxisLabels === false || (config.butterflyCategoryPosition ?? 'center') !== 'center') return []
-  const { prepared, style, labels, gap, wrapped } = butterflyCategoryLayout(table, config)
-  let leftZero: unknown, rightZero: unknown
-  try {
-    leftZero = instance.convertToPixel({ xAxisIndex: 0 }, 0)
-    rightZero = instance.convertToPixel({ xAxisIndex: 1 }, 0)
-  } catch { return [] }
-  if (typeof leftZero !== 'number' || typeof rightZero !== 'number' || !Number.isFinite(leftZero) || !Number.isFinite(rightZero)) return []
-  const centerX = (leftZero + rightZero) / 2
-  const points = prepared.categories.map((_, index) => {
-    let y: unknown
-    try { y = instance.convertToPixel({ yAxisIndex: 0 }, index) } catch { return null }
-    return typeof y === 'number' && Number.isFinite(y) ? [centerX, y] as [number, number] : null
-  })
-  const validPoints = points.filter((point): point is [number, number] => Boolean(point))
-  if (!validPoints.length) return []
-  const band = validPoints.length > 1 ? Math.min(...validPoints.slice(1).map((point, index) => Math.abs(point[1] - validPoints[index][1]))) : instance.getHeight() / Math.max(1, prepared.categories.length)
-  const top = Math.min(...validPoints.map((point) => point[1])) - band / 2
-  const bottom = Math.max(...validPoints.map((point) => point[1])) + band / 2
-  return [{
-    id: 'butterfly-category-column',
-    type: 'rect',
-    z: 114,
-    silent: true,
-    shape: { x: centerX - gap / 2, y: top, width: gap, height: bottom - top },
-    style: { fill: config.canvasBackground ?? '#ffffff' },
-  }, ...labels.flatMap(({ key, label }, index) => {
-    const point = points[index]
-    if (!point) return []
-    return [{
-      id: `butterfly-category-${index}`,
-      type: 'text',
-      z: 120,
-      silent: clean,
-      cursor: clean ? undefined : 'pointer',
-      style: {
-        x: point[0],
-        y: point[1],
-        text: label,
-        fill: style.color,
-        fontFamily: style.fontFamily,
-        fontSize: style.size,
-        fontWeight: style.weight,
-        fontStyle: style.italic ? 'italic' : 'normal',
-        lineHeight: Math.round(style.size * style.lineHeight / 100),
-        ...(wrapped ? { width: gap - 16, overflow: 'break' } : {}),
-        align: 'center',
-        verticalAlign: 'middle',
-        backgroundColor: config.canvasBackground ?? '#ffffff',
-        padding: [2, 7],
-        opacity: !clean && selectedCategory === key ? 0 : 1,
-      },
-      onclick: clean ? undefined : () => {
-        if (selectedSettingsSection !== 'y-axis-labels') { onFocus?.('y-axis-labels'); return }
-        onSelect?.({ key: `category-label:y:${key}`, seriesName: '', category: key, value: label, target: 'category-label', axis: 'y' })
-      },
-    }]
-  })]
-}
-export function butterflyBarHitGraphics(instance: echarts.ECharts, table: DataTable, config: ChartConfig, selectedSeriesName?: string | null, onSeriesSelect?: (selection: ChartSeriesSelection) => void, onSelect?: (selection: ChartElementSelection) => void, onFocus?: (section: ChartSettingsSection) => void) {
-  if (config.kind !== 'butterfly') return []
-  const prepared = prepareButterflyChartData(table, config)
-  const leftFields = new Set(config.butterflyLeftFields?.length ? config.butterflyLeftFields : config.yFields.slice(0, 1))
-  const categoryPixels = prepared.categories.map((_, index) => Number(instance.convertToPixel({ yAxisIndex: 0 }, index)))
-  const band = categoryPixels.length > 1 ? Math.min(...categoryPixels.slice(1).map((pixel, index) => Math.abs(pixel - categoryPixels[index]))) : instance.getHeight() / Math.max(1, prepared.categories.length)
-  const height = Math.max(1, band * Math.max(.1, Math.min(1, (config.barWidth ?? 68) / 100)))
-  return prepared.series.flatMap((series, seriesIndex) => series.data.flatMap((value, dataIndex) => {
-    if (value == null) return []
-    const category = prepared.categories[dataIndex]
-    const axisIndex = leftFields.has(series.name) ? 0 : 1
-    const previous = prepared.series.slice(0, seriesIndex).reduce((sum, candidate) => {
-      const candidateValue = candidate.data[dataIndex] ?? 0
-      return leftFields.has(candidate.name) === leftFields.has(series.name) ? sum + candidateValue : sum
-    }, 0)
-    const start = Number(instance.convertToPixel({ xAxisIndex: axisIndex }, previous))
-    const end = Number(instance.convertToPixel({ xAxisIndex: axisIndex }, previous + value))
-    const zero = Number(instance.convertToPixel({ xAxisIndex: axisIndex }, 0))
-    const y = Number(instance.convertToPixel({ yAxisIndex: axisIndex }, dataIndex))
-    if (![start, end, zero, y].every(Number.isFinite)) return []
-    const visibleStart = start
-    const visibleEnd = end
-    const key = `${series.name}\u001f${category instanceof Date ? category.toISOString() : `${typeof category}:${String(category)}`}`
-    const displayCategory = category instanceof Date ? formatTimeValue(category, table.timeProfiles?.[config.xField], config.dateLabelFormat) : String(category ?? '')
-    return [{
-      id: `butterfly-hit-${seriesIndex}-${dataIndex}`,
-      type: 'rect',
-      z: 115,
-      cursor: 'pointer',
-      shape: { x: Math.min(visibleStart, visibleEnd), y: y - height / 2, width: Math.max(1, Math.abs(visibleEnd - visibleStart)), height },
-      style: { fill: 'rgba(0,0,0,0)' },
-      onclick: () => {
-        if (selectedSeriesName !== series.name) {
-          onSeriesSelect?.({ name: series.name, color: getSeriesColor(config, series.name, seriesIndex) })
-          onFocus?.('series')
-          return
-        }
-        onSelect?.({ key, seriesName: series.name, category: displayCategory, value: formatChartNumber(Math.abs(value), config) })
-        onFocus?.('element')
-      },
-    }]
-  }))
 }
 function cloneChartOption<T>(value: T): T {
   if (Array.isArray(value)) return value.map((item) => cloneChartOption(item)) as T
@@ -1648,7 +1390,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         cleanOption.graphic = [...(Array.isArray(cleanOption.graphic) ? cleanOption.graphic : []), ...cleanDirect]
         instance.setOption({ graphic: option.graphic }, { replaceMerge: ['graphic'] })
       }
-      const valueLabelHits = valueLabelHitGraphics(instance, table, config, selectedSettingsSection === 'values', onSelect, onSettingsFocus, selectedElementKey, selectedElementTarget)
+      const valueLabelHits = valueLabelHitGraphics(instance, table, config, selectedSettingsSection === 'values', onSelect, onSettingsFocus)
       if (valueLabelHits.length) {
         option.graphic = [...(Array.isArray(option.graphic) ? option.graphic : []), ...valueLabelHits]
         instance.setOption({ graphic: option.graphic }, { replaceMerge: ['graphic'] })
@@ -1734,55 +1476,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const pointerCategory = (pointer: [number, number]) => pointer[horizontalBar ? 1 : 0]
       const nearestIndex = (pointer: [number, number]) => nearestPixelIndex(categoryPixels, pointerCategory(pointer))
       const clickedSegmentIndex = (pointer: [number, number]) => segmentEndpointIndex(categoryPixels, pointerCategory(pointer))
-      const selectWaterfallAt = (pointer: [number, number], target?: ChartElementSelection['target']) => {
-        if (config.kind !== 'waterfall') return
-        const source = prepared.series[0]
-        if (!source) return
-        const { steps, total } = waterfallSteps(source.data)
-        const totalLabel = config.waterfallTotalLabel?.trim() || 'Итого'
-        const entries = [
-          ...steps.map((step, index) => ({ ...step, category: prepared.categories[index], label: String(prepared.categories[index] ?? ''), total: false })),
-          ...((config.waterfallShowTotal ?? true) ? [{ delta: total, start: 0, end: total, category: totalLabel, label: totalLabel, total: true }] : []),
-        ]
-        const pixels = entries.map((_, index) => {
-          try { return Number(instance.convertToPixel({ xAxisIndex: 0 }, index)) } catch { return Number.NaN }
-        })
-        const index = nearestPixelIndex(pixels, pointer[0]), entry = entries[index]
-        if (!entry || entry.delta == null) return
-        const key = `${source.name}\u001f${entry.category instanceof Date ? entry.category.toISOString() : `${typeof entry.category}:${String(entry.category)}`}`
-        let resolvedTarget = target
-        if (!resolvedTarget && (config.elementStyles[key]?.showLabel ?? config.showValues) && (!entry.total || (config.waterfallShowTotalValue ?? true))) {
-          const element = config.elementStyles[key], style = element?.valueText ?? config.valueText
-          const label = element?.label || waterfallValueLabel(entry.delta, entry.end, entry.total, config)
-          const lineHeight = Math.round(style.size * style.lineHeight / 100), labelHeight = lineHeight * label.split('\n').length
-          const labelWidth = Math.max(...label.split('\n').map((line) => measureTextWidth(line, style.size, style.fontFamily, style.weight)))
-          const band = pixels.length > 1 ? Math.min(...pixels.slice(1).map((pixel, current) => Math.abs(pixel - pixels[current])).filter((value) => value > 0)) : instance.getWidth()
-          const width = band * Math.max(.1, Math.min(1, (config.barWidth ?? 68) / 100))
-          let startY: number, endY: number
-          try {
-            startY = Number(instance.convertToPixel({ yAxisIndex: 0 }, entry.start))
-            endY = Number(instance.convertToPixel({ yAxisIndex: 0 }, entry.end))
-          } catch { return }
-          const requested = element?.waterfallLabelPosition ?? config.valueLabelPosition ?? 'auto'
-          const position = entry.total ? requested === 'bottom' ? 'top' : requested === 'inside-bottom' ? 'inside-top' : requested : requested
-          const placement = waterfallLabelPlacement(startY, endY, width, labelWidth, labelHeight, position, config.waterfallLabelGap ?? 6)
-          const top = placement.verticalAlign === 'top' ? placement.y : placement.verticalAlign === 'bottom' ? placement.y - labelHeight : placement.y - labelHeight / 2
-          if (Math.abs(pointer[0] - pixels[index]) <= labelWidth / 2 + 4 && pointer[1] >= top - 2 && pointer[1] <= top + labelHeight + 2) resolvedTarget = 'value-label'
-        }
-        const color = config.elementStyles[key]?.color ?? (entry.total ? config.waterfallTotalColor ?? '#6956e8' : entry.delta >= 0 ? config.waterfallIncreaseColor ?? '#36a476' : config.waterfallDecreaseColor ?? '#db5a5a')
-        onSelect?.({ key, seriesName: source.name, category: entry.label, value: waterfallValueLabel(entry.delta, entry.end, entry.total, config), color, target: resolvedTarget })
-        onSettingsFocus?.('element')
-      }
-      const clickHandler = (event: MouseEvent) => {
-        pointerHandler(event)
-        if (config.kind !== 'waterfall' || !lastPointer.current) return
-        const node = event.target as { tagName?: string; parentElement?: { tagName?: string }; getAttribute?: (name: string) => string | null }
-        const text = node.tagName?.toLowerCase() === 'text' || node.tagName?.toLowerCase() === 'tspan' || node.parentElement?.tagName?.toLowerCase() === 'text'
-        const filledPath = node.tagName?.toLowerCase() === 'path' && !['', 'none', 'transparent'].includes(node.getAttribute?.('fill') ?? '')
-        if (text) selectWaterfallAt(lastPointer.current, 'value-label')
-        else if (filledPath) selectWaterfallAt(lastPointer.current)
-      }
-      void clickHandler
       const highlightGuide = (pointer: [number, number] | null) => {
         if (!pointer || !selectedSeriesName) return
         const current = instance.getOption() as { series?: Array<{ name?: string }> }

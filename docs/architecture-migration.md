@@ -98,3 +98,13 @@ The renderer remains `DataTable`/statistics/KDE/binning-free, source observation
 Wave 1 started from `457e501d21403f7a30e81d18894c042b59d6b951`. Font determinism was implemented in `237d7bf465f151e4eaa1ea06a4e64f9d4e52205c`, Histogram/KDE in `4b3f45eae17860ef13836b0ee74eccc9a1edac6b`, and both parallel tracks were integrated in `97a0d14432a65dc88a66b262d5a656d87b1a52d1`.
 
 Critical DM Sans, Manrope, and Onest faces now come from repository-local WOFF2 files and share one readiness boundary across preview, SVG, and PNG. The previous Google-hosted files and the pinned local files have slightly different glyph metrics; therefore the 15 affected Smoothing, Interval, and dense-Lollipop baselines were regenerated once after a three-repeat run reproduced identical pixel diffs every time. No screenshot tolerance changed.
+
+## Wave 3 checkpoint — native Waterfall and Butterfly
+
+Wave 3 started from `57a9357` and its native Waterfall/Butterfly implementation completed in `db638ea`.
+
+Waterfall now compiles `plot.kind = 'waterfall'`: source steps retain raw/aggregate identity, cumulative start/end values are semantic, and the optional total owns a stable synthetic datum ID independent of its editable label. Connectors and change/cumulative label intent are scene data. Its dedicated layout resolves floating rectangles, connector endpoints, label fit/placement, and dense-label visibility before rendering.
+
+Butterfly now compiles `plot.kind = 'butterfly'`: left/right fields are explicit semantic sides, magnitudes are normalized once, each side stacks independently, and the value domain is symmetric. Its dedicated layout owns mirrored rectangles and center/left/right category placement; the renderer consumes resolved geometry and exposes a renderer-neutral hit map to the outer callback adapter.
+
+Both plugins are explicitly native, their legacy entry points throw, and their old `ChartCanvas` split-axis/category/bar-hit and Waterfall pointer-geometry helpers were removed. Six focused visual baselines cover three states per family. Remaining legacy families are Lollipop, Horizontal Lollipop, Dumbbell, Heatmap, and Treemap.
