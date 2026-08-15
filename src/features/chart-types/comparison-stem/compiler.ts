@@ -4,6 +4,7 @@ import { chartDocumentFromLegacy } from '../../../entities/chart/model/legacyCha
 import type { ChartElement, ElementId } from '../../../entities/chart/model/ChartElement'
 import type { CartesianPointScene, ComparisonStemConnectorScene, ComparisonStemSeriesScene, LayerId, NativeComparisonStemChartScene } from '../../../entities/chart/model/ChartScene'
 import { compileNativeBarScene } from '../bar/compiler'
+import { orderedBounds } from '../../../core/chartScale'
 
 export const NATIVE_COMPARISON_STEM_KINDS = ['lollipop', 'horizontal-lollipop', 'dumbbell'] as const
 export type NativeComparisonStemKind = typeof NATIVE_COMPARISON_STEM_KINDS[number]
@@ -33,9 +34,10 @@ export function compileNativeComparisonStemScene(table: DataTable, sourceConfig:
     barOrientation: orientation,
     barValueLabelAbsorption: false,
     ...(dumbbell ? { seriesField: '', yFields: fields, yField: fields[0] ?? sourceConfig.yField } : {}),
+    ...(dumbbell ? { seriesOrder: fields, barCategorySort: 'none' as const } : {}),
   }
   const base = compileNativeBarScene(table, surrogate)
-  const wanted = validDumbbell ? base.plot.series.filter((series) => fields.includes(series.name)) : []
+  const wanted = validDumbbell ? fields.flatMap((field) => base.plot.series.find((series) => series.name === field) ?? []) : []
   const sourceSeries = dumbbell ? wanted : base.plot.series
   const pairedIndices = dumbbell && wanted.length === 2
     ? base.plot.categories.flatMap((_, index) => wanted.every((series) => series.marks[index]?.value != null) ? [index] : [])
@@ -69,6 +71,14 @@ export function compileNativeComparisonStemScene(table: DataTable, sourceConfig:
     })
     return { id: source.id, name: source.name, color, visible: true, role, points }
   })
+  const values = series.flatMap((item) => item.points.flatMap((point) => point.value != null && point.value > 0 ? [point.value] : []))
+  const [configuredMin, configuredMax] = orderedBounds(sourceConfig.yAxisMin, sourceConfig.yAxisMax)
+  const logMin = 10 ** Math.floor(Math.log10(values.length ? Math.min(...values) : 1))
+  const logMaxBase = 10 ** Math.ceil(Math.log10(values.length ? Math.max(...values) : 10))
+  const logDomainMin = configuredMin != null && configuredMin > 0 ? configuredMin : logMin
+  const valueDomain = sourceConfig.yAxisScaleType === 'log'
+    ? { min: logDomainMin, max: configuredMax != null && configuredMax > logDomainMin ? configuredMax : Math.max(logDomainMin * 10, logMaxBase), step: sourceConfig.yAxisStep ?? base.plot.valueDomain.step }
+    : base.plot.valueDomain
   const connectors: ComparisonStemConnectorScene[] = dumbbell && series.length === 2
     ? categories.map((category, categoryIndex) => {
       const first = series[0].points[categoryIndex], second = series[1].points[categoryIndex]
@@ -79,9 +89,9 @@ export function compileNativeComparisonStemScene(table: DataTable, sourceConfig:
       const endpointIds = [first.id, second.id]
       return { id: layerId(endpointIds), categoryId: category.id, categoryIndex, endpointIds, fromValue: first.value!, toValue: second.value!, stroke: { color, width: sourceConfig.dumbbellConnectorWidth ?? 3, type: sourceConfig.dumbbellConnectorType ?? 'solid', opacity: sourceConfig.dumbbellConnectorOpacity ?? 1 }, change: { descriptor, visible: Boolean(sourceConfig.dumbbellShowDifference), label: formatChange(descriptor, sourceConfig.dumbbellDifferenceFormat ?? 'absolute', sourceConfig, sourceConfig.dumbbellPercentDecimals ?? 0), position: sourceConfig.dumbbellDifferencePosition ?? 'middle', color: sourceConfig.dumbbellColorByChange ? color : sourceConfig.valueText.color } }
     })
-    : series.flatMap((item) => item.points.map((point) => ({ id: layerId([point.id]), categoryId: categories[point.categoryIndex].id, categoryIndex: point.categoryIndex, endpointIds: [point.id], fromValue: 0, toValue: point.value!, stroke: { color: item.color, width: Math.max(1, sourceConfig.seriesStyles[item.name]?.lineWidth ?? 2), type: 'solid', opacity: .72 } })))
+    : series.flatMap((item) => item.points.map((point) => ({ id: layerId([point.id]), categoryId: categories[point.categoryIndex].id, categoryIndex: point.categoryIndex, endpointIds: [point.id], fromValue: sourceConfig.yAxisScaleType === 'log' ? valueDomain.min : 0, toValue: point.value!, stroke: { color: item.color, width: Math.max(1, sourceConfig.seriesStyles[item.name]?.lineWidth ?? 2), type: 'solid', opacity: .72 } })))
   const pointIds = new Set(series.flatMap((item) => item.points.map((point) => point.id)))
   const categoryIds = new Set(categories.map((category) => `category-label:${category.id}`))
   const elements: ChartElement[] = base.elements.filter((element) => element.role === 'mark' ? pointIds.has(element.id) : element.role === 'category-label' ? categoryIds.has(element.id) : 'seriesId' in element && series.some((item) => item.id === element.seriesId))
-  return { ...base, document: chartDocumentFromLegacy(table, sourceConfig), compatibilityConfig: sourceConfig, elements, plot: { kind: 'comparison-stem', variant: dumbbell ? 'dumbbell' : 'lollipop', categoryPlacement: 'band', orientation, categories, categoryAxis: base.plot.categoryAxis, valueAxis: base.plot.valueAxis, valueDomain: base.plot.valueDomain, series, connectors } }
+  return { ...base, document: chartDocumentFromLegacy(table, sourceConfig), compatibilityConfig: sourceConfig, elements, plot: { kind: 'comparison-stem', variant: dumbbell ? 'dumbbell' : 'lollipop', categoryPlacement: 'band', orientation, categories, categoryAxis: base.plot.categoryAxis, valueAxis: base.plot.valueAxis, valueDomain, series, connectors } }
 }

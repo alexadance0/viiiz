@@ -5,6 +5,7 @@ import { renderScene } from '../../chart-renderer/echarts/renderScene'
 import { resolveNativeComparisonStemScene } from './layout'
 import { createDefaultChartConfig } from '../../../entities/chart/model/defaultChartConfig'
 import type { NativeComparisonStemChartScene } from '../../../entities/chart/model/ChartScene'
+import { applySeriesVisualState } from '../../../components/ChartCanvas'
 
 const table: DataTable = {
   name: 'comparison', columns: ['category', 'value', 'before', 'after'], rows: [
@@ -41,6 +42,56 @@ describe('native comparison/stem compiler', () => {
     const edited = plugin.compile(table, { ...source, dumbbellSort: 'start', dumbbellSortDirection: 'asc', seriesStyles: { ...source.seriesStyles, before: { color: '#6956e8' } } })
     if (edited.migrationMode !== 'native' || edited.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
     expect(new Set(edited.plot.series.flatMap((series) => series.points.map((point) => point.id)))).toEqual(new Set(scene.plot.series.flatMap((series) => series.points.map((point) => point.id))))
+  })
+
+  it('keeps explicit dumbbell roles and source category order despite stale generic sorting', () => {
+    const source = { ...config('dumbbell'), yFields: ['before', 'after'], dumbbellStartField: 'before', dumbbellEndField: 'after', seriesOrder: ['after', 'before'], barCategorySort: 'name-desc' as const }
+    const scene = getChartPlugin('dumbbell').compile(table, source)
+    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
+    expect(scene.plot.series.map((series) => [series.name, series.role])).toEqual([['before', 'start'], ['after', 'end']])
+    expect(scene.plot.categories.map((category) => category.label)).toEqual(['A', 'B', 'C'])
+  })
+
+  it.each([['lollipop', 'vertical'], ['horizontal-lollipop', 'horizontal'], ['dumbbell', 'vertical'], ['dumbbell', 'horizontal']] as const)('%s resolves a strictly positive log domain and finite geometry in %s mode', (kind, orientation) => {
+    const source = { ...config(kind), yFields: kind === 'dumbbell' ? ['before', 'after'] : ['value'], yAxisScaleType: 'log' as const, dumbbellStartField: 'before', dumbbellEndField: 'after', dumbbellOrientation: orientation }
+    const scene = getChartPlugin(kind).compile(table, source)
+    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
+    expect(scene.plot.valueDomain.min).toBeGreaterThan(0)
+    expect(scene.plot.valueDomain.max).toBeGreaterThan(scene.plot.valueDomain.min)
+    const resolved = resolveNativeComparisonStemScene(scene as NativeComparisonStemChartScene)
+    expect(Object.values(resolved.comparisonGeometry.points).every((point) => Number.isFinite(point.x) && Number.isFinite(point.y))).toBe(true)
+    const option = renderScene(resolved) as { xAxis: { type: string; min: number }; yAxis: { type: string; min: number } }
+    const axis = orientation === 'horizontal' ? option.xAxis : option.yAxis
+    expect(axis).toMatchObject({ type: 'log', min: scene.plot.valueDomain.min })
+  })
+
+  it('owns vertical category-grid geometry without ChartCanvas data conversion', () => {
+    const source = { ...config('lollipop'), showVerticalGrid: true }
+    const scene = getChartPlugin('lollipop').compile(table, source)
+    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
+    const resolved = resolveNativeComparisonStemScene(scene as NativeComparisonStemChartScene)
+    expect(resolved.comparisonGeometry.categoryGridLines).toHaveLength(scene.plot.categories.length)
+    const option = renderScene(resolved) as { graphic: Array<{ id?: string }> }
+    expect(option.graphic.filter((item) => item.id?.startsWith('comparison-category-grid:'))).toHaveLength(scene.plot.categories.length)
+  })
+
+  it('preserves custom mark/stem interaction styling and fully resolved direct guides', () => {
+    const source = { ...config('lollipop'), yFields: ['before', 'after'], showDirectLabels: true, showDirectLabelLines: true, seriesStyles: { before: { legendNote: 'baseline' }, after: {} } }
+    const scene = getChartPlugin('lollipop').compile(table, source)
+    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
+    const resolved = resolveNativeComparisonStemScene(scene as NativeComparisonStemChartScene)
+    const before = scene.plot.series.find((series) => series.name === 'before')!, after = scene.plot.series.find((series) => series.name === 'after')!
+    expect(resolved.comparisonGeometry.directLabels[before.id]).toMatchObject({ collision: 'shift-y', leader: { points: expect.any(Array) }, noteY: expect.any(Number) })
+    const option = renderScene(resolved) as { series: Array<{ name: string; data: Array<{ itemStyle: Record<string, unknown>; selectionTarget?: string }>; renderItem(params: { dataIndex: number }): { children: Array<{ info?: { selectionTarget?: string }; style?: Record<string, unknown> }> } }>; graphic: Array<{ comparisonConnectorSeriesNames?: string[]; children?: Array<{ style?: { opacity?: number } }> }> }
+    applySeriesVisualState(option as unknown as Record<string, unknown>, table, source, 'before')
+    expect(option.series.find((series) => series.name === 'after')?.data[0].itemStyle.opacity).toBe(.22)
+    const afterMark = option.series.find((series) => series.name === 'after')!
+    expect(afterMark.renderItem({ dataIndex: 0 }).children[0].style?.opacity).toBe(.22)
+    expect(option.graphic.find((item) => item.comparisonConnectorSeriesNames?.includes('after'))?.children?.[0].style?.opacity).toBeCloseTo(.72 * .22)
+    const beforeGuide = option.series.find((series) => series.name === '__comparison-direct-guide:before')!
+    expect(beforeGuide.data[0].selectionTarget).toBe('guide')
+    expect(beforeGuide.renderItem({ dataIndex: 0 }).children.some((child) => child.info?.selectionTarget === 'guide')).toBe(true)
+    expect(resolved.comparisonGeometry.directLabels[after.id].collision).toBe('shift-y')
   })
 
   it('resolves all mark geometry before the renderer and renders without DataTable access', () => {

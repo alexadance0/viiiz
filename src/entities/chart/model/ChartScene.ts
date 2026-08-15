@@ -622,7 +622,8 @@ export interface ResolvedSlopeGeometry {
 export interface ResolvedComparisonStemGeometry {
   points: Record<ElementId, { x: number; y: number; label?: { x: number; y: number; align: 'left' | 'center' | 'right'; verticalAlign: 'top' | 'middle' | 'bottom'; visible: boolean } }>
   connectors: Record<LayerId, { x1: number; y1: number; x2: number; y2: number; changeLabel?: { x: number; y: number; align: 'left' | 'center' | 'right'; verticalAlign: 'top' | 'middle' | 'bottom' } }>
-  directLabels: Record<SeriesId, { pointId: ElementId; x: number; y: number; align: 'left' | 'center' | 'right'; verticalAlign: 'top' | 'middle' | 'bottom' }>
+  directLabels: Record<SeriesId, { pointId: ElementId; anchorX: number; anchorY: number; x: number; y: number; width: number; height: number; noteY?: number; align: 'left' | 'center' | 'right'; verticalAlign: 'top' | 'middle' | 'bottom'; collision: 'shift-x' | 'shift-y'; displacement: number; leader?: { points: Array<[number, number]> } }>
+  categoryGridLines: Array<{ x1: number; y1: number; x2: number; y2: number }>
 }
 
 export interface ResolvedSlopeEndpointLabelPlacement {

@@ -473,6 +473,25 @@ test('direct labels can be controlled per series and survive axis and orientatio
   assertNoErrors()
 })
 
+test('native lollipop direct-guide labels keep notes and route clicks to the guide editor', async ({ page }) => {
+  const assertNoErrors = await failOnRuntimeErrors(page)
+  await loadDemo(page)
+  await page.getByRole('button', { name: 'Леденцовая', exact: true }).click()
+  await page.getByRole('button', { name: /Настроить оформление/ }).click()
+  const legend = page.locator('details').filter({ has: page.locator('summary').filter({ hasText: /^Легенда$/ }) })
+  await legend.locator(':scope > summary').click()
+  await page.getByRole('tab', { name: 'Справа у рядов' }).click()
+  const card = legend.locator('.series-label-card').first()
+  const name = (await card.locator('strong').textContent())!.trim()
+  await card.getByLabel('Примечание').fill('контекст ряда')
+  await expect(page.locator('.canvas-paper svg text').filter({ hasText: /^контекст ряда$/ })).toBeVisible()
+  await legend.locator(':scope > summary').click()
+  await expect(legend).not.toHaveAttribute('open', '')
+  await page.locator('.canvas-paper svg text').filter({ hasText: new RegExp(`^${escaped(name)}$`) }).last().click({ force: true })
+  await expect(legend).toHaveAttribute('open', '')
+  assertNoErrors()
+})
+
 test('country chart spacing is configurable and hidden headers return space to the plot', async ({ page }) => {
   const assertNoErrors = await failOnRuntimeErrors(page)
   await page.goto('/editor')

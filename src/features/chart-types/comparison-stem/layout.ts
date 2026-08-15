@@ -28,6 +28,7 @@ export function resolveNativeComparisonStemScene(sourceScene: NativeComparisonSt
     ? plot.y + (inverseCategory ? index + .5 : count - index - .5) * band
     : plot.x + (index + .5) * band
   const valueCoordinate = (value: number) => {
+    if (scene.compatibilityConfig.yAxisScaleType === 'log' && value <= 0) return undefined
     const ratio = valueRatio(value, scene.plot.valueDomain.min, scene.plot.valueDomain.max, scene.compatibilityConfig.yAxisScaleType === 'log')
     return horizontal ? plot.x + ratio * plot.width : plot.y + (1 - ratio) * plot.height
   }
@@ -39,8 +40,10 @@ export function resolveNativeComparisonStemScene(sourceScene: NativeComparisonSt
     const stride = scene.plot.variant === 'lollipop' ? denseValueLabelStride(horizontal, band, width, height, scene.compatibilityConfig.valueLabelHideOverlap ?? false) : 1
     series.points.forEach((point) => {
       if (point.value == null) return
-      const x = horizontal ? valueCoordinate(point.value) : categoryCoordinate(point.categoryIndex)
-      const y = horizontal ? categoryCoordinate(point.categoryIndex) : valueCoordinate(point.value)
+      const value = valueCoordinate(point.value)
+      if (value == null) return
+      const x = horizontal ? value : categoryCoordinate(point.categoryIndex)
+      const y = horizontal ? categoryCoordinate(point.categoryIndex) : value
       const distance = 7, labelVisible = point.label.visible && showDenseValueLabel(point.categoryIndex, scene.plot.categories.length, stride)
       const label = point.label.position === 'left' ? { x: x - distance, y, align: 'right' as const, verticalAlign: 'middle' as const, visible: labelVisible }
         : point.label.position === 'right' ? { x: x + distance, y, align: 'left' as const, verticalAlign: 'middle' as const, visible: labelVisible }
@@ -55,6 +58,7 @@ export function resolveNativeComparisonStemScene(sourceScene: NativeComparisonSt
   scene.plot.connectors.forEach((connector) => {
     const category = categoryCoordinate(connector.categoryIndex)
     const from = valueCoordinate(connector.fromValue), to = valueCoordinate(connector.toValue)
+    if (from == null || to == null) return
     const x1 = horizontal ? from : category, y1 = horizontal ? category : from
     const x2 = horizontal ? to : category, y2 = horizontal ? category : to
     let changeLabel: { x: number; y: number; align: 'left' | 'center' | 'right'; verticalAlign: 'top' | 'middle' | 'bottom' } | undefined
@@ -73,16 +77,36 @@ export function resolveNativeComparisonStemScene(sourceScene: NativeComparisonSt
   })
   const directLabels: ResolvedComparisonStemGeometry['directLabels'] = {}
   const directGuide = scene.guides.find((guide) => guide.kind === 'direct-series')
-  if (directGuide?.visible) directGuide.items.filter((item) => item.visible).forEach((item) => {
+  const directCandidates = directGuide?.visible ? directGuide.items.filter((item) => item.visible).flatMap((item) => {
     const series = scene.plot.series.find((candidate) => candidate.id === item.seriesId)
     const point = series?.points.findLast((candidate) => candidate.value != null), resolved = point && points[point.id]
-    if (!point || !resolved) return
+    if (!point || !resolved) return []
     const distance = scene.compatibilityConfig.directLabelGap ?? 14
-    directLabels[item.seriesId] = horizontal
-      ? { pointId: point.id, x: resolved.x, y: resolved.y - distance, align: 'center', verticalAlign: 'bottom' }
+    const lineHeight = Math.round(item.style.size * item.style.lineHeight / 100), noteHeight = item.note ? Math.max(8, item.style.size - 2) * 1.25 + 3 : 0
+    const width = Math.max(...[item.label, item.note ?? ''].flatMap((text) => text.split('\n').map((line) => measureTextWidth(line, item.style.size, item.style.fontFamily, item.style.weight))))
+    const initial = horizontal
+      ? { x: resolved.x, y: resolved.y - distance, align: 'center' as const, verticalAlign: 'bottom' as const, collision: 'shift-x' as const }
       : scene.compatibilityConfig.yAxisPosition === 'right'
-        ? { pointId: point.id, x: resolved.x - distance, y: resolved.y, align: 'right', verticalAlign: 'middle' }
-        : { pointId: point.id, x: resolved.x + distance, y: resolved.y, align: 'left', verticalAlign: 'middle' }
+        ? { x: resolved.x - distance, y: resolved.y, align: 'right' as const, verticalAlign: 'middle' as const, collision: 'shift-y' as const }
+        : { x: resolved.x + distance, y: resolved.y, align: 'left' as const, verticalAlign: 'middle' as const, collision: 'shift-y' as const }
+    return [{ item, point, resolved, initial, width, height: lineHeight + noteHeight, lineHeight }]
+  }) : []
+  directCandidates.sort((left, right) => horizontal ? left.initial.x - right.initial.x : left.initial.y - right.initial.y)
+  let previousEnd = horizontal ? plot.x : plot.y
+  directCandidates.forEach((candidate) => {
+    const half = (horizontal ? candidate.width : candidate.height) / 2
+    const natural = horizontal ? candidate.initial.x : candidate.initial.y
+    const maximum = horizontal ? plot.x + plot.width : plot.y + plot.height
+    const adjusted = Math.min(maximum - half, Math.max(natural, previousEnd + half + 4))
+    previousEnd = adjusted + half
+    const x = horizontal ? adjusted : candidate.initial.x, y = horizontal ? candidate.initial.y : adjusted
+    const displacement = adjusted - natural
+    const leader = candidate.item.leaderLine || Math.abs(displacement) > .5 ? { points: [[candidate.resolved.x, candidate.resolved.y] as [number, number], [x, y] as [number, number]] } : undefined
+    directLabels[candidate.item.seriesId] = { pointId: candidate.point.id, anchorX: candidate.resolved.x, anchorY: candidate.resolved.y, x, y, width: candidate.width, height: candidate.height, noteY: candidate.item.note ? y + candidate.lineHeight / 2 + 3 : undefined, align: candidate.initial.align, verticalAlign: candidate.initial.verticalAlign, collision: candidate.initial.collision, displacement, leader }
   })
-  return { ...scene, comparisonGeometry: { points, connectors, directLabels } }
+  const requestedStep = Math.max(1, Math.round(scene.compatibilityConfig.xAxisStep ?? 1))
+  const categoryGridLines = !horizontal && scene.compatibilityConfig.showVerticalGrid
+    ? scene.plot.categories.flatMap((category, index) => category.label && index % requestedStep === 0 ? [{ x1: categoryCoordinate(index), y1: plot.y, x2: categoryCoordinate(index), y2: plot.y + plot.height }] : [])
+    : []
+  return { ...scene, comparisonGeometry: { points, connectors, directLabels, categoryGridLines } }
 }

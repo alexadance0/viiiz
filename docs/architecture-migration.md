@@ -35,7 +35,7 @@ Phase 3 baseline: `ab264f5d7a69a466935b25873d68c8e1379a7113`.
 
 `NativeChartScene.plot` is now a discriminated bar/line/area union. Basic line, spline, step-line, area, stacked-area, and normalized-stacked-area compile semantic points, interpolation, missing-value policy, stroke/marker/fill intent, stable identities, and category-label plans. They share the native Cartesian frame/axis/text layout and render through plot-kind dispatch without reaching the legacy option builder.
 
-Specialized interval charts, waterfall, butterfly, lollipop, dumbbell, distribution, heatmap, and treemap remain explicitly legacy.
+Specialized interval and Distribution charts, Scatter/Bubble, Lollipop/Horizontal Lollipop, and Dumbbell are native. Waterfall, Butterfly, Heatmap, and Treemap remain explicitly legacy.
 
 ## Phase 6 checkpoint — native smoothing
 
@@ -55,7 +55,7 @@ Implementation completed in: `d939955`.
 
 Interval charts reuse prepared point data and the shared native Cartesian frame, axes, guides, category-edge behavior, selection visitors, and export lifecycle. The dedicated ECharts adapter translates semantic cells into clipped polygons below visible source lines. The compiler resolves fill colors, opacity, source visibility, boundary presentation, legend/direct/value-label membership, and domain participation; neither the renderer nor `ChartCanvas` branches on the persisted interval product kind.
 
-The legacy `intervalLine()` builder, fake stacked Confidence base/fill series, custom Range band construction, and interval legend filtering were removed from `chartRegistry.ts`. Waterfall, butterfly, lollipop, dumbbell, distribution, heatmap, and treemap remain explicitly legacy.
+The legacy `intervalLine()` builder, fake stacked Confidence base/fill series, custom Range band construction, and interval legend filtering were removed from `chartRegistry.ts`. Later phases also removed the Distribution and Lollipop/Dumbbell runtime builders. Waterfall, Butterfly, Heatmap, and Treemap remain explicitly legacy.
 
 ## Phase 7.1 checkpoint — deterministic native rendering
 
@@ -73,7 +73,7 @@ Phase 8 started from `b089ab3b5a0eeda0d242ae10482f91496340b82b` and completed in
 
 Scatter and Bubble now dispatch through `plot.kind = 'xy'`, with truthful `x`/`y` channels and a dedicated continuous-axis layout. Only actual data groups live in `plot.series`; trend/band/reference/diagonal/quadrant layers and the size-scale guide have separate semantic types and stable IDs. The renderer consumes no table rows and `ChartCanvas` gained no Scatter geometry branches.
 
-The legacy relationship builder, local bubble callback, fake stacked confidence band, `markLine`, `markArea`, fake size-guide series, legacy tooltip, and legend mutation were removed from `chartRegistry.ts`. Remaining legacy families are Waterfall, Butterfly, Lollipop, Horizontal Lollipop, Dumbbell, Heatmap, and Treemap.
+The legacy relationship builder, local bubble callback, fake stacked confidence band, `markLine`, `markArea`, fake size-guide series, legacy tooltip, and legend mutation were removed from `chartRegistry.ts`. At the Phase 8 checkpoint Lollipop and Dumbbell were still legacy; Wave 2 later migrated them. Current legacy families are Waterfall, Butterfly, Heatmap, and Treemap.
 
 The final gate passed three consecutive full E2E runs (44/44 each), the full suite at `--repeat-each=3` (132/132), and the visual file at `--repeat-each=5` (35/35), with no expected snapshot changes. Playwright uses two parallel workers in the supported macOS snapshot environment to avoid host saturation from concurrent SVG/video/trace contexts; this remains a multi-worker verification path.
 
@@ -98,3 +98,11 @@ The renderer remains `DataTable`/statistics/KDE/binning-free, source observation
 Wave 1 started from `457e501d21403f7a30e81d18894c042b59d6b951`. Font determinism was implemented in `237d7bf465f151e4eaa1ea06a4e64f9d4e52205c`, Histogram/KDE in `4b3f45eae17860ef13836b0ee74eccc9a1edac6b`, and both parallel tracks were integrated in `97a0d14432a65dc88a66b262d5a656d87b1a52d1`.
 
 Critical DM Sans, Manrope, and Onest faces now come from repository-local WOFF2 files and share one readiness boundary across preview, SVG, and PNG. The previous Google-hosted files and the pinned local files have slightly different glyph metrics; therefore the 15 affected Smoothing, Interval, and dense-Lollipop baselines were regenerated once after a three-repeat run reproduced identical pixel diffs every time. No screenshot tolerance changed.
+
+## Wave 2 checkpoint — native Lollipop and Dumbbell
+
+Wave 2 started from `57a9357` after integrating the deterministic-font and Distribution-frequency work; the first native implementation is `f8ea4a4` and this checkpoint includes the blocking-review stabilization.
+
+Lollipop, Horizontal Lollipop, and Dumbbell now share semantic `plot.kind = 'comparison-stem'`. Endpoints are the only source-editable marks. Stems, pair connectors, change labels, direct-guide leaders, and category grid lines are derived layers or resolved geometry. Explicit Dumbbell start/end fields own their roles regardless of generic series ordering, stale bar sorting is ignored, incomplete pairs are omitted, and sorting never changes endpoint identity.
+
+The comparison layout owns linear/log projection, positive log domains, both orientations, dense value-label visibility, direct-label note/leader/collision placement, and category-grid coordinates. Its renderer consumes no table and exposes endpoint/guide metadata at the callback boundary. `ChartCanvas` does not calculate comparison geometry or convert its grid positions. Both legacy runtime builders were removed and replaced with a throwing guard.

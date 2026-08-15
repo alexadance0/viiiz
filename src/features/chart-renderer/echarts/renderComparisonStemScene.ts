@@ -21,33 +21,48 @@ export function renderComparisonStemScene(scene: ResolvedComparisonStemScene): R
   const legendGuide = scene.guides.find((guide) => guide.kind === 'categorical-legend')
   const legendRail = scene.geometry.reservations['guide:legend']
   const names = new Map(scene.plot.series.map((series) => [series.id, series.name]))
+  const directGuide = scene.guides.find((guide) => guide.kind === 'direct-series')
   const legendItems = legendGuide?.items.flatMap((item) => item.visible && item.target.kind === 'series' ? [{ ...item, rendererName: names.get(item.target.seriesId) ?? String(item.target.seriesId) }] : []) ?? []
   const legendLabels = new Map(legendItems.map((item) => [item.rendererName, item.label]))
-  const series = scene.plot.series.map((source) => ({
-    id: source.id, name: source.name, type: 'custom', coordinateSystem: 'none', triggerEvent: true, silent: false, z: 10,
-    data: source.points.map((point) => ({ value: point.categoryIndex, ...pointInfo(point, source.name, point.marker.fill) })),
+  const series = scene.plot.series.map((source) => {
+    const data = source.points.map((point) => ({ value: point.categoryIndex, ...pointInfo(point, source.name, point.marker.fill), itemStyle: { color: point.marker.fill, borderColor: point.marker.stroke, borderWidth: point.marker.strokeWidth, opacity: 1 } }))
+    return {
+    id: source.id, name: source.name, type: 'custom', coordinateSystem: 'none', triggerEvent: true, silent: false, z: 10, itemStyle: { opacity: 1 }, data,
     renderItem: (params: { dataIndex: number }) => {
       const point = source.points[params.dataIndex], resolved = point && scene.comparisonGeometry.points[point.id]
       if (!point || !resolved || point.value == null) return null
       const shape = markerShape(point, resolved.x, resolved.y)
       const info = pointInfo(point, source.name, point.marker.fill)
-      const directGuide = scene.guides.find((guide) => guide.kind === 'direct-series')
-      const directItem = directGuide?.items.find((item) => item.seriesId === source.id && item.visible)
-      const direct = scene.comparisonGeometry.directLabels[source.id]
+      const interactiveStyle = (data[params.dataIndex]?.itemStyle ?? {}) as Record<string, string | number | undefined>
       return { type: 'group', info, children: [
-        { ...shape, info, style: { fill: point.marker.fill, stroke: point.marker.stroke, lineWidth: point.marker.strokeWidth } },
+        { ...shape, info, style: { fill: interactiveStyle.fill ?? interactiveStyle.color ?? point.marker.fill, stroke: interactiveStyle.stroke ?? interactiveStyle.borderColor ?? point.marker.stroke, lineWidth: interactiveStyle.lineWidth ?? interactiveStyle.borderWidth ?? point.marker.strokeWidth, opacity: interactiveStyle.opacity, shadowColor: interactiveStyle.shadowColor, shadowBlur: interactiveStyle.shadowBlur } },
         ...(resolved.label?.visible ? [{ type: 'text', info, style: { x: resolved.label.x, y: resolved.label.y, text: point.label.text, fill: point.label.style.color, font: font(point.label.style), align: resolved.label.align, verticalAlign: resolved.label.verticalAlign, lineHeight: Math.round(point.label.style.size * point.label.style.lineHeight / 100) } }] : []),
-        ...(directItem && direct?.pointId === point.id ? [{ type: 'text', info: { seriesId: source.id, sourceSeriesName: source.name }, style: { x: direct.x, y: direct.y, text: directItem.label, fill: directItem.style.color, font: font(directItem.style), align: direct.align, verticalAlign: direct.verticalAlign } }] : []),
       ] }
     },
-  }))
+  }})
+  const directSeries = scene.plot.series.flatMap((source) => {
+    const item = directGuide?.items.find((candidate) => candidate.seriesId === source.id && candidate.visible)
+    const geometry = scene.comparisonGeometry.directLabels[source.id]
+    if (!item || !geometry) return []
+    const info = { value: 0, elementKey: `guide:direct:${source.id}`, sourceSeriesName: source.name, displayCategory: '', displayValue: item.label, displayColor: item.color, selectionTarget: 'guide' as const, itemStyle: { opacity: 1 } }
+    return [{
+      id: `comparison-direct-guide:${source.id}`, name: `__comparison-direct-guide:${source.name}`, type: 'custom', coordinateSystem: 'none', triggerEvent: true, silent: false, z: 20, data: [info],
+      renderItem: () => ({ type: 'group', info, children: [
+        ...(geometry.leader ? [{ type: 'polyline', info, shape: geometry.leader, style: { fill: 'none', stroke: item.color, lineWidth: config.directLabelLineWidth ?? 1, lineDash: dash(config.directLabelLineType ?? 'solid'), opacity: info.itemStyle.opacity } }] : []),
+        { type: 'text', info, style: { x: geometry.x, y: geometry.y, text: item.label, fill: item.style.color, font: font(item.style), align: geometry.align, verticalAlign: geometry.verticalAlign, opacity: info.itemStyle.opacity } },
+        ...(item.note && geometry.noteY != null ? [{ type: 'text', info, style: { x: geometry.x, y: geometry.noteY, text: item.note, fill: item.style.color, font: font({ ...item.style, size: Math.max(8, item.style.size - 2), weight: 400 }), align: geometry.align, verticalAlign: 'top', opacity: .78 * info.itemStyle.opacity } }] : []),
+      ] }),
+    }]
+  })
   const connectors = scene.plot.connectors.map((connector) => {
     const geometry = scene.comparisonGeometry.connectors[connector.id]
-    return { id: connector.id, type: 'group', silent: true, z: 2, children: [
+    const sourceSeriesNames = connector.endpointIds.flatMap((id) => scene.plot.series.filter((series) => series.points.some((point) => point.id === id)).map((series) => series.name))
+    return { id: connector.id, type: 'group', silent: true, z: 2, comparisonConnectorSeriesNames: sourceSeriesNames, children: [
       { type: 'line', shape: { x1: geometry.x1, y1: geometry.y1, x2: geometry.x2, y2: geometry.y2 }, style: { stroke: connector.stroke.color, opacity: connector.stroke.opacity, lineWidth: connector.stroke.width, lineDash: dash(connector.stroke.type), lineCap: 'round' } },
       ...(connector.change?.visible && geometry.changeLabel ? [{ type: 'text', style: { x: geometry.changeLabel.x, y: geometry.changeLabel.y, text: connector.change.label, fill: connector.change.color, font: font(config.valueText), align: geometry.changeLabel.align, verticalAlign: geometry.changeLabel.verticalAlign } }] : []),
     ] }
   })
+  const categoryGrid = scene.comparisonGeometry.categoryGridLines.map((line, index) => ({ id: `comparison-category-grid:${index}`, type: 'line', silent: true, z: 1, shape: line, style: { stroke: config.gridColor, lineWidth: config.gridWidth, lineDash: dash(config.gridType) } }))
   const plot = scene.geometry.plot, canvas = scene.geometry.canvas
   const title = scene.frameElements.find((item) => item.role === 'title'), subtitle = scene.frameElements.find((item) => item.role === 'subtitle')
   const footer = scene.frameElements.filter((item) => item.role === 'note' || item.role === 'source').map((item, index, items) => ({ id: `chart-${item.role}`, type: 'text', left: scene.geometry.content.x, bottom: canvas.height - scene.geometry.content.y - scene.geometry.content.height + (items.length - index - 1) * (Math.round(item.style.size * item.style.lineHeight / 100) + scene.document.composition.noteSource), style: { text: item.text, width: scene.geometry.content.width, overflow: 'break', ...nativeGraphicTextStyle(item.style) } }))
@@ -69,7 +84,7 @@ export function renderComparisonStemScene(scene: ResolvedComparisonStemScene): R
     grid: { left: plot.x, top: plot.y, right: canvas.width - plot.x - plot.width, bottom: canvas.height - plot.y - plot.height, containLabel: false },
     xAxis: horizontal ? renderNativeCartesianAxis(scene, 'value') : renderNativeCartesianAxis(scene, 'category'),
     yAxis: horizontal ? renderNativeCartesianAxis(scene, 'category') : renderNativeCartesianAxis(scene, 'value'),
-    series,
-    graphic: [...connectors, ...verticalTitleGraphic, ...footer],
+    series: [...series, ...directSeries],
+    graphic: [...categoryGrid, ...connectors, ...verticalTitleGraphic, ...footer],
   }
 }

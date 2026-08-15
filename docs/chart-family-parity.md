@@ -30,8 +30,8 @@ Wave 1 started from `457e501d21403f7a30e81d18894c042b59d6b951`; font determinism
 | slope | specialized comparison | native | dedicated native Slope layout inside shared frame | native endpoint metadata → callback adapter | shared SVG/PNG boundary | no |
 | waterfall | waterfall | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | butterfly | butterfly | legacy | legacy/hybrid | legacy | existing legacy path | yes |
-| lollipop / horizontal-lollipop | lollipop | legacy | legacy/hybrid | legacy | existing legacy path | yes |
-| dumbbell | dumbbell | legacy | legacy/hybrid | legacy | existing legacy path | yes |
+| lollipop / horizontal-lollipop | comparison stem | native | shared native Cartesian frame/axes + resolved stems/grid/direct guides | native endpoint and guide metadata | shared SVG/PNG boundary | no |
+| dumbbell | paired comparison stem | native | shared native Cartesian frame/axes + resolved pair/change geometry | native endpoint and guide metadata; connectors derived | shared SVG/PNG boundary | no |
 | range-line / step-range-line / confidence-line | interval | native | shared native Cartesian frame/axes | visible source point metadata; derived bands excluded | shared SVG/PNG boundary | no |
 | moving-average-line / moving-average-scatter | smoothing transform | native | shared native Cartesian frame/axes | raw native point metadata; derived layer non-editable | shared SVG/PNG boundary | no |
 | scatter / bubble | continuous XY relationship | native | dedicated continuous XY layout inside shared frame | unique native point IDs; derived analytics excluded | shared SVG/PNG boundary | no |
@@ -126,6 +126,12 @@ Range and Step Range prepare exactly the selected lower/upper fields and ignore 
 
 Stable `IntervalGroupId` values derive from participating `SeriesId` values and stable band-cell IDs derive from the band plus adjacent category identities and part number. Bands contain no renderer vocabulary, source identity, or editability. The interval ECharts adapter renders clipped silent polygons below visible real lines and dispatches only on `plot.kind = 'interval'`.
 
+## Comparison-stem parity
+
+Lollipop and Dumbbell compile one `ComparisonStemPlotScene`. A Lollipop source point owns its stable raw/aggregate datum and element IDs; its baseline stem owns a derived `LayerId`. Dumbbell resolves its explicit start field before its explicit end field even when persisted `seriesOrder` is reversed. Only complete pairs enter the plot; `difference`/`start`/`end` sorting reorders stable category and endpoint references without changing IDs. Stale generic `barCategorySort` is intentionally neutralized.
+
+The value domain is linear or strictly positive logarithmic in either orientation. Nonpositive log endpoints remain source semantics but produce no invalid pixel geometry. Layout owns endpoint, connector, change-label, dense-value-label, category-grid, and direct-guide geometry. Direct guides include notes, optional or displacement-required leaders, one-dimensional collision displacement, and typed guide click metadata. Custom endpoint marks and their derived stems/connectors participate in the existing series hover/selection dimming contract. The renderer reads no `DataTable`; `ChartCanvas` contains no Lollipop/Dumbbell geometry branch.
+
 ## Phase 7.1 integration checkpoint
 
-The interval semantic migration and its integration quality are tracked separately. Integration now uses an explicit revision-aware final-frame contract for preview, transitions, resize/font completion, and export restoration. Full-suite and repeated visual verification capture only `settled` revisions. Unmigrated legacy families remain Waterfall, Butterfly, Lollipop, Dumbbell, Heatmap, and Treemap; Phase 8 moved Scatter/Bubble to native XY and Wave 1 completed Distribution.
+The interval semantic migration and its integration quality are tracked separately. Integration now uses an explicit revision-aware final-frame contract for preview, transitions, resize/font completion, and export restoration. Full-suite and repeated visual verification capture only `settled` revisions. Phase 8 moved Scatter/Bubble to native XY, Wave 1 completed Distribution, and Wave 2 completed Lollipop/Dumbbell. Current unmigrated legacy families are Waterfall, Butterfly, Heatmap, and Treemap.

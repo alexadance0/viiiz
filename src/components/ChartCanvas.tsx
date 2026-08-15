@@ -971,7 +971,7 @@ export function applySeriesVisualState(option: Record<string, unknown>, table: D
     if (active) {
       item.z = Math.max(Number(item.z ?? 0), 1000)
       if (item.type === 'line') item.lineStyle = { ...item.lineStyle, width: Number(item.lineStyle?.width ?? 2) + .8, opacity: 1 }
-      if (item.type === 'scatter') item.itemStyle = { ...item.itemStyle, opacity: 1, shadowColor: 'rgba(32,32,39,.18)', shadowBlur: 4 }
+      if (item.type === 'scatter' || item.type === 'custom') item.itemStyle = { ...item.itemStyle, opacity: 1, shadowColor: 'rgba(32,32,39,.18)', shadowBlur: 4 }
     }
     item.data?.forEach((point) => {
       if (!point || typeof point !== 'object') return
@@ -999,6 +999,13 @@ export function applySeriesVisualState(option: Record<string, unknown>, table: D
         if (item.type === 'scatter') point.symbolSize = Math.max(Number(point.symbolSize ?? point.bubbleSize ?? config.scatterPointSize ?? 10), Number(point.bubbleSize ?? config.scatterPointSize ?? 10) + 3)
       }
     })
+  })
+  const graphics = option.graphic as Array<{ comparisonConnectorSeriesNames?: string[]; children?: Array<{ style?: Record<string, unknown> }> }> | undefined
+  graphics?.forEach((graphic) => {
+    const names = graphic.comparisonConnectorSeriesNames
+    if (!names?.length) return
+    const opacity = activeSeriesName && !names.includes(activeSeriesName) ? .22 : 1
+    graphic.children?.forEach((child) => { child.style = applyStyleOpacity(child.style, opacity) })
   })
 }
 export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
@@ -1562,7 +1569,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       })
       const exactDisplayDecorations = decorationGraphics(config.decorations ?? [], exactBounds ?? undefined, selectDecoration)
       const exactCleanDecorations = decorationGraphics(config.decorations ?? [], exactBounds ?? undefined)
-      const barGrid = barVerticalGridGraphics(instance, table, config, exactBounds)
+      const barGrid = plotKind === 'comparison-stem' ? [] : barVerticalGridGraphics(instance, table, config, exactBounds)
       if (exactBounds) {
         const exactMiddleY = (exactBounds.top + exactBounds.bottom) / 2
         const exactGrid = { left: exactBounds.left, right: (config.canvasWidth ?? 1000) - exactBounds.right, top: exactBounds.top, bottom: canvasHeight - exactBounds.bottom }
@@ -1805,10 +1812,18 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         onSelect?.({ key, seriesName, category: String(category), value: value == null ? 'пропуск' : String(value), color: config.elementStyles[key]?.color ?? getSeriesColor(config, seriesName, Math.max(0, seriesIndex)) })
         onSettingsFocus?.('element')
       }
+      type NativeRendererElement = { type?: string; info?: { elementId?: string; datumId?: string; seriesId?: string; elementKey?: string; sourceSeriesName?: string; displayCategory?: string; displayValue?: string; displayLabel?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target'] }; parent?: NativeRendererElement; __hostTarget?: NativeRendererElement }
+      const nativeRendererInfo = (target?: NativeRendererElement) => {
+        let element = target
+        for (let depth = 0; element && depth < 8; depth += 1, element = element.parent ?? element.__hostTarget) {
+          if (element.info?.elementKey) return element.info
+        }
+        return undefined
+      }
       const handler = (params: unknown) => {
         if (suppressTreemapClick.current) { suppressTreemapClick.current = false; return }
-        type RendererPoint = { elementId?: string; datumId?: string; seriesId?: string; elementKey?: string; sourceSeriesName?: string; displayValue?: string; displayCategory?: string; displayLabel?: string; displayColor?: string; directLegendLabel?: boolean; itemStyle?: { color?: unknown } }
-        const event = params as { componentType?: string; targetType?: string; seriesName?: string; name?: string; value?: unknown; color?: unknown; data?: RendererPoint; info?: RendererPoint; event?: { target?: { type?: string; parent?: { type?: string } }; topTarget?: { type?: string; parent?: { type?: string } } } }
+        type RendererPoint = { elementId?: string; datumId?: string; seriesId?: string; elementKey?: string; sourceSeriesName?: string; displayValue?: string; displayCategory?: string; displayLabel?: string; displayColor?: string; directLegendLabel?: boolean; selectionTarget?: ChartElementSelection['target']; itemStyle?: { color?: unknown } }
+        const event = params as { componentType?: string; targetType?: string; seriesName?: string; name?: string; value?: unknown; color?: unknown; data?: RendererPoint; info?: RendererPoint; event?: { target?: NativeRendererElement; topTarget?: NativeRendererElement } }
         if (event.componentType === 'title') { onSettingsFocus?.(event.targetType === 'subtitle' || event.targetType === 'subtext' ? 'subtitle' : 'title'); return }
         if (event.componentType === 'xAxis' || event.componentType === 'yAxis') {
           const axis = event.componentType === 'xAxis' ? 'x' : 'y'
@@ -1823,11 +1838,17 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         if (event.componentType === 'legend') { onSettingsFocus?.('legend'); return }
         if (event.targetType === 'endLabel') { onSettingsFocus?.('legend'); return }
         if (!event.seriesName) return
-        const pointData = event.info?.elementKey ? event.info : event.data
+        const rendererPoint = nativeRendererInfo(event.event?.target) ?? nativeRendererInfo(event.event?.topTarget)
+        const pointData = event.info?.elementKey ? event.info : rendererPoint?.elementKey ? rendererPoint : event.data
         const seriesName = pointData?.sourceSeriesName ?? event.seriesName.replace(/^__hit__:/, '')
         const pointColor = pointData?.displayColor ?? (typeof event.data?.itemStyle?.color === 'string' ? event.data.itemStyle.color : undefined) ?? (typeof event.color === 'string' ? event.color : undefined)
         const renderTarget = event.event?.target ?? event.event?.topTarget
         const clickedValueLabel = event.targetType === 'label' || renderTarget?.type === 'text' || renderTarget?.type === 'tspan' || renderTarget?.parent?.type === 'text'
+        if (pointData?.selectionTarget === 'guide' && pointData.elementKey) {
+          onSelect?.({ key: pointData.elementKey, seriesName, category: '', value: pointData.displayValue ?? seriesName, color: pointColor, target: 'guide' })
+          onSettingsFocus?.('legend')
+          return
+        }
         const nativeSelection = (target?: 'value-label') => {
           if (!pointData?.elementId) return undefined
           const selection: ChartSelection = { kind: 'element', id: pointData.elementId, role: target ?? 'mark', seriesId: pointData.seriesId, datumId: pointData.datumId, legacyKey: pointData.elementKey, series: seriesName, category: pointData.displayCategory ?? event.name ?? '', value: pointData.displayValue ?? String(event.value ?? ''), label: pointData.displayLabel, color: pointColor }
@@ -1869,10 +1890,15 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       }
       const legendHandler = () => onSettingsFocus?.('legend')
       const backgroundHandler = (event: { target?: unknown }) => { if (!event.target) { onClearSettingsFocus?.(); onAnnotationSelect?.('') } }
-      const waterfallElementHandler = (event: { target?: { type?: string; info?: { elementKey?: string; sourceSeriesName?: string; displayCategory?: string; displayValue?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target'] }; parent?: { type?: string; info?: { elementKey?: string; sourceSeriesName?: string; displayCategory?: string; displayValue?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target'] } } } }) => {
-        if (config.kind !== 'waterfall') return
-        const point = event.target?.info?.elementKey ? event.target.info : event.target?.parent?.info
+      const nativeElementHandler = (event: { target?: NativeRendererElement }) => {
+        const point = nativeRendererInfo(event.target)
         if (!point?.elementKey) return
+        if (point.selectionTarget === 'guide') {
+          onSelect?.({ key: point.elementKey, seriesName: point.sourceSeriesName ?? '', category: '', value: point.displayValue ?? point.sourceSeriesName ?? '', color: point.displayColor, target: 'guide' })
+          onSettingsFocus?.('legend')
+          return
+        }
+        if (config.kind !== 'waterfall') return
         const target = point.selectionTarget ?? (event.target?.type === 'text' || event.target?.parent?.type === 'text' ? 'value-label' : undefined)
         onSelect?.({ key: point.elementKey, seriesName: point.sourceSeriesName ?? '', category: point.displayCategory ?? '', value: point.displayValue ?? '', color: point.displayColor, target })
         onSettingsFocus?.('element')
@@ -2031,7 +2057,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       instance.on('globalout', resetHover)
       instance.on('mouseout', resetHover)
       instance.on('legendselectchanged', legendHandler)
-      renderer.on('click', waterfallElementHandler)
+      renderer.on('click', nativeElementHandler)
       renderer.on('click', backgroundHandler)
       renderer.on('mousemove', treemapMove)
       renderer.on('mouseup', finishTreemapDrag)
@@ -2048,7 +2074,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           instance.off('mouseout', resetHover)
           instance.off('legendselectchanged', legendHandler)
         }
-        renderer.off('click', waterfallElementHandler)
+        renderer.off('click', nativeElementHandler)
         renderer.off('click', backgroundHandler)
         renderer.off('mousemove', treemapMove)
         renderer.off('mouseup', finishTreemapDrag)
