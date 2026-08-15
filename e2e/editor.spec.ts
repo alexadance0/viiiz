@@ -217,6 +217,9 @@ test('Butterfly mirrors two measures around a shared category axis', async ({ pa
   const categoryBox = await category.boundingBox()
   expect(categoryBox).not.toBeNull()
   const center = categoryBox!.x + categoryBox!.width / 2
+  await category.click({ force: true })
+  await expect(page.locator('.canvas-rich-text-content').filter({ hasText: /^Север$/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Снять выделение' }).click()
   const leftPaths = page.locator('.canvas-paper svg path[fill="#0072b2"]')
   const rightPaths = page.locator('.canvas-paper svg path[fill="#e69f00"]')
   const leftBar = (await Promise.all([...Array(await leftPaths.count()).keys()].map((index) => leftPaths.nth(index).boundingBox()))).filter((box): box is NonNullable<typeof box> => box != null && box.width > 20).sort((a, b) => b.width - a.width)[0]

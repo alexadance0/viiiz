@@ -2,6 +2,7 @@ import { niceNumericScale } from '../../../core/chartScale'
 import { formatChartNumber } from '../../../core/numberFormat'
 import type { ChartConfig, DataTable } from '../../../core/types'
 import type { ButterflySeriesScene, NativeButterflyChartScene } from '../../../entities/chart/model/ChartScene'
+import { chartDocumentFromLegacy } from '../../../entities/chart/model/legacyChartConfigAdapter'
 import { compileNativeBarScene } from '../bar/compiler'
 
 export const legacyButterflyBuilderGuard = () => { throw new Error('Legacy Butterfly builder was removed; use the native Butterfly compiler.') }
@@ -24,6 +25,8 @@ export function compileNativeButterflyScene(table: DataTable, sourceConfig: Char
   const fields = butterflyFields(sourceConfig)
   const config = { ...sourceConfig, yField: fields.all[0] ?? sourceConfig.yField, yFields: fields.all, seriesField: '', barCategorySort: 'none' as const, barOrientation: 'horizontal' as const, showDirectLabels: false }
   const base = compileNativeBarScene(table, { ...config, kind: 'horizontal-bar' })
+  const categoryPlacement = config.butterflyCategoryPosition ?? 'center'
+  const categoryAxis = { ...base.plot.categoryAxis, placement: categoryPlacement === 'center' ? { kind: 'internal' as const, anchor: 'center' as const } : { kind: 'side' as const, side: categoryPlacement } }
   const leftSet = new Set(fields.left)
   const running = new Map<string, number[]>()
   const series: ButterflySeriesScene[] = base.plot.series.map((source) => {
@@ -43,5 +46,5 @@ export function compileNativeButterflyScene(table: DataTable, sourceConfig: Char
   const automatic = niceNumericScale([-extent, extent], true)
   const absoluteMax = Math.max(Math.abs(config.yAxisMin ?? automatic.min), Math.abs(config.yAxisMax ?? automatic.max))
   const valueDomain = { min: -absoluteMax, max: absoluteMax, step: config.yAxisStep ?? automatic.step }
-  return { ...base, compatibilityConfig: config, plot: { kind: 'butterfly', categoryPlacement: config.butterflyCategoryPosition ?? 'center', categories: base.plot.categories, categoryAxis: base.plot.categoryAxis, valueAxis: base.plot.valueAxis, valueDomain, barWidth: config.barWidth ?? 68, seriesGap: config.barSeriesGap ?? 30, series } }
+  return { ...base, document: chartDocumentFromLegacy(table, sourceConfig), compatibilityConfig: config, plot: { kind: 'butterfly', categoryPlacement, categories: base.plot.categories, categoryAxis, valueAxis: base.plot.valueAxis, valueDomain, barWidth: config.barWidth ?? 68, seriesGap: config.barSeriesGap ?? 30, series } }
 }

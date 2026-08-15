@@ -29,9 +29,11 @@ export function resolveNativeWaterfallScene(source: NativeWaterfallChartScene): 
     marks[mark.id] = { rect, label }
     base.geometry.elements[mark.id] = rect
   })
-  const connectors = Object.fromEntries(source.plot.connectors.map((connector) => {
-    const from = marks[connector.fromId]?.rect, to = marks[connector.toId]?.rect
-    return [connector.id, from && to ? { x1: from.x + from.width, y1: project(connector.value), x2: to.x, y2: project(connector.value) } : { x1: 0, y1: 0, x2: 0, y2: 0 }]
+  const connectors = Object.fromEntries(source.plot.connectors.map((connector, index) => {
+    const fromMark = source.plot.marks[index], toMark = source.plot.marks[index + 1]
+    const width = (mark: typeof fromMark) => band * Math.max(.1, Math.min(1, (mark.style.width ?? source.plot.barWidth) / 100))
+    const y = project(connector.value)
+    return [connector.id, { x1: plot.x + band * (index + .5) + width(fromMark) / 2, y1: y, x2: plot.x + band * (index + 1.5) - width(toMark) / 2, y2: y }]
   }))
   return { ...source, geometry: base.geometry, resolvedReservations: base.resolvedReservations, waterfallGeometry: { marks, connectors } }
 }

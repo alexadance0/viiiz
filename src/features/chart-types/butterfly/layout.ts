@@ -3,7 +3,7 @@ import type { ElementId } from '../../../entities/chart/model/ChartElement'
 import type { NativeButterflyChartScene, ResolvedNativeChartScene } from '../../../entities/chart/model/ChartScene'
 import { resolveNativeCartesianScene } from '../bar/layout'
 
-export type ResolvedButterflyScene = ResolvedNativeChartScene & { plot: NativeButterflyChartScene['plot']; butterflyGeometry: { marks: Record<ElementId, { x: number; y: number; width: number; height: number }>; labels: Record<ElementId, { x: number; y: number; align: 'left' | 'right'; verticalAlign: 'middle' }>; categories: Array<{ x: number; y: number; width: number; height: number }> ; centerGap: number } }
+export type ResolvedButterflyScene = ResolvedNativeChartScene & { plot: NativeButterflyChartScene['plot']; butterflyGeometry: { marks: Record<ElementId, { x: number; y: number; width: number; height: number }>; labels: Record<ElementId, { x: number; y: number; align: 'left' | 'center' | 'right'; verticalAlign: 'middle'; inside: boolean }>; categories: Array<{ x: number; y: number; width: number; height: number }> ; centerGap: number } }
 
 export function resolveNativeButterflyScene(source: NativeButterflyChartScene): ResolvedButterflyScene {
   const fake = { ...source, plot: { kind: 'bar' as const, categoryPlacement: 'band' as const, orientation: 'horizontal' as const, stacking: 'stacked' as const, categories: source.plot.categories, categoryAxis: source.plot.categoryAxis, valueAxis: source.plot.valueAxis, valueDomain: source.plot.valueDomain, barWidth: source.plot.barWidth, seriesGap: source.plot.seriesGap, series: source.plot.series } }
@@ -16,18 +16,29 @@ export function resolveNativeButterflyScene(source: NativeButterflyChartScene): 
   const center = plot.x + plot.width / 2, half = Math.max(1, (plot.width - centerGap) / 2), extent = Math.max(Math.abs(source.plot.valueDomain.min), Math.abs(source.plot.valueDomain.max), 1)
   const marks: ResolvedButterflyScene['butterflyGeometry']['marks'] = {}
   const labels: ResolvedButterflyScene['butterflyGeometry']['labels'] = {}
-  const sideCounts = { left: source.plot.series.filter((item) => item.side === 'left').length, right: source.plot.series.filter((item) => item.side === 'right').length }
   source.plot.series.forEach((series) => {
-    const sideIndex = source.plot.series.filter((item) => item.side === series.side).indexOf(series)
     series.marks.forEach((mark, categoryIndex) => {
       if (mark.value == null) return
-      const yBand = band * Math.max(.1, Math.min(1, source.plot.barWidth / 100)), barHeight = yBand / Math.max(1, sideCounts[series.side])
+      const barHeight = band * Math.max(.1, Math.min(1, source.plot.barWidth / 100))
       const inner = center + (series.side === 'left' ? -centerGap / 2 : centerGap / 2)
       const start = inner + (series.side === 'left' ? -1 : 1) * half * mark.stackStart / extent
       const end = inner + (series.side === 'left' ? -1 : 1) * half * mark.stackEnd / extent
-      const rect = { x: Math.min(start, end), y: plot.y + band * categoryIndex + (band - yBand) / 2 + sideIndex * barHeight, width: Math.max(1, Math.abs(end - start)), height: barHeight }
+      const rect = { x: Math.min(start, end), y: plot.y + band * categoryIndex + (band - barHeight) / 2, width: Math.max(1, Math.abs(end - start)), height: barHeight }
       marks[mark.id] = rect
-      if (mark.label.visible) labels[mark.id] = { x: mark.side === 'left' ? rect.x - 5 : rect.x + rect.width + 5, y: rect.y + rect.height / 2, align: mark.side === 'left' ? 'right' : 'left', verticalAlign: 'middle' }
+      if (mark.label.visible) {
+        const requested = mark.label.position ?? 'auto'
+        const inward = requested === 'bottom'
+        const inside = requested.startsWith('inside-')
+        const endpoint = mark.side === 'left' ? rect.x : rect.x + rect.width
+        const startpoint = mark.side === 'left' ? rect.x + rect.width : rect.x
+        const x = inside
+          ? requested === 'inside-center' ? rect.x + rect.width / 2 : requested === 'inside-bottom' ? startpoint + (mark.side === 'left' ? -5 : 5) : endpoint + (mark.side === 'left' ? 5 : -5)
+          : inward ? startpoint + (mark.side === 'left' ? 5 : -5) : endpoint + (mark.side === 'left' ? -5 : 5)
+        const align = inside && requested === 'inside-center' ? 'center'
+          : inside ? requested === 'inside-bottom' ? mark.side === 'left' ? 'right' : 'left' : mark.side === 'left' ? 'left' : 'right'
+            : inward ? mark.side === 'left' ? 'left' : 'right' : mark.side === 'left' ? 'right' : 'left'
+        labels[mark.id] = { x, y: rect.y + rect.height / 2, align, verticalAlign: 'middle', inside }
+      }
       base.geometry.elements[mark.id] = rect
     })
   })

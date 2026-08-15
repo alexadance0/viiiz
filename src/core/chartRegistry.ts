@@ -25,7 +25,7 @@ import { compileNativeDistributionScene, isNativeDistributionKind, validateNativ
 import { compileNativeWaterfallScene, legacyWaterfallBuilderGuard } from '../features/chart-types/waterfall/compiler'
 import { waterfallSteps } from '../features/chart-types/waterfall/transform'
 export { formatWaterfallChange, waterfallLabelPlacement, waterfallSteps, waterfallValueLabel } from '../features/chart-types/waterfall/transform'
-import { compileNativeButterflyScene, validateNativeButterflyMapping } from '../features/chart-types/butterfly/compiler'
+import { compileNativeButterflyScene, legacyButterflyBuilderGuard, validateNativeButterflyMapping } from '../features/chart-types/butterfly/compiler'
 export { fitSwarmClouds, fitSwarmOffsets, packSwarmOffsets } from '../features/chart-types/distribution/swarm'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 import { nativeMarkSelections } from '../entities/chart/model/sceneVisitors'
@@ -822,6 +822,8 @@ export function chartElementColor(table: DataTable, config: ChartConfig, key: st
 
 const waterfallBase = cartesian('bar', 'Waterfall', 'comparison')
 const waterfall: LegacyChartPlugin = { ...waterfallBase, ...pluginModel('waterfall'), id: 'waterfall', label: 'Waterfall', settings: { ...waterfallBase.settings, series: [], features: { ...waterfallBase.settings.features, directLabels: false } }, buildOption: legacyWaterfallBuilderGuard }
+const butterflyBase = cartesian('horizontal-bar', 'Butterfly', 'bar-horizontal')
+const butterfly: LegacyChartPlugin = { ...butterflyBase, ...pluginModel('butterfly'), id: 'butterfly', label: 'Butterfly', settings: butterflyBase.settings, buildOption: legacyButterflyBuilderGuard }
 
 const lollipop = (id: 'lollipop' | 'horizontal-lollipop', label: string): LegacyChartPlugin => {
   const horizontal = id === 'horizontal-lollipop'
@@ -1347,8 +1349,9 @@ const distribution: LegacyChartPlugin = {
 }
 
 const legacyChartRegistry = [
-  ...barChartDefinitions.flatMap(([id, label, category]) => id === 'waterfall' || id === 'lollipop' || id === 'horizontal-lollipop' ? [] : [cartesian(id, label, category)]),
+  ...barChartDefinitions.flatMap(([id, label, category]) => id === 'waterfall' || id === 'butterfly' || id === 'lollipop' || id === 'horizontal-lollipop' ? [] : [cartesian(id, label, category)]),
   waterfall,
+  butterfly,
   lollipop('lollipop', 'Леденцовая'),
   lollipop('horizontal-lollipop', 'Леденцовая горизонтальная'),
   dumbbell,
@@ -1419,7 +1422,7 @@ export const chartRegistry: ChartPlugin[] = legacyChartRegistry.map((plugin) => 
   if (compiler) return {
     ...plugin, compilerMode: 'native' as const,
     capabilities: plugin.id === 'waterfall' ? { ...nativeBarCapabilities, orientation: ['vertical'] } : plugin.id === 'butterfly' ? { ...nativeBarCapabilities, axes: { category: { placements: ['side', 'internal'] }, value: { scaleTypes: ['linear'] } }, orientation: ['horizontal'], stacking: ['stacked'] } : isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : isNativeSmoothingKind(plugin.id) ? nativeSmoothingCapabilities : isNativeIntervalKind(plugin.id) ? nativeIntervalCapabilities : isNativeXYKind(plugin.id) ? nativeXYCapabilities(plugin.id) : nativeDistributionCapabilities,
-    validate: plugin.id === 'butterfly' ? validateNativeButterflyMapping : isNativeXYKind(plugin.id) ? validateNativeXYMapping : isNativeDistributionKind(plugin.id) ? validateNativeDistributionMapping : plugin.validate,
+    validate: plugin.id === 'butterfly' ? (table: DataTable, config: ChartConfig) => { const generic = plugin.validate(table, config), native = validateNativeButterflyMapping(table, config); return { ok: generic.ok && native.ok, errors: [...generic.errors, ...native.errors] } } : isNativeXYKind(plugin.id) ? validateNativeXYMapping : isNativeDistributionKind(plugin.id) ? validateNativeDistributionMapping : plugin.validate,
     compile: compiler,
     buildOption: (table: DataTable, config: ChartConfig) => renderScene(compiler(table, config)),
   }

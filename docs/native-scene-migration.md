@@ -73,6 +73,8 @@ Wave 3 started from `57a9357`; implementation completed in `db638ea`. Waterfall 
 
 Focused verification covers compiler identity/semantics, layout determinism, renderer isolation, existing interaction parity, production build, and six visual baselines (three per family). Both legacy entry points are throwing guards.
 
+Review stabilization additionally pins source-family documents, combined Butterfly mapping/category validation, contiguous same-row side stacks, mirrored inside/outside labels with contrast, typed center-category selection/edit metadata, null-safe Waterfall connectors, and per-element Waterfall color/label-position precedence. `ChartCanvas` consumes renderer-neutral hit and category-layout metadata and no longer branches on either persisted family kind.
+
 ## Phase 8 native XY
 
 `scatter` and `bubble` now compile a dedicated `CartesianXYPlotScene`. Continuous X/Y scales, final point marker/label styles, tooltip display values, categorical grouping, size encoding, and all analytical decisions are complete before the ECharts adapter. Layout measures continuous tick labels with the actual numeric/date formatters and resolves the Bubble size guide relative to the authoritative plot rectangle.

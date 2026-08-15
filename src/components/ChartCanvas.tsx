@@ -22,7 +22,6 @@ import { AnnotationDisplay, CanvasTextDisplay } from './ChartCanvasDisplays'
 import { formatChartNumber } from '../core/numberFormat'
 import { formatTimeValue } from '../core/timeFrequency'
 import { measureTextWidth, wrapMeasuredText } from '../core/textMetrics'
-import { planCategoryDateLabels } from '../core/chartDateAxis'
 import { decorationGraphics, type PlotBounds } from './chartDecorations'
 import { isAreaChart, isBarChart, isDistributionChart, isStackedBarChart, isStackedChart, usesHorizontalAxes } from '../core/chartKinds'
 import type { ChartExportOptions, ExportTextBlock } from '../features/chart-export/chartExport'
@@ -358,21 +357,6 @@ function valueLabelHitGraphics(instance: echarts.ECharts, table: DataTable, conf
     } }]
   }))
 }
-// oxlint-disable-next-line react/only-export-components -- exported for date-layout regression tests
-export function butterflyCategoryLayout(table: DataTable, config: ChartConfig) {
-  const prepared = prepareVisibleChartData(table, config)
-  const style = config.xAxisLabelText ?? config.axisLabelText
-  const plannedLabels = planCategoryDateLabels(prepared.categories, table, config)
-  const labels = prepared.categories.map((category, index) => {
-    const key = category instanceof Date ? category.toISOString() : `${index}:${String(category ?? '')}`
-    const label = config.categoryLabelOverrides?.y?.[key] ?? plannedLabels[index] ?? ''
-    return { category, key, label }
-  })
-  const naturalGap = Math.max(60, ...labels.map(({ label }) => Math.max(...label.split('\n').map((line) => measureTextWidth(line, style.size, style.fontFamily, style.weight))) + 44))
-  const maximumGap = Math.max(60, (config.canvasWidth ?? 1000) * .34)
-  const gap = Math.min(naturalGap, maximumGap)
-  return { prepared, style, labels, gap, wrapped: naturalGap > maximumGap }
-}
 function cloneChartOption<T>(value: T): T {
   if (Array.isArray(value)) return value.map((item) => cloneChartOption(item)) as T
   if (value instanceof Date) return new Date(value.getTime()) as T
@@ -416,7 +400,7 @@ function chartPlotBounds(instance: echarts.ECharts, table: DataTable, config: Ch
   if (heatmapBounds) return heatmapBounds
   const option = instance.getOption() as unknown as { xAxis?: Array<{ min?: number; max?: number }>; yAxis?: Array<{ min?: number; max?: number }>; grid?: Array<{ left?: number; right?: number; top?: number; bottom?: number }> }
   if (isHorizontalBar(config)) {
-    const firstGrid = option.grid?.[0], lastGrid = config.kind === 'butterfly' && option.grid?.[1] ? option.grid[1] : firstGrid
+    const firstGrid = option.grid?.[0], lastGrid = option.grid?.at(-1) ?? firstGrid
     const left = Number(firstGrid?.left), right = Number(lastGrid?.right), top = Number(firstGrid?.top), bottom = Number(firstGrid?.bottom)
     if ([left, right, top, bottom].every(Number.isFinite)) return { left, right: instance.getWidth() - right, top, bottom: instance.getHeight() - bottom }
   }
@@ -671,7 +655,7 @@ export function outlineSelectedTreemapGroup(instance: echarts.ECharts, selectedE
 export function applySeriesVisualState(option: Record<string, unknown>, table: DataTable, config: ChartConfig, selectedSeriesName?: string | null, selectedElementKey?: string | null, hoveredSeriesName?: string | null) {
   const selectedElementSeriesName = selectedElementKey?.startsWith('treemap-group:') ? selectedElementKey.slice('treemap-group:'.length) : selectedElementKey?.split('\u001f')[0]
   const activeSeriesName = hoveredSeriesName ?? selectedSeriesName ?? selectedElementSeriesName ?? null
-  const series = option.series as Array<{ name?: string; segmentOf?: string; customBarOf?: string; type?: string; silent?: boolean; z?: number; itemStyle?: Record<string, unknown>; lineStyle?: Record<string, unknown>; areaStyle?: Record<string, unknown>; emphasis?: Record<string, unknown>; blur?: Record<string, unknown>; data?: Array<Record<string, unknown> | null> }> | undefined
+  const series = option.series as Array<{ id?: string; name?: string; segmentOf?: string; customBarOf?: string; type?: string; silent?: boolean; z?: number; itemStyle?: Record<string, unknown>; lineStyle?: Record<string, unknown>; areaStyle?: Record<string, unknown>; emphasis?: Record<string, unknown>; blur?: Record<string, unknown>; data?: Array<Record<string, unknown> | null> }> | undefined
   if (config.kind === 'treemap') {
     const groupSelected = selectedElementKey?.startsWith('treemap-group:')
     if (groupSelected) return
@@ -725,7 +709,7 @@ export function applySeriesVisualState(option: Record<string, unknown>, table: D
       if (pointDim || pointSelected) point.itemStyle = applyPointOpacity(point.itemStyle as Record<string, unknown> | undefined, pointSelected ? 1 : dimSeries ? .22 : peerOpacity, fallbackPointColor)
       if (pointSelected) {
         const pointStyle = point.itemStyle as Record<string, unknown> | undefined
-        const barLike = item.type === 'bar' || config.kind === 'waterfall'
+        const barLike = item.type === 'bar' || item.id === 'native-waterfall'
         const selectedBorderWidth = barLike ? Number(pointStyle?.borderWidth ?? 0) : Math.max(Number(pointStyle?.borderWidth ?? 0), item.type === 'line' ? 2.5 : 1.5)
         point.itemStyle = {
           ...pointStyle,
@@ -899,10 +883,13 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const compiledScene = plugin.compile(table, renderConfig)
       const plotKind = compiledScene.migrationMode === 'native' ? compiledScene.plot.kind : 'legacy'
       const rendererOwnsDirectLabels = compiledScene.migrationMode === 'native' && compiledScene.plot.kind !== 'bar'
-      type NativeSelectionHit = { rect: { x: number; y: number; width: number; height: number }; info: { elementKey: string; sourceSeriesName: string; displayCategory: string; displayValue: string; displayColor?: string; selectionTarget?: ChartElementSelection['target'] } }
-      const option = renderScene(compiledScene) as Record<string, unknown> & { graphic?: unknown[]; nativeSelectionHits?: NativeSelectionHit[] }
+      type NativeSelectionHit = { rect: { x: number; y: number; width: number; height: number }; info: { elementKey: string; sourceSeriesName: string; displayCategory: string; displayValue: string; displayColor?: string; selectionTarget?: ChartElementSelection['target']; axis?: 'x' | 'y'; selectionMode?: 'series-first' } }
+      type NativeCategoryLayout = CategoryLabelLayout
+      const option = renderScene(compiledScene) as Record<string, unknown> & { graphic?: unknown[]; nativeSelectionHits?: NativeSelectionHit[]; nativeCategoryLayouts?: NativeCategoryLayout[] }
       const nativeSelectionHits = option.nativeSelectionHits ?? []
+      const nativeCategoryLayouts = option.nativeCategoryLayouts ?? []
       delete option.nativeSelectionHits
+      delete option.nativeCategoryLayouts
       const nativeLayoutSnapshot = plugin.compilerMode === 'native' ? cloneChartOption({ grid: option.grid, xAxis: option.xAxis, yAxis: option.yAxis, legend: option.legend }) : null
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       setRenderAnimationEnabled(!reducedMotion)
@@ -986,7 +973,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const individualValueStyles = Object.values(config.elementStyles).flatMap((item) => item.showLabel || item.valueText ? [item.valueText ?? config.valueText] : [])
       const visibleValueStyles = config.showValues ? [config.valueText, ...individualValueStyles] : individualValueStyles
       const valueLabelSpace = visibleValueStyles.reduce((space, valueStyle) => Math.max(space, Math.round(valueStyle.size * valueStyle.lineHeight / 100) + 8), 0)
-      if (grid && valueLabelSpace && isBarChart(config.kind) && config.kind !== 'waterfall' && config.kind !== 'butterfly' && config.barValueLabelAbsorption) {
+      if (grid && valueLabelSpace && plugin.compilerMode === 'legacy' && isBarChart(config.kind) && config.barValueLabelAbsorption) {
         const values = prepareVisibleChartData(table, config).series.flatMap((series) => series.data)
         const hasPositive = values.some((value) => value != null && value >= 0)
         const hasNegative = values.some((value) => value != null && value < 0)
@@ -997,16 +984,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           if (hasPositive) grid.top = Number(grid.top ?? 0) + valueLabelSpace
           if (hasNegative) grid.bottom = Number(grid.bottom ?? 0) + valueLabelSpace
         }
-      } else if (grid && config.kind === 'waterfall' && valueLabelSpace && !(config.valueLabelPosition ?? '').startsWith('inside-')) {
-        const values = prepareVisibleChartData(table, config).series[0]?.data ?? []
-        const outsidePrevious = config.valueLabelPosition === 'bottom'
-        const total = values.reduce<number>((sum, value) => sum + (value ?? 0), 0)
-        const totalVisible = (config.waterfallShowTotal ?? true) && (config.waterfallShowTotalValue ?? true)
-        const needsTop = values.some((value) => value != null && (outsidePrevious ? value < 0 : value >= 0)) || totalVisible && total >= 0
-        const needsBottom = values.some((value) => value != null && (outsidePrevious ? value >= 0 : value < 0)) || totalVisible && total < 0
-        if (needsTop) grid.top = Number(grid.top ?? 0) + valueLabelSpace
-        if (needsBottom) grid.bottom = Number(grid.bottom ?? 0) + valueLabelSpace
-      } else if (grid && config.kind !== 'treemap' && config.kind !== 'butterfly' && valueLabelSpace && !(config.valueLabelPosition ?? '').startsWith('inside-')) {
+      } else if (grid && plugin.compilerMode === 'legacy' && config.kind !== 'treemap' && valueLabelSpace && !(config.valueLabelPosition ?? '').startsWith('inside-')) {
         const valuePosition = config.valueLabelPosition ?? 'auto'
         if (isHorizontalBar(config)) {
           if (valuePosition === 'bottom') grid.left = Number(grid.left ?? 0) + valueLabelSpace
@@ -1186,7 +1164,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const makeXAxisTitle = (clean = false) => standardXAxisTitle && { id: 'chart-x-axis-title', type: 'text', x: xAxisTitleX, y: xAxisTitleY, z: 20, silent: clean, cursor: clean ? undefined : 'pointer', style: { text: physicalXAxisTitle, fill: xAxisTitleStyle.color, fontFamily: xAxisTitleStyle.fontFamily, fontSize: xAxisTitleStyle.size, fontWeight: xAxisTitleStyle.weight, fontStyle: xAxisTitleStyle.italic ? 'italic' : 'normal', lineHeight: Math.round(xAxisTitleStyle.size * xAxisTitleStyle.lineHeight / 100), align: 'center', textAlign: 'center', verticalAlign: 'middle', ...(!clean && selectedSettingsSection === xAxisTitleSection ? selectionStyle : {}) }, onclick: clean ? undefined : () => onSettingsFocus?.(xAxisTitleSection) }
       const existing = [...positionHeatmapScaleGraphics(Array.isArray(option.graphic) ? option.graphic : [], config, grid ?? {}, config.canvasWidth ?? 1000, canvasHeight, heatmapAxisReserve), makeXAxisTitle()].filter(Boolean)
       const plotMiddleY = grid ? (Number(grid.top ?? 0) + canvasHeight - Number(grid.bottom ?? 0)) / 2 : canvasHeight / 2
-      const yTitlePosition = config.kind === 'butterfly' && config.butterflyCategoryPosition && config.butterflyCategoryPosition !== 'center' ? config.butterflyCategoryPosition : config.yAxisPosition
+      const yTitlePosition = config.yAxisPosition
       const yTitleSideOffset = standardLegend && legendPosition === yTitlePosition ? sideLegendWidth + (yTitlePosition === 'left' ? marginLeft : marginRight) + 8 : (yTitlePosition === 'left' ? marginLeft : marginRight) + heatmapScaleSideOffset(config)
       const yTitleLabelStyle = isHorizontalBar(config) ? config.xAxisTitleText ?? config.axisTitleText : config.yAxisTitleText ?? config.axisTitleText
       const yTitleEdgeThickness = Math.round(yTitleLabelStyle.size * yTitleLabelStyle.lineHeight / 100)
@@ -1265,6 +1243,9 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       setRenderedChartKind(config.kind)
       setRenderedPlotKind(plotKind)
       if (activeCategoryLabel && config.kind !== 'treemap') {
+        const nativeCategoryLayout = nativeCategoryLayouts.find((item) => item.axis === activeCategoryLabel.axis && item.category === activeCategoryLabel.category)
+        if (nativeCategoryLayout) setCategoryLabelLayout(nativeCategoryLayout)
+        else {
         const axisKey = activeCategoryLabel.axis === 'x' ? 'xAxis' : 'yAxis'
         const axisOption = option[axisKey] as { data?: unknown[]; position?: 'top' | 'bottom' | 'left' | 'right'; axisLabel?: { rotate?: number; show?: boolean } } | Array<{ data?: unknown[]; position?: 'top' | 'bottom' | 'left' | 'right'; axisLabel?: { rotate?: number; show?: boolean } }> | undefined
         const axis = Array.isArray(axisOption) ? axisOption[0] : axisOption
@@ -1286,17 +1267,12 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         const width = config.xAxisLabelOverflow === 'wrap' ? activeCategoryLabel.axis === 'x' ? categoryWidth : sideWidth : naturalWidth
         const textLayout = layoutText({ document: plainTextDocument(text, baseStyle), maxWidth: width, wrap: config.xAxisLabelOverflow === 'wrap', rotation })
         const align = activeCategoryLabel.axis === 'x' ? 'center' : axis?.position === 'right' ? 'left' : 'right'
-        const butterflyGap = config.kind === 'butterfly' ? butterflyCategoryLayout(table, config).gap : 0
-        const butterflyCenter = config.kind === 'butterfly' && (config.butterflyCategoryPosition ?? 'center') === 'center'
-          ? (Number(instance.convertToPixel({ xAxisIndex: 0 }, 0)) + Number(instance.convertToPixel({ xAxisIndex: 1 }, 0))) / 2
-          : 0
-        if (axis?.axisLabel?.show === false && config.kind !== 'butterfly') setCategoryLabelLayout(null)
+        if (axis?.axisLabel?.show === false) setCategoryLabelLayout(null)
         else if (Number.isFinite(pixel) && bounds) setCategoryLabelLayout(activeCategoryLabel.axis === 'x'
           ? { axis: 'x', category: activeCategoryLabel.category, style: { ...baseStyle, align }, rotation, size: baseStyle.size, width, left: pixel - width / 2, top: axis?.position === 'top' ? bounds.top - (config.showXTicks ? config.tickLength : 0) - (config.xAxisLabelGap ?? 8) - textLayout.rotatedSize.height : bounds.bottom + (config.showXTicks ? config.tickLength : 0) + (config.xAxisLabelGap ?? 8) }
-          : config.kind === 'butterfly' && (config.butterflyCategoryPosition ?? 'center') === 'center'
-            ? { axis: 'y', category: activeCategoryLabel.category, style: { ...baseStyle, align: 'center' }, rotation: 0, size: baseStyle.size, width: butterflyGap - 16, left: butterflyCenter - (butterflyGap - 16) / 2, top: pixel - textLayout.size.height / 2 }
-            : { axis: 'y', category: activeCategoryLabel.category, style: { ...baseStyle, align }, rotation: 0, size: baseStyle.size, width: axis?.position === 'right' ? Math.max(20, canvasWidth - bounds.right - (config.xAxisLabelGap ?? 8)) : Math.max(20, bounds.left - (config.xAxisLabelGap ?? 8)), left: axis?.position === 'right' ? bounds.right + (config.xAxisLabelGap ?? 8) : 0, top: pixel - textLayout.size.height / 2 })
+          : { axis: 'y', category: activeCategoryLabel.category, style: { ...baseStyle, align }, rotation: 0, size: baseStyle.size, width: axis?.position === 'right' ? Math.max(20, canvasWidth - bounds.right - (config.xAxisLabelGap ?? 8)) : Math.max(20, bounds.left - (config.xAxisLabelGap ?? 8)), left: axis?.position === 'right' ? bounds.right + (config.xAxisLabelGap ?? 8) : 0, top: pixel - textLayout.size.height / 2 })
         else setCategoryLabelLayout(null)
+        }
       } else setCategoryLabelLayout(null)
       const exactBounds = chartPlotBounds(instance, table, config)
       if (exactBounds) setPlotBounds((current) => current && Math.abs(current.top - exactBounds.top) < .5 && Math.abs(current.bottom - exactBounds.bottom) < .5 && Math.abs(current.left - exactBounds.left) < .5 && Math.abs(current.right - exactBounds.right) < .5 ? current : exactBounds)
@@ -1398,7 +1374,12 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       if (nativeSelectionHits.length) {
         const hits = nativeSelectionHits.map((hit, index) => ({ id: `native-selection-hit-${index}`, type: 'rect', z: 140, cursor: 'pointer', shape: hit.rect, style: hit.info.elementKey === selectedElementKey && hit.info.selectionTarget === selectedElementTarget ? { fill: 'rgba(0,0,0,0)', stroke: '#6956e8', lineWidth: 1 } : { fill: 'rgba(0,0,0,0)' }, onclick: () => {
           const point = hit.info, seriesName = point.sourceSeriesName
-          if (config.kind === 'butterfly' && clickedSeries.current !== seriesName) {
+          if (point.selectionTarget === 'category-label') {
+            onSelect?.({ key: point.elementKey, seriesName: '', category: point.displayCategory, value: point.displayValue, target: 'category-label', axis: point.axis })
+            onSettingsFocus?.(`${point.axis ?? 'y'}-axis-labels`)
+            return
+          }
+          if (point.selectionMode === 'series-first' && clickedSeries.current !== seriesName) {
             const seriesIndex = prepareChartData(table, config).series.findIndex((item) => item.name === seriesName)
             onSeriesSelect?.({ name: seriesName, color: getSeriesColor(config, seriesName, Math.max(0, seriesIndex)) })
             clickedSeries.current = seriesName
@@ -1544,12 +1525,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           onSettingsFocus?.('element')
           return
         }
-        if (config.kind === 'waterfall') {
-          if (pointData?.elementKey) onSelect?.({ key: pointData.elementKey, seriesName, category: pointData.displayCategory ?? event.name ?? '', value: pointData.displayValue ?? String(event.value ?? ''), label: pointData.displayLabel, color: pointColor, ...(clickedValueLabel ? { target: 'value-label' as const } : {}) })
-          else selectNearestValue(seriesName)
-          onSettingsFocus?.('element')
-          return
-        }
         if (clickedValueLabel && pointData?.elementKey) {
           if (config.kind !== 'treemap' && selectedSettingsSection !== 'values') { onSettingsFocus?.('values'); return }
           onSelect?.(nativeSelection('value-label') ?? { key: pointData.elementKey, seriesName, category: pointData.displayCategory ?? event.name ?? '', value: pointData.displayValue ?? String(event.value ?? ''), label: pointData.displayLabel, color: pointColor, target: 'value-label' })
@@ -1574,26 +1549,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       }
       const legendHandler = () => onSettingsFocus?.('legend')
       const backgroundHandler = (event: { target?: unknown }) => { if (!event.target) { onClearSettingsFocus?.(); onAnnotationSelect?.('') } }
-      const waterfallElementHandler = (event: { target?: { type?: string; info?: { elementKey?: string; sourceSeriesName?: string; displayCategory?: string; displayValue?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target'] }; parent?: unknown } }) => {
-        if (config.kind !== 'waterfall' && config.kind !== 'butterfly') return
-        type Node = { type?: string; info?: { elementKey?: string; sourceSeriesName?: string; displayCategory?: string; displayValue?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target'] }; parent?: Node }
-        let node = event.target as Node | undefined
-        while (node && !node.info?.elementKey) node = node.parent
-        const point = node?.info
-        if (!point?.elementKey) return
-        const seriesName = point.sourceSeriesName ?? ''
-        if (config.kind === 'butterfly' && clickedSeries.current !== seriesName) {
-          const seriesIndex = prepareChartData(table, config).series.findIndex((item) => item.name === seriesName)
-          onSeriesSelect?.({ name: seriesName, color: getSeriesColor(config, seriesName, Math.max(0, seriesIndex)) })
-          clickedSeries.current = seriesName
-          onSettingsFocus?.('series')
-          return
-        }
-        const target = point.selectionTarget ?? (node?.type === 'text' ? 'value-label' : undefined)
-        onSelect?.({ key: point.elementKey, seriesName, category: point.displayCategory ?? '', value: point.displayValue ?? '', color: point.displayColor, target })
-        onSettingsFocus?.('element')
-      }
-      void waterfallElementHandler
       // Keep the renderer that was alive when the handlers were registered.
       // During StrictMode teardown the chart-init effect may dispose ECharts
       // before this effect gets a chance to remove its listeners, at which
@@ -1748,7 +1703,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       instance.on('globalout', resetHover)
       instance.on('mouseout', resetHover)
       instance.on('legendselectchanged', legendHandler)
-      renderer.on('click', waterfallElementHandler)
       renderer.on('click', backgroundHandler)
       renderer.on('mousemove', treemapMove)
       renderer.on('mouseup', finishTreemapDrag)
@@ -1764,7 +1718,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           instance.off('mouseout', resetHover)
           instance.off('legendselectchanged', legendHandler)
         }
-        renderer.off('click', waterfallElementHandler)
         renderer.off('click', backgroundHandler)
         renderer.off('mousemove', treemapMove)
         renderer.off('mouseup', finishTreemapDrag)

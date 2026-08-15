@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as echarts from 'echarts'
-import { applySeriesVisualState, barVerticalGridGraphics, butterflyCategoryLayout, directLegendGraphics, fitTreemapLabelBoxes, heatmapPlotBounds, heatmapScaleSideOffset, materializeTreemapHyphens, outlineSelectedTreemapGroup, positionHeatmapScaleGraphics, suppressBuiltInDirectLabels, wrapTreemapLabelText } from './ChartCanvas'
+import { applySeriesVisualState, barVerticalGridGraphics, directLegendGraphics, fitTreemapLabelBoxes, heatmapPlotBounds, heatmapScaleSideOffset, materializeTreemapHyphens, outlineSelectedTreemapGroup, positionHeatmapScaleGraphics, suppressBuiltInDirectLabels, wrapTreemapLabelText } from './ChartCanvas'
 import { customFontCss } from '../features/chart-export/chartExport'
 import { decorationGraphics } from './chartDecorations'
 import { getChartPlugin } from '../core/chartRegistry'
@@ -37,23 +37,6 @@ describe('heatmap title layout', () => {
   it('reads heatmap bounds from the rendered coordinate rectangle, excluding labels', () => {
     const instance = { getModel: () => ({ getComponent: () => ({ coordinateSystem: { getRect: () => ({ x: 173, y: 91, width: 427, height: 286 }) } }) }) }
     expect(heatmapPlotBounds(instance, { ...config, kind: 'heatmap' })).toEqual({ left: 173, right: 600, top: 91, bottom: 377 })
-  })
-})
-
-describe('Butterfly category layout', () => {
-  it('uses the shared date-label planner for central categories', () => {
-    const dated: DataTable = {
-      name: 'dated',
-      columns: ['date', 'a', 'b'],
-      rows: [
-        { date: new Date(2024, 0, 1), a: 10, b: 12 },
-        { date: new Date(2024, 1, 1), a: 11, b: 13 },
-        { date: new Date(2025, 0, 1), a: 12, b: 14 },
-      ],
-      timeProfiles: { date: { frequency: 'monthly', confidence: 1, label: 'Ежемесячно', source: 'intervals' } },
-    }
-    const butterfly = { ...config, kind: 'butterfly' as const, xField: 'date', yFields: ['a', 'b'], butterflyLeftFields: ['a'], butterflyRightFields: ['b'], dateLabelFormat: 'month-context-ru' as const }
-    expect(butterflyCategoryLayout(dated, butterfly).labels.map(({ label }) => label)).toEqual(['янв.\n2024', 'февр.', 'янв.\n2025'])
   })
 })
 

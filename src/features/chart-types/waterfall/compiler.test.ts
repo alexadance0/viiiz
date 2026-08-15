@@ -4,6 +4,7 @@ import { createDefaultChartConfig } from '../../../entities/chart/model/defaultC
 import type { ChartConfig, DataTable } from '../../../core/types'
 import { compileNativeWaterfallScene, legacyWaterfallBuilderGuard } from './compiler'
 import { resolveNativeWaterfallScene } from './layout'
+import { chartElementColor } from '../../../core/chartRegistry'
 
 const table: DataTable = { name: 'waterfall', columns: ['factor', 'change'], rows: [{ factor: 'Revenue', change: 100 }, { factor: 'Cost', change: -30 }, { factor: 'Other', change: 20 }] }
 const config = (overrides: Partial<ChartConfig> = {}): ChartConfig => ({ ...createDefaultChartConfig(), kind: 'waterfall', xField: 'factor', yField: 'change', yFields: ['change'], aggregation: 'none', showValues: true, ...overrides })
@@ -23,6 +24,30 @@ describe('native Waterfall compiler and layout', () => {
     expect(Object.keys(resolved.waterfallGeometry.marks)).toHaveLength(4)
     expect(Object.values(resolved.waterfallGeometry.marks).every((mark) => mark.rect.width > 0 && mark.rect.height > 0)).toBe(true)
     expect(Object.keys(resolved.waterfallGeometry.connectors)).toHaveLength(3)
+  })
+
+  it('keeps source-family document semantics and honors element color and label-position overrides', () => {
+    const initial = compileNativeWaterfallScene(table, config())
+    const sourceKey = initial.plot.marks[1].legacyKey, totalKey = initial.plot.marks.at(-1)!.legacyKey
+    const customized = config({ elementStyles: { [sourceKey]: { color: '#123456', waterfallLabelPosition: 'inside-bottom' }, [totalKey]: { color: '#654321', waterfallLabelPosition: 'inside-center' } } })
+    const scene = compileNativeWaterfallScene(table, customized)
+    expect(scene.document.chart).toMatchObject({ family: 'waterfall', kind: 'waterfall' })
+    expect(scene.plot.marks[1]).toMatchObject({ style: { color: '#123456' }, label: { position: 'inside-bottom' } })
+    expect(scene.plot.marks.at(-1)).toMatchObject({ style: { color: '#654321' }, label: { position: 'inside-center' } })
+    expect(chartElementColor(table, customized, sourceKey)).toBe('#123456')
+    expect(chartElementColor(table, customized, totalKey)).toBe('#654321')
+  })
+
+  it.each([
+    ['beginning', [null, 10, -2]],
+    ['middle', [10, null, -2]],
+    ['end', [10, -2, null]],
+  ] as const)('keeps connectors finite across a null step at the %s', (_name, values) => {
+    const nullTable: DataTable = { ...table, rows: table.rows.map((row, index) => ({ ...row, change: values[index] })) }
+    const resolved = resolveNativeWaterfallScene(compileNativeWaterfallScene(nullTable, config()))
+    expect(Object.keys(resolved.waterfallGeometry.marks)).toHaveLength(3)
+    expect(Object.values(resolved.waterfallGeometry.connectors)).toHaveLength(3)
+    expect(Object.values(resolved.waterfallGeometry.connectors).every((line) => Object.values(line).every(Number.isFinite) && (line.x1 !== 0 || line.y1 !== 0 || line.x2 !== 0 || line.y2 !== 0))).toBe(true)
   })
 
   it('keeps compiler independent of ECharts and fails closed through the legacy guard', () => {
