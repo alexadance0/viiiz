@@ -79,7 +79,7 @@ export function resolveNativeComparisonStemScene(sourceScene: NativeComparisonSt
   const directGuide = scene.guides.find((guide) => guide.kind === 'direct-series')
   const directCandidates = directGuide?.visible ? directGuide.items.filter((item) => item.visible).flatMap((item) => {
     const series = scene.plot.series.find((candidate) => candidate.id === item.seriesId)
-    const point = series?.points.findLast((candidate) => candidate.value != null), resolved = point && points[point.id]
+    const point = series?.points.findLast((candidate) => candidate.value != null && Boolean(points[candidate.id])), resolved = point && points[point.id]
     if (!point || !resolved) return []
     const distance = scene.compatibilityConfig.directLabelGap ?? 14
     const lineHeight = Math.round(item.style.size * item.style.lineHeight / 100), noteHeight = item.note ? Math.max(8, item.style.size - 2) * 1.25 + 3 : 0
@@ -92,13 +92,15 @@ export function resolveNativeComparisonStemScene(sourceScene: NativeComparisonSt
     return [{ item, point, resolved, initial, width, height: lineHeight + noteHeight, lineHeight }]
   }) : []
   directCandidates.sort((left, right) => horizontal ? left.initial.x - right.initial.x : left.initial.y - right.initial.y)
-  let previousEnd = horizontal ? plot.x : plot.y
-  directCandidates.forEach((candidate) => {
-    const half = (horizontal ? candidate.width : candidate.height) / 2
+  const minimum = horizontal ? plot.x : plot.y, maximum = horizontal ? plot.x + plot.width : plot.y + plot.height
+  const halves = directCandidates.map((candidate) => (horizontal ? candidate.width : candidate.height) / 2)
+  const positions = directCandidates.map((candidate, index) => Math.max(minimum + halves[index], horizontal ? candidate.initial.x : candidate.initial.y))
+  for (let index = 1; index < positions.length; index += 1) positions[index] = Math.max(positions[index], positions[index - 1] + halves[index - 1] + halves[index] + 4)
+  if (positions.length) positions[positions.length - 1] = Math.min(positions[positions.length - 1], maximum - halves[halves.length - 1])
+  for (let index = positions.length - 2; index >= 0; index -= 1) positions[index] = Math.min(positions[index], positions[index + 1] - halves[index + 1] - halves[index] - 4)
+  directCandidates.forEach((candidate, index) => {
     const natural = horizontal ? candidate.initial.x : candidate.initial.y
-    const maximum = horizontal ? plot.x + plot.width : plot.y + plot.height
-    const adjusted = Math.min(maximum - half, Math.max(natural, previousEnd + half + 4))
-    previousEnd = adjusted + half
+    const adjusted = positions[index]
     const x = horizontal ? adjusted : candidate.initial.x, y = horizontal ? candidate.initial.y : adjusted
     const displacement = adjusted - natural
     const leader = candidate.item.leaderLine || Math.abs(displacement) > .5 ? { points: [[candidate.resolved.x, candidate.resolved.y] as [number, number], [x, y] as [number, number]] } : undefined

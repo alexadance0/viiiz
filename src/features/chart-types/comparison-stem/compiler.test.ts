@@ -65,6 +65,45 @@ describe('native comparison/stem compiler', () => {
     expect(axis).toMatchObject({ type: 'log', min: scene.plot.valueDomain.min })
   })
 
+  it.each([['lollipop', 'vertical'], ['horizontal-lollipop', 'horizontal'], ['dumbbell', 'vertical'], ['dumbbell', 'horizontal']] as const)('%s omits nonpositive log marks and unresolved connectors in %s mode', (kind, orientation) => {
+    const logTable: DataTable = { name: 'log comparison', columns: ['category', 'value', 'before', 'after'], rows: [
+      { category: 'positive', value: 4, before: 2, after: 4 },
+      { category: 'zero', value: 0, before: 0, after: 4 },
+      { category: 'negative', value: -2, before: 2, after: -1 },
+    ] }
+    const source = { ...config(kind), yFields: kind === 'dumbbell' ? ['before', 'after'] : ['value'], yAxisScaleType: 'log' as const, dumbbellStartField: 'before', dumbbellEndField: 'after', dumbbellOrientation: orientation }
+    const scene = getChartPlugin(kind).compile(logTable, source)
+    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
+    const resolved = resolveNativeComparisonStemScene(scene as NativeComparisonStemChartScene)
+    expect(Object.keys(resolved.comparisonGeometry.connectors)).toHaveLength(1)
+    expect(() => renderScene(resolved)).not.toThrow()
+    const option = renderScene(resolved) as { graphic: Array<{ id?: string }> }
+    expect(option.graphic.filter((item) => item.id?.startsWith('layer:comparison:'))).toHaveLength(1)
+  })
+
+  it.each(['lollipop', 'horizontal-lollipop'] as const)('%s direct-guide collision pass keeps labels in bounds and pairwise separated', (kind) => {
+    const fields = ['Alpha extended', 'Beta extended', 'Gamma extended', 'Delta extended']
+    const denseTable: DataTable = { name: 'dense guides', columns: ['category', ...fields], rows: [
+      { category: 'A', ...Object.fromEntries(fields.map((field) => [field, 10])) },
+      { category: 'B', ...Object.fromEntries(fields.map((field) => [field, 20])) },
+    ] }
+    const source = { ...config(kind), yFields: fields, showDirectLabels: true }
+    const scene = getChartPlugin(kind).compile(denseTable, source)
+    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
+    const resolved = resolveNativeComparisonStemScene(scene as NativeComparisonStemChartScene)
+    const horizontal = kind === 'horizontal-lollipop'
+    const minimum = horizontal ? resolved.geometry.plot.x : resolved.geometry.plot.y
+    const maximum = horizontal ? resolved.geometry.plot.x + resolved.geometry.plot.width : resolved.geometry.plot.y + resolved.geometry.plot.height
+    const bounds = Object.values(resolved.comparisonGeometry.directLabels).map((label) => {
+      const center = horizontal ? label.x : label.y, half = (horizontal ? label.width : label.height) / 2
+      return { start: center - half, end: center + half }
+    }).sort((left, right) => left.start - right.start)
+    expect(bounds).toHaveLength(fields.length)
+    expect(bounds[0].start).toBeGreaterThanOrEqual(minimum)
+    expect(bounds.at(-1)!.end).toBeLessThanOrEqual(maximum)
+    bounds.slice(1).forEach((bound, index) => expect(bound.start).toBeGreaterThanOrEqual(bounds[index].end + 4 - 1e-6))
+  })
+
   it('owns vertical category-grid geometry without ChartCanvas data conversion', () => {
     const source = { ...config('lollipop'), showVerticalGrid: true }
     const scene = getChartPlugin('lollipop').compile(table, source)

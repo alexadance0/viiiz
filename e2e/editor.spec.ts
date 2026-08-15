@@ -489,6 +489,9 @@ test('native lollipop direct-guide labels keep notes and route clicks to the gui
   await expect(legend).not.toHaveAttribute('open', '')
   await page.locator('.canvas-paper svg text').filter({ hasText: new RegExp(`^${escaped(name)}$`) }).last().click({ force: true })
   await expect(legend).toHaveAttribute('open', '')
+  await expect(page.locator('.element-editor').filter({ hasText: 'Выбран элемент' })).toHaveCount(0)
+  const fadedMarks = await page.locator('.canvas-paper svg circle, .canvas-paper svg path').evaluateAll((nodes) => nodes.filter((node) => Number.parseFloat(getComputedStyle(node).opacity) < .5).length)
+  expect(fadedMarks).toBe(0)
   assertNoErrors()
 })
 

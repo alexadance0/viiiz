@@ -1845,7 +1845,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         const renderTarget = event.event?.target ?? event.event?.topTarget
         const clickedValueLabel = event.targetType === 'label' || renderTarget?.type === 'text' || renderTarget?.type === 'tspan' || renderTarget?.parent?.type === 'text'
         if (pointData?.selectionTarget === 'guide' && pointData.elementKey) {
-          onSelect?.({ key: pointData.elementKey, seriesName, category: '', value: pointData.displayValue ?? seriesName, color: pointColor, target: 'guide' })
           onSettingsFocus?.('legend')
           return
         }
@@ -1884,7 +1883,8 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         onSettingsFocus?.('element')
       }
       const hoverHandler = (params: unknown) => {
-        const event = params as { seriesName?: string; data?: { sourceSeriesName?: string } }
+        const event = params as { seriesName?: string; data?: { sourceSeriesName?: string; selectionTarget?: ChartElementSelection['target'] } }
+        if (event.data?.selectionTarget === 'guide') { setHoveredSeriesName(null); return }
         const name = event.data?.sourceSeriesName ?? event.seriesName?.replace(/^__hit__:/, '')
         if (name && !name.startsWith('__')) setHoveredSeriesName((current) => current === name ? current : name)
       }
@@ -1894,7 +1894,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         const point = nativeRendererInfo(event.target)
         if (!point?.elementKey) return
         if (point.selectionTarget === 'guide') {
-          onSelect?.({ key: point.elementKey, seriesName: point.sourceSeriesName ?? '', category: '', value: point.displayValue ?? point.sourceSeriesName ?? '', color: point.displayColor, target: 'guide' })
           onSettingsFocus?.('legend')
           return
         }

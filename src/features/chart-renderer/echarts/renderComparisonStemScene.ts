@@ -54,13 +54,14 @@ export function renderComparisonStemScene(scene: ResolvedComparisonStemScene): R
       ] }),
     }]
   })
-  const connectors = scene.plot.connectors.map((connector) => {
+  const connectors = scene.plot.connectors.flatMap((connector) => {
     const geometry = scene.comparisonGeometry.connectors[connector.id]
+    if (!geometry) return []
     const sourceSeriesNames = connector.endpointIds.flatMap((id) => scene.plot.series.filter((series) => series.points.some((point) => point.id === id)).map((series) => series.name))
-    return { id: connector.id, type: 'group', silent: true, z: 2, comparisonConnectorSeriesNames: sourceSeriesNames, children: [
+    return [{ id: connector.id, type: 'group', silent: true, z: 2, comparisonConnectorSeriesNames: sourceSeriesNames, children: [
       { type: 'line', shape: { x1: geometry.x1, y1: geometry.y1, x2: geometry.x2, y2: geometry.y2 }, style: { stroke: connector.stroke.color, opacity: connector.stroke.opacity, lineWidth: connector.stroke.width, lineDash: dash(connector.stroke.type), lineCap: 'round' } },
       ...(connector.change?.visible && geometry.changeLabel ? [{ type: 'text', style: { x: geometry.changeLabel.x, y: geometry.changeLabel.y, text: connector.change.label, fill: connector.change.color, font: font(config.valueText), align: geometry.changeLabel.align, verticalAlign: geometry.changeLabel.verticalAlign } }] : []),
-    ] }
+    ] }]
   })
   const categoryGrid = scene.comparisonGeometry.categoryGridLines.map((line, index) => ({ id: `comparison-category-grid:${index}`, type: 'line', silent: true, z: 1, shape: line, style: { stroke: config.gridColor, lineWidth: config.gridWidth, lineDash: dash(config.gridType) } }))
   const plot = scene.geometry.plot, canvas = scene.geometry.canvas
