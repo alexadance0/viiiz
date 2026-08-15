@@ -9,7 +9,7 @@ export function chartSpecFromLegacy(config: ChartConfig): ChartSpec {
   if (config.kind === 'waterfall') return { family: 'waterfall', kind: config.kind, showTotal: config.waterfallShowTotal ?? true, labelContent: config.waterfallLabelContent ?? 'change' }
   if (config.kind === 'butterfly') return { family: 'butterfly', kind: config.kind, categoryPlacement: config.butterflyCategoryPosition ?? 'center' }
   if (config.kind === 'lollipop' || config.kind === 'horizontal-lollipop') return { family: 'lollipop', kind: config.kind, orientation: config.kind === 'horizontal-lollipop' ? 'horizontal' : 'vertical' }
-  if (config.kind === 'dumbbell') return { family: 'dumbbell', kind: config.kind, orientation: 'horizontal', startField: config.yFields[0], endField: config.yFields[1] }
+  if (config.kind === 'dumbbell') return { family: 'dumbbell', kind: config.kind, orientation: config.dumbbellOrientation ?? 'horizontal', startField: config.dumbbellStartField, endField: config.dumbbellEndField }
   if (config.kind === 'heatmap') return { family: 'heatmap', kind: config.kind, scale: config.heatmapScaleMode ?? 'diverging', scalePosition: config.heatmapScalePosition ?? 'right' }
   if (config.kind === 'treemap') return { family: 'treemap', kind: config.kind, subcategoryField: config.treemapSubcategoryField, groupGap: config.treemapGroupGap ?? 5, leafGap: config.treemapGap ?? 2 }
   if (isDistributionChart(config.kind)) return { family: 'distribution', kind: config.kind, orientation: config.distributionOrientation ?? 'horizontal', layout: config.distributionLayoutMode ?? 'measures' }

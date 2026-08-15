@@ -4,10 +4,13 @@ import { measureTextWidth } from '../../../core/textMetrics'
 import type { ChartTextStyle } from '../../../core/types'
 import type { CartesianBarPlotScene, NativeChartScene, ResolvedSceneGeometry } from '../../../entities/chart/model/ChartScene'
 import type { ResolvedReservation } from '../../chart-layout/reservations'
+import type { ResolvedComparisonStemScene } from '../../chart-types/comparison-stem/layout'
 
 export type ResolvedNativeBarScene = NativeChartScene & { plot: CartesianBarPlotScene; geometry: ResolvedSceneGeometry; resolvedReservations: ResolvedReservation[] }
-const textStyle = (style: ChartTextStyle) => ({ color: style.color, fontFamily: style.fontFamily, fontSize: style.size, fontWeight: style.weight, fontStyle: style.italic ? 'italic' : 'normal', lineHeight: Math.round(style.size * style.lineHeight / 100), align: style.align })
-const graphicTextStyle = (style: ChartTextStyle) => { const { color, ...rest } = textStyle(style); return { ...rest, fill: color } }
+export const nativeTextStyle = (style: ChartTextStyle) => ({ color: style.color, fontFamily: style.fontFamily, fontSize: style.size, fontWeight: style.weight, fontStyle: style.italic ? 'italic' : 'normal', lineHeight: Math.round(style.size * style.lineHeight / 100), align: style.align })
+export const nativeGraphicTextStyle = (style: ChartTextStyle) => { const { color, ...rest } = nativeTextStyle(style); return { ...rest, fill: color } }
+const textStyle = nativeTextStyle
+const graphicTextStyle = nativeGraphicTextStyle
 const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!)
 const contrastText = (color: string) => {
   const match = color.match(/^#([\da-f]{6})$/i)
@@ -99,7 +102,8 @@ function valueEdgeAffixSeries(scene: ResolvedNativeBarScene) {
   }]
 }
 
-function categoryLabelInterval(scene: ResolvedNativeBarScene) {
+type ResolvedCartesianAxisScene = ResolvedNativeBarScene | ResolvedComparisonStemScene
+function categoryLabelInterval(scene: ResolvedCartesianAxisScene) {
   const requested = scene.compatibilityConfig.xAxisStep
   if (requested != null) return Math.max(0, Math.round(requested) - 1)
   const categories = scene.plot.categories
@@ -114,7 +118,7 @@ function categoryLabelInterval(scene: ResolvedNativeBarScene) {
   return (index: number) => displayed.has(index)
 }
 
-function renderAxis(scene: ResolvedNativeBarScene, channel: 'category' | 'value') {
+export function renderNativeCartesianAxis(scene: ResolvedCartesianAxisScene, channel: 'category' | 'value') {
   const config = scene.compatibilityConfig
   const axis = channel === 'category' ? scene.plot.categoryAxis : scene.plot.valueAxis
   const side = axis.placement.kind === 'side' ? axis.placement.side : undefined
@@ -134,7 +138,7 @@ function renderAxis(scene: ResolvedNativeBarScene, channel: 'category' | 'value'
       triggerEvent: true,
     }
   }
-  const formatter = scene.plot.stacking === 'normalized' ? formatYAxisNumber : scene.plot.orientation === 'horizontal' ? formatXAxisNumber : formatYAxisNumber
+  const formatter = scene.plot.kind === 'bar' && scene.plot.stacking === 'normalized' ? formatYAxisNumber : scene.plot.orientation === 'horizontal' ? formatXAxisNumber : formatYAxisNumber
   const tickPosition = (value: number) => Math.abs(value - scene.plot.valueDomain.min) < 1e-9 ? 'first' : Math.abs(value - scene.plot.valueDomain.max) < 1e-9 ? 'last' : 'middle'
   const edgeOverlay = scene.plot.orientation === 'vertical' && config.yAxisAffixScope != null && config.yAxisAffixScope !== 'all' && Boolean(config.numberPrefix || config.numberSuffix)
   return {
@@ -192,8 +196,8 @@ export function renderNativeBarScene(scene: ResolvedNativeBarScene): Record<stri
     tooltip: { trigger: 'axis', formatter: (input: unknown) => { const items = (Array.isArray(input) ? input : [input]) as Array<{ dataIndex?: number; seriesName?: string; value?: unknown; data?: { displayValue?: string; displayCategory?: string } }>; const index = items[0]?.dataIndex ?? 0; return [`<b>${escapeHtml(items[0]?.data?.displayCategory ?? scene.plot.series[0]?.marks[index]?.displayCategory ?? '')}</b>`, ...items.filter((item) => item.seriesName).map((item) => `${escapeHtml(item.seriesName)}: <b>${escapeHtml(item.data?.displayValue ?? formatYAxisNumber(item.value, config))}</b>`)].join('<br/>') } },
     legend: { show: Boolean(legendGuide?.visible && legendItems.length), data: legendItems.map((item) => ({ name: item.rendererName, icon: config.legendMarker === 'circle' ? 'circle' : config.legendMarker === 'diamond' ? 'diamond' : config.legendMarker === 'triangle' ? 'triangle' : 'rect', itemStyle: { color: item.color, borderWidth: 0 } })), formatter: (name: string) => legendLabels.get(name) ?? name, orient: legendGuide?.kind === 'categorical-legend' && (legendGuide.position === 'left' || legendGuide.position === 'right') ? 'vertical' : 'horizontal', left: legendRail?.x ?? scene.geometry.content.x, top: legendRail?.y, right: legendGuide?.kind === 'categorical-legend' && legendGuide.position === 'right' ? canvas.width - (legendRail?.x ?? 0) - (legendRail?.width ?? 0) : undefined, itemWidth: 10, itemHeight: 10, itemGap: 18, textStyle: textStyle(config.legendText) },
     grid: { left: plot.x, top: plot.y, right: canvas.width - plot.x - plot.width, bottom: canvas.height - plot.y - plot.height, containLabel: false },
-    xAxis: horizontal ? renderAxis(scene, 'value') : renderAxis(scene, 'category'),
-    yAxis: horizontal ? renderAxis(scene, 'category') : renderAxis(scene, 'value'),
+    xAxis: horizontal ? renderNativeCartesianAxis(scene, 'value') : renderNativeCartesianAxis(scene, 'category'),
+    yAxis: horizontal ? renderNativeCartesianAxis(scene, 'category') : renderNativeCartesianAxis(scene, 'value'),
     series: [...series, ...customBarSeries(scene), ...absorbedLabelSeries(scene), ...valueEdgeAffixSeries(scene)],
     graphic: [...verticalTitle, ...footerGraphics],
   }

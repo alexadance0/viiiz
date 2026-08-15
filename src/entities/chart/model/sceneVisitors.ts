@@ -13,6 +13,7 @@ export interface NativeMarkSelection {
 export function nativeMarkSelections(scene: NativeChartScene): NativeMarkSelection[] {
   switch (scene.plot.kind) {
   case 'bar': return scene.plot.series.flatMap((series) => series.marks.map((mark) => ({ legacyKey: mark.legacyKey, seriesName: series.name, displayCategory: mark.displayCategory, displayValue: mark.displayValue, value: mark.value, color: mark.style.color })))
+  case 'comparison-stem': return scene.plot.series.flatMap((series) => series.points.map((point) => ({ legacyKey: point.legacyKey, seriesName: series.name, displayCategory: point.displayCategory, displayValue: point.displayValue, value: point.value, color: point.marker.fill })))
   case 'smoothing': {
     const plot = scene.plot
     return plot.layers.filter((layer) => layer.role === 'raw').flatMap((layer) => {
@@ -39,6 +40,7 @@ export function nativePointSeries(scene: NativeChartScene): Array<{ name: string
   case 'bar':
   case 'xy': return []
   case 'distribution': return []
+  case 'comparison-stem': return scene.plot.series
   case 'smoothing': return scene.plot.layers
   case 'interval': return scene.plot.series.filter((series) => series.visible)
   case 'line':

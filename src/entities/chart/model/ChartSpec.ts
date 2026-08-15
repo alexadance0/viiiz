@@ -5,7 +5,7 @@ export interface BarSpec extends SpecBase { family: 'bar'; orientation: 'vertica
 export interface LollipopSpec extends SpecBase { family: 'lollipop'; orientation: 'vertical' | 'horizontal' }
 export interface WaterfallSpec extends SpecBase { family: 'waterfall'; showTotal: boolean; labelContent: 'change' | 'cumulative' | 'both' }
 export interface ButterflySpec extends SpecBase { family: 'butterfly'; categoryPlacement: 'center' | 'left' | 'right' }
-export interface DumbbellSpec extends SpecBase { family: 'dumbbell'; orientation: 'horizontal'; startField?: string; endField?: string }
+export interface DumbbellSpec extends SpecBase { family: 'dumbbell'; orientation: 'vertical' | 'horizontal'; startField?: string; endField?: string }
 export interface LineSpec extends SpecBase { family: 'line'; variant: ChartKind; missing: 'gap' | 'zero' | 'connect' }
 export interface SlopeSpec extends SpecBase { family: 'slope'; showValues: boolean; showSeriesNames: boolean; showInternalValueLabels: boolean }
 export interface IntervalSpec extends SpecBase { family: 'interval'; variant: 'range-line' | 'step-range-line' | 'confidence-line' }

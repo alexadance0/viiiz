@@ -54,6 +54,39 @@ export interface CartesianBarPlotScene {
   series: BarSeriesScene[]
 }
 
+export interface ComparisonStemConnectorScene {
+  id: LayerId
+  categoryId: DatumId
+  categoryIndex: number
+  endpointIds: ElementId[]
+  fromValue: number
+  toValue: number
+  stroke: { color: string; width: number; type: 'solid' | 'dashed' | 'dotted'; opacity: number }
+  change?: { descriptor: ChangeDescriptor; visible: boolean; label: string; position: 'start' | 'middle' | 'end'; color: string }
+}
+
+export interface ComparisonStemSeriesScene {
+  id: SeriesId
+  name: string
+  color: string
+  visible: boolean
+  role: 'value' | 'start' | 'end'
+  points: CartesianPointScene[]
+}
+
+export interface ComparisonStemPlotScene {
+  kind: 'comparison-stem'
+  variant: 'lollipop' | 'dumbbell'
+  categoryPlacement: 'band'
+  orientation: 'vertical' | 'horizontal'
+  categories: Array<{ id: DatumId; value: DataValue; label: string; coordinate: string }>
+  categoryAxis: AxisSpec
+  valueAxis: AxisSpec
+  valueDomain: { min: number; max: number; step: number }
+  series: ComparisonStemSeriesScene[]
+  connectors: ComparisonStemConnectorScene[]
+}
+
 export interface CartesianPointScene {
   type: 'point'
   id: ElementId
@@ -66,7 +99,7 @@ export interface CartesianPointScene {
   displayCategory: string
   displayValue: string
   marker: { visible: boolean; shape: 'circle' | 'rect' | 'roundRect' | 'triangle' | 'diamond'; size: number; fill: string; stroke: string; strokeWidth: number }
-  label: { visible: boolean; text: string; style: ChartTextStyle; position: NonNullable<ChartConfig['valueLabelPosition']> }
+  label: { visible: boolean; text: string; style: ChartTextStyle; position: 'auto' | 'top' | 'right' | 'bottom' | 'left' | 'inside-top' | 'inside-center' | 'inside-bottom' }
 }
 
 export interface LineSegmentScene {
@@ -540,7 +573,7 @@ export interface DistributionPlotScene {
   grid: { valueVisible: boolean; laneVisible: boolean; color: string; width: number; type: 'solid' | 'dashed' | 'dotted' }
 }
 
-export type NativePlotScene = CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene | DistributionPlotScene
+export type NativePlotScene = CartesianBarPlotScene | ComparisonStemPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene | DistributionPlotScene
 
 export interface NativeChartScene extends ChartSceneBase {
   migrationMode: 'native'
@@ -552,6 +585,7 @@ export interface NativeChartScene extends ChartSceneBase {
 }
 
 export type NativeBarChartScene = NativeChartScene & { plot: CartesianBarPlotScene }
+export type NativeComparisonStemChartScene = NativeChartScene & { plot: ComparisonStemPlotScene }
 export type NativeLineChartScene = NativeChartScene & { plot: CartesianLinePlotScene }
 export type NativeAreaChartScene = NativeChartScene & { plot: CartesianAreaPlotScene }
 export type NativeSlopeChartScene = NativeChartScene & { plot: CartesianSlopePlotScene }
@@ -583,6 +617,12 @@ export interface ResolvedSlopeGeometry {
   valueScaleLabelRail?: Rect
   endpointLabels: Record<ElementId, ResolvedSlopeEndpointLabelPlacement>
   changeLabels: Record<SeriesId, ResolvedSlopeChangeLabelPlacement>
+}
+
+export interface ResolvedComparisonStemGeometry {
+  points: Record<ElementId, { x: number; y: number; label?: { x: number; y: number; align: 'left' | 'center' | 'right'; verticalAlign: 'top' | 'middle' | 'bottom'; visible: boolean } }>
+  connectors: Record<LayerId, { x1: number; y1: number; x2: number; y2: number; changeLabel?: { x: number; y: number; align: 'left' | 'center' | 'right'; verticalAlign: 'top' | 'middle' | 'bottom' } }>
+  directLabels: Record<SeriesId, { pointId: ElementId; x: number; y: number; align: 'left' | 'center' | 'right'; verticalAlign: 'top' | 'middle' | 'bottom' }>
 }
 
 export interface ResolvedSlopeEndpointLabelPlacement {

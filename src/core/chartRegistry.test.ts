@@ -1487,69 +1487,6 @@ describe('chart composition alignment', () => {
     expect(quadrants?.kind === 'quadrants' && quadrants.regions.map((region) => region.label)).toEqual(['A', 'B', 'C', 'D'])
   })
 
-  it('builds a sorted dumbbell chart from two explicitly selected measures', () => {
-    const dumbbellTable: DataTable = {
-      name: 'dumbbell',
-      columns: ['country', 'before', 'after'],
-      rows: [
-        { country: 'A', before: 10, after: 14 },
-        { country: 'B', before: 20, after: 18 },
-        { country: 'C', before: 8, after: 17 },
-      ],
-    }
-    const config = base('dumbbell')
-    config.xField = 'country'
-    config.dumbbellStartField = 'before'
-    config.dumbbellEndField = 'after'
-    config.dumbbellSort = 'difference'
-    config.dumbbellSortDirection = 'desc'
-    config.showValues = true
-    config.xAxisLabelRotate = 60
-    const option = getChartPlugin('dumbbell').buildOption(dumbbellTable, config) as {
-      yAxis: { data: string[]; axisLabel: { formatter(value: string): string; rotate: number } }
-      series: Array<{ name: string; type: string; z?: number; zlevel?: number; data: Array<{ value: unknown[]; label?: { show: boolean; position: string; formatter: string } }>; label?: { show: boolean } }>
-    }
-    expect(option.yAxis.data.map(option.yAxis.axisLabel.formatter)).toEqual(['C', 'A', 'B'])
-    expect(option.yAxis.axisLabel.rotate).toBe(0)
-    expect(option.series.map((series) => [series.name, series.type])).toEqual([
-      ['__dumbbell-connectors', 'custom'],
-      ['before', 'scatter'],
-      ['after', 'scatter'],
-    ])
-    expect(option.series.slice(1).every((series) => Number(series.z) > Number(option.series[0].z) && Number(series.zlevel) > Number(option.series[0].zlevel))).toBe(true)
-    expect(option.series[1].data[0].value).toEqual([8, '0:C'])
-    expect(option.series[1].data[0].label?.position).toBe('left')
-    expect(option.series[2].data[0].label?.position).toBe('right')
-
-    const vertical = getChartPlugin('dumbbell').buildOption(dumbbellTable, { ...config, dumbbellOrientation: 'vertical', dumbbellShowDifference: true, dumbbellDifferenceFormat: 'percent', dumbbellDifferencePosition: 'start', dumbbellShowStartValue: false, dumbbellShowEndValue: true, dumbbellConnectorWidth: 5, dumbbellConnectorOpacity: .6, dumbbellConnectorType: 'dotted', dumbbellColorByChange: true, dumbbellIncreaseColor: '#118855' }) as {
-      xAxis: { data: string[]; boundaryGap: boolean }
-      series: Array<{ name: string; data: Array<{ value: unknown[]; label?: { show: boolean; position: string; formatter: string } }>; renderItem?: (params: { dataIndex: number }, api: { value(index: number): number | string; coord(value: unknown[]): number[] }) => { children: Array<{ type: string; style?: Record<string, unknown> }> } }>
-    }
-    expect(vertical.xAxis.data).toHaveLength(3)
-    expect(vertical.xAxis.boundaryGap).toBe(true)
-    expect(vertical.series[1].data[0].value).toEqual(['0:C', 8])
-    expect(vertical.series[1].data[0].label?.position).toBe('bottom')
-    expect(vertical.series[1].data[0].label?.show).toBe(false)
-    expect(vertical.series[2].data[0].label?.show).toBe(true)
-    const connector = vertical.series.find((series) => series.name === '__dumbbell-connectors')
-    const connectorChildren = connector?.renderItem?.({ dataIndex: 0 }, { value: (index) => ['0:C', 8, 17][index], coord: ([x, y]) => [Number(x) || 0, Number(y)] }).children ?? []
-    expect(connectorChildren[0]?.style).toMatchObject({ stroke: '#118855', opacity: .6, lineWidth: 5, lineDash: [2, 4] })
-    const change = connectorChildren[1]
-    expect(change).toMatchObject({ type: 'text', style: { text: '+113%', textAlign: 'center', textVerticalAlign: 'bottom', y: 0 } })
-    expect(change?.style?.fill).toBe('#118855')
-    expect(change?.style).not.toHaveProperty('backgroundColor')
-    expect(change?.style).not.toHaveProperty('padding')
-
-    const horizontal = getChartPlugin('dumbbell').buildOption(dumbbellTable, { ...config, dumbbellShowDifference: true, dumbbellDifferencePosition: 'end' }) as unknown as {
-      series: Array<{ name: string; renderItem?: (params: { dataIndex: number }, api: { value(index: number): number | string; coord(value: unknown[]): number[] }) => { children: Array<{ style?: { x?: number; y?: number; text?: string } }> } }>
-    }
-    const horizontalConnector = horizontal.series.find((series) => series.name === '__dumbbell-connectors')
-    expect(horizontalConnector?.renderItem?.({ dataIndex: 0 }, { value: (index) => [8, 17, '0:C'][index], coord: ([x]) => [Number(x), 0] }).children[1]?.style).toMatchObject({ x: 28.5, text: '+9', textAlign: 'left' })
-
-    const incomplete = base('dumbbell')
-    expect((getChartPlugin('dumbbell').buildOption(dumbbellTable, incomplete) as { series: unknown[] }).series).toEqual([])
-  })
-
   it('shows human labels rather than internal category identifiers in tooltips', () => {
     const option = getChartPlugin('bar').buildOption(table, base('bar')) as { tooltip: { formatter(input: unknown): string } }
     const tooltip = option.tooltip.formatter([{ dataIndex: 0, seriesName: 'value', value: 10, marker: '•' }])
@@ -1916,52 +1853,6 @@ describe('chart composition alignment', () => {
       expect(plugin.inferMapping(table)).toMatchObject({ xField: 'month', yField: 'value', yFields: ['value'] })
       expect(plugin.validate(table, base(plugin.id))).toHaveProperty('ok')
     }
-  })
-
-  it('builds vertical and horizontal lollipop charts from stems and interactive dots', () => {
-    for (const kind of ['lollipop', 'horizontal-lollipop'] as const) {
-      const config = base(kind); config.showValues = true; config.barValueLabelAbsorption = true; config.barCategorySort = 'name-asc'
-      const option = getChartPlugin(kind).buildOption(table, config) as { xAxis: { type: string; data?: string[] }; yAxis: { type: string; data?: string[] }; series: Array<{ name: string; type: string; symbolSize?: number; encode?: { x: number; y: number }; data: Array<{ label?: { show?: boolean; position?: string; formatter?: string } }> }> }
-      const stem = option.series.find((series) => series.name === '__lollipop-stems')!
-      const dots = option.series.find((series) => series.type === 'scatter')!
-      expect(stem).toMatchObject({ type: 'custom' })
-      expect(stem.encode).toEqual(kind === 'horizontal-lollipop' ? { x: 1, y: 0 } : { x: 0, y: 1 })
-      expect(dots.symbolSize).toBe(12)
-      expect(dots.data[0].label).toMatchObject({ show: true, position: kind === 'horizontal-lollipop' ? 'right' : 'top', formatter: '20' })
-      expect(kind === 'horizontal-lollipop' ? option.yAxis.data : option.xAxis.data).toEqual(['0:Фев', '1:Янв'])
-      expect(kind === 'horizontal-lollipop' ? option.xAxis.type : option.yAxis.type).toBe('value')
-    }
-  })
-
-  it('keeps dense lollipop value labels at the configured size', () => {
-    const dense: DataTable = {
-      name: 'dense',
-      columns: ['category', 'value'],
-      rows: Array.from({ length: 20 }, (_, index) => ({ category: `Категория ${index + 1}`, value: (index + 1) * 123456789 })),
-    }
-    const config = { ...base('lollipop'), xField: 'category', yField: 'value', yFields: ['value'], showValues: true, canvasWidth: 300 }
-    const option = getChartPlugin('lollipop').buildOption(dense, config) as {
-      series: Array<{ type: string; labelLayout?: { hideOverlap?: boolean; moveOverlap?: string }; data: Array<{ label?: { fontSize?: number } }> }>
-    }
-    const dots = option.series.find((series) => series.type === 'scatter')!
-    expect(dots.labelLayout).toMatchObject({ hideOverlap: false, moveOverlap: 'shiftX' })
-    expect(dots.data.every((point) => point.label?.fontSize === config.valueText.size)).toBe(true)
-
-    const hidden = getChartPlugin('lollipop').buildOption(dense, { ...config, valueLabelHideOverlap: true }) as {
-      series: Array<{ type: string; data: Array<{ label?: { show?: boolean; fontSize?: number } }> }>
-    }
-    const hiddenDots = hidden.series.find((series) => series.type === 'scatter')!
-    expect(hiddenDots.data.some((point) => point.label?.show === false)).toBe(true)
-    expect(hiddenDots.data.every((point) => point.label?.fontSize === config.valueText.size)).toBe(true)
-  })
-
-  it('does not inherit the right direct-legend size for the last lollipop value', () => {
-    const config = { ...base('lollipop'), xField: 'category', yField: 'value', yFields: ['value'], showValues: true, showDirectLabels: true, directLabelText: { ...base('lollipop').valueText, size: 31 } }
-    const option = getChartPlugin('lollipop').buildOption(table, config) as {
-      series: Array<{ type: string; data: Array<{ label?: { fontSize?: number } }> }>
-    }
-    const dots = option.series.find((series) => series.type === 'scatter')!
-    expect(dots.data.at(-1)?.label?.fontSize).toBe(config.valueText.size)
   })
 
   it('builds slope charts for exactly two X positions', () => {

@@ -1,6 +1,6 @@
 import { formatXAxisNumber, formatYAxisNumber } from '../../../core/numberFormat'
 import { measureTextWidth } from '../../../core/textMetrics'
-import type { CartesianAreaPlotScene, CartesianBarPlotScene, CartesianIntervalPlotScene, CartesianLinePlotScene, CartesianSmoothingPlotScene, NativeChartScene, ResolvedScene } from '../../../entities/chart/model/ChartScene'
+import type { CartesianAreaPlotScene, CartesianBarPlotScene, CartesianIntervalPlotScene, CartesianLinePlotScene, CartesianSmoothingPlotScene, ComparisonStemPlotScene, NativeChartScene, ResolvedScene } from '../../../entities/chart/model/ChartScene'
 import { axisReservation, type AxisSpec } from '../../chart-layout/axisLayout'
 import { resolveFrame } from '../../chart-layout/frameLayout'
 import type { Rect } from '../../chart-layout/geometry'
@@ -8,9 +8,9 @@ import { guideReservation } from '../../chart-layout/guides/types'
 import type { LayoutReservation } from '../../chart-layout/reservations'
 import { layoutText, plainTextDocument } from '../../chart-layout/textLayout'
 
-type NativeCartesianScene = NativeChartScene & { plot: CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene }
+type NativeCartesianScene = NativeChartScene & { plot: CartesianBarPlotScene | ComparisonStemPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene }
 const lineHeight = (style: AxisSpec['labels']['style']) => Math.round(style.size * style.lineHeight / 100)
-const orientation = (scene: NativeCartesianScene) => scene.plot.kind === 'bar' ? scene.plot.orientation : 'vertical'
+const orientation = (scene: NativeCartesianScene) => scene.plot.kind === 'bar' || scene.plot.kind === 'comparison-stem' ? scene.plot.orientation : 'vertical'
 const railRect = (plot: Rect, side: 'top' | 'right' | 'bottom' | 'left'): Rect => side === 'top'
   ? { x: plot.x, y: plot.y, width: plot.width, height: 0 }
   : side === 'bottom' ? { x: plot.x, y: plot.y + plot.height, width: plot.width, height: 0 }
@@ -126,7 +126,16 @@ export function resolveNativeCartesianScene(sourceScene: NativeChartScene): Reso
     if (values.some((value) => value != null && value >= 0)) reservations.push({ id: 'value-labels:positive', side: positiveSide, size: amount, gap: 0, mode: 'outside', priority: 60 })
     if (values.some((value) => value != null && value < 0)) reservations.push({ id: 'value-labels:negative', side: negativeSide, size: amount, gap: 0, mode: 'outside', priority: 60 })
   }
-  if (scene.plot.kind !== 'bar' && config.showValues && !(config.valueLabelPosition ?? '').startsWith('inside-')) {
+  if (scene.plot.kind === 'comparison-stem' && config.showValues) {
+    const amount = lineHeight(config.valueText) + 8
+    if (scene.plot.orientation === 'horizontal') {
+      reservations.push({ id: 'value-labels:left', side: 'left', size: amount, gap: 0, mode: 'outside', priority: 60 })
+      reservations.push({ id: 'value-labels:right', side: 'right', size: amount, gap: 0, mode: 'outside', priority: 60 })
+    } else {
+      reservations.push({ id: 'value-labels:top', side: 'top', size: amount, gap: 0, mode: 'outside', priority: 60 })
+      if (scene.plot.variant === 'dumbbell') reservations.push({ id: 'value-labels:bottom', side: 'bottom', size: amount, gap: 0, mode: 'outside', priority: 60 })
+    }
+  } else if (scene.plot.kind !== 'bar' && config.showValues && !(config.valueLabelPosition ?? '').startsWith('inside-')) {
     const side = config.valueLabelPosition === 'bottom' ? 'bottom' : 'top'
     reservations.push({ id: `value-labels:${side}`, side, size: lineHeight(config.valueText) + 8, gap: 0, mode: 'outside', priority: 60 })
   }

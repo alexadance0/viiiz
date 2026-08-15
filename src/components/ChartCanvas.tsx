@@ -381,7 +381,7 @@ function valueLabelHitGraphics(instance: echarts.ECharts, table: DataTable, conf
   if (config.kind === 'treemap' || !config.showValues && !Object.values(config.elementStyles).some((style) => style.showLabel)) return []
   const prepared = config.kind === 'butterfly' ? prepareButterflyChartData(table, config) : prepareVisibleChartData(table, config), horizontal = isHorizontalBar(config)
   const configured = config.valueLabelPosition ?? 'auto'
-  const absorption = isBarChart(config.kind) && config.kind !== 'lollipop' && config.kind !== 'horizontal-lollipop' && Boolean(config.barValueLabelAbsorption)
+  const absorption = isBarChart(config.kind) && Boolean(config.barValueLabelAbsorption)
   const categoryPixels = absorption ? prepared.categories.flatMap((_, index) => {
     try {
       const pixel = Number(instance.convertToPixel(horizontal ? { yAxisIndex: 0 } : { xAxisIndex: 0 }, index))
@@ -646,7 +646,7 @@ export function suppressBuiltInDirectLabels(option: Record<string, unknown>, con
     if (item.labelLine) item.labelLine.show = false
     item.data?.forEach((point) => {
       if (!point?.directLegendLabel) return
-      if (config.barValueLabelAbsorption && isBarChart(config.kind) && config.kind !== 'lollipop' && config.kind !== 'horizontal-lollipop') {
+      if (config.barValueLabelAbsorption && isBarChart(config.kind)) {
         point.label = { show: false }
         return
       }
@@ -1645,7 +1645,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         cleanOption.graphic = [...(Array.isArray(cleanOption.graphic) ? cleanOption.graphic : []), ...cleanDirect]
         instance.setOption({ graphic: option.graphic }, { replaceMerge: ['graphic'] })
       }
-      const valueLabelHits = valueLabelHitGraphics(instance, table, config, selectedSettingsSection === 'values', onSelect, onSettingsFocus, selectedElementKey, selectedElementTarget)
+      const valueLabelHits = plugin.compilerMode === 'native' ? [] : valueLabelHitGraphics(instance, table, config, selectedSettingsSection === 'values', onSelect, onSettingsFocus, selectedElementKey, selectedElementTarget)
       if (valueLabelHits.length) {
         option.graphic = [...(Array.isArray(option.graphic) ? option.graphic : []), ...valueLabelHits]
         instance.setOption({ graphic: option.graphic }, { replaceMerge: ['graphic'] })

@@ -73,6 +73,34 @@ const openSettings = async (page: Page, name: string) => {
   if (!(await summary.evaluate((element) => (element.parentElement as HTMLDetailsElement).open))) await summary.click()
 }
 
+test('native comparison and stem charts preserve both orientations and dense change labels', async ({ page }) => {
+  test.setTimeout(120_000)
+  await openDemoChart(page, 'Временной ряд', 'Леденцовая')
+  const canvas = page.locator('.chart-canvas-shell')
+  await expect(canvas).toHaveAttribute('data-plot-kind', 'comparison-stem')
+  await openDesign(page)
+  await openSettings(page, 'Подписи значений')
+  await updateChart(page, canvas, () => setCheckbox(page.getByRole('checkbox', { name: 'Показывать подписи значений' }), true))
+  await updateChart(page, canvas, () => setCheckbox(page.getByRole('checkbox', { name: 'Скрывать пересекающиеся подписи' }), true))
+  await expect(canvas).toHaveScreenshot('native-lollipop-vertical-dense.png')
+
+  await page.getByRole('button', { name: '← Тип графика' }).click()
+  await updateChart(page, canvas, () => page.getByRole('button', { name: 'Леденцовая горизонтальная', exact: true }).click())
+  await expect(canvas).toHaveAttribute('data-plot-kind', 'comparison-stem')
+  await expect(canvas).toHaveScreenshot('native-lollipop-horizontal-dense.png')
+
+  await openDemoChart(page, 'До → после', 'Гантельная')
+  await expect(canvas).toHaveAttribute('data-plot-kind', 'comparison-stem')
+  await openDesign(page)
+  await openSettings(page, 'Гантельная диаграмма')
+  await updateChart(page, canvas, () => setCheckbox(page.getByRole('checkbox', { name: 'Показывать изменение между точками' }), true))
+  await updateChart(page, canvas, () => page.getByLabel('Формат изменения').selectOption('percent'))
+  await updateChart(page, canvas, () => setCheckbox(page.getByRole('checkbox', { name: 'Цвет по направлению изменения' }), true))
+  await expect(canvas).toHaveScreenshot('native-dumbbell-horizontal-change.png')
+  await updateChart(page, canvas, () => page.getByLabel('Ориентация').selectOption('vertical'))
+  await expect(canvas).toHaveScreenshot('native-dumbbell-vertical-change.png')
+})
+
 test('native Distribution observation semantics stay visually stable', async ({ page }) => {
   test.setTimeout(120_000)
   await openDemoChart(page, 'Распределения', 'Strip plot')

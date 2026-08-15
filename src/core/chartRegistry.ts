@@ -22,11 +22,11 @@ import { compileNativeSmoothingScene, isNativeSmoothingKind } from '../features/
 import { compileNativeIntervalScene, isNativeIntervalKind } from '../features/chart-types/interval/compiler'
 import { compileNativeXYScene, isNativeXYKind, validateNativeXYMapping } from '../features/chart-types/xy/compiler'
 import { compileNativeDistributionScene, isNativeDistributionKind, validateNativeDistributionMapping } from '../features/chart-types/distribution/compiler'
+import { compileNativeComparisonStemScene, isNativeComparisonStemKind } from '../features/chart-types/comparison-stem/compiler'
 export { fitSwarmClouds, fitSwarmOffsets, packSwarmOffsets } from '../features/chart-types/distribution/swarm'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 import { nativeMarkSelections } from '../entities/chart/model/sceneVisitors'
 import { repeatedChartCategories } from './chartData'
-import { changeColor as semanticChangeColor, describeChange, formatChange } from './changeSemantics'
 import { absorbedBarLabelPlacement, barSeriesGeometry, denseValueLabelStride, isInsideValueLabel, showDenseValueLabel, valueLabelPosition } from './chartLabels'
 import { hyphenateSync as hyphenateRussian } from 'hyphen/ru'
 import { getSeriesColor } from './seriesColor'
@@ -743,6 +743,7 @@ const nativeIntervalPlugin = (id: 'range-line' | 'step-range-line' | 'confidence
   return { ...base, ...pluginModel(id), id, label, settings: { ...base.settings, features: { ...base.settings.features, lineVariant: true } } }
 }
 
+export const legacyComparisonStemBuilderGuard = () => { throw new Error('Legacy Lollipop/Dumbbell builder was removed; use the native Comparison/Stem compiler.') }
 const dumbbellBase = cartesian('bar', 'Гантельная', 'comparison')
 const dumbbell: LegacyChartPlugin = {
   ...dumbbellBase, ...pluginModel('dumbbell'),
@@ -750,92 +751,7 @@ const dumbbell: LegacyChartPlugin = {
   label: 'Гантельная',
   category: 'comparison',
   settings: { ...dumbbellBase.settings, series: ['color', 'markers'], features: { ...dumbbellBase.settings.features, directLabels: false, barLayout: false, lineVariant: true } },
-  buildOption(table, config) {
-    const startField = config.dumbbellStartField, endField = config.dumbbellEndField
-    const configured = startField && endField && startField !== endField
-    const fields = configured ? [startField, endField] : [config.yField]
-    const orientation = config.dumbbellOrientation ?? 'horizontal'
-    const scoped = { ...config, seriesField: '', yFields: fields, yField: fields[0], barOrientation: orientation }
-    const option = dumbbellBase.buildOption(table, scoped) as { xAxis: { data?: unknown[]; axisLabel?: Record<string, unknown>; boundaryGap?: boolean }; yAxis: { data?: unknown[]; axisLabel?: Record<string, unknown> }; legend?: Record<string, unknown>; tooltip?: Record<string, unknown>; series: Array<Record<string, unknown>> }
-    const edgeAffixes = option.series.filter((series) => series.name === '__x-axis-edge-affixes' || series.name === '__y-axis-edge-affixes')
-    if (!configured) { option.series = []; return option }
-    if (orientation === 'vertical') option.xAxis.boundaryGap = true
-    const prepared = prepareVisibleChartData(table, scoped)
-    const start = prepared.series.find((series) => series.name === startField)
-    const end = prepared.series.find((series) => series.name === endField)
-    if (!start || !end) { option.series = []; return option }
-    const rows = prepared.categories.flatMap((category, index) => {
-      const startValue = start.data[index], endValue = end.data[index]
-      return startValue == null || endValue == null ? [] : [{ category, start: startValue, end: endValue }]
-    })
-    const sort = config.dumbbellSort ?? 'none'
-    if (sort !== 'none') {
-      const value = (row: typeof rows[number]) => sort === 'difference' ? row.end - row.start : sort === 'start' ? row.start : row.end
-      const direction = config.dumbbellSortDirection === 'asc' ? 1 : -1
-      rows.sort((left, right) => (value(left) - value(right)) * direction)
-    }
-    const items = rows.map((row, index) => ({
-      ...row,
-      key: row.category instanceof Date ? row.category.toISOString() : `${index}:${String(row.category ?? '')}`,
-      label: row.category instanceof Date ? formatTimeValue(row.category, table.timeProfiles?.[config.xField], config.dateLabelFormat) : String(row.category ?? ''),
-    }))
-    const labels = new Map(items.map((item) => [item.key, item.label]))
-    const categoryAxis = orientation === 'horizontal' ? option.yAxis : option.xAxis
-    categoryAxis.data = items.map((item) => item.key)
-    categoryAxis.axisLabel = { ...categoryAxis.axisLabel, formatter: (value: string) => labels.get(value) ?? value }
-    const startColor = getSeriesColor(config, startField, 0), endColor = getSeriesColor(config, endField, 1)
-    const point = (item: typeof items[number], field: string, value: number, otherValue: number, color: string) => {
-      const lower = field === startField ? value <= otherValue : value < otherValue
-      return {
-      value: orientation === 'horizontal' ? [value, item.key] : [item.key, value],
-      elementKey: elementKey(field, item.category),
-      sourceSeriesName: field,
-      displayValue: formatChartNumber(value, config),
-      displayCategory: item.label,
-      itemStyle: { color: config.elementStyles[elementKey(field, item.category)]?.color ?? color },
-      label: { show: config.showValues && (field === startField ? config.dumbbellShowStartValue ?? true : config.dumbbellShowEndValue ?? true), position: orientation === 'horizontal' ? lower ? 'left' : 'right' : lower ? 'bottom' : 'top', formatter: formatChartNumber(value, config), ...text(config.valueText) },
-    }
-    }
-    const changeLabel = (item: typeof items[number]) => formatChange(describeChange(item.start, item.end), config.dumbbellDifferenceFormat ?? 'absolute', config, config.dumbbellPercentDecimals ?? 0)
-    const changeColor = (item: typeof items[number]) => !config.dumbbellColorByChange
-      ? config.dumbbellConnectorColor ?? config.gridColor
-      : semanticChangeColor(describeChange(item.start, item.end), config.dumbbellIncreaseColor ?? '#168a72', config.dumbbellDecreaseColor ?? '#db5a5a', config.dumbbellNeutralColor ?? '#777580')
-    option.series = [
-      {
-        name: '__dumbbell-connectors', type: 'custom', silent: true, tooltip: { show: false }, z: 0, zlevel: 0,
-        data: items.map((item) => orientation === 'horizontal' ? [item.start, item.end, item.key] : [item.key, item.start, item.end]),
-        renderItem: (_params: { dataIndex: number }, api: { value(index: number): number | string; coord(value: unknown[]): number[] }) => {
-          const left = orientation === 'horizontal' ? api.coord([api.value(0), api.value(2)]) : api.coord([api.value(0), api.value(1)])
-          const right = orientation === 'horizontal' ? api.coord([api.value(1), api.value(2)]) : api.coord([api.value(0), api.value(2)])
-          const item = items[_params.dataIndex]
-          const color = item ? changeColor(item) : config.dumbbellConnectorColor ?? config.gridColor
-          const connectorType = config.dumbbellConnectorType ?? 'solid'
-          return { type: 'group', children: [
-            { type: 'line', shape: { x1: left[0], y1: left[1], x2: right[0], y2: right[1] }, style: { stroke: color, opacity: config.dumbbellConnectorOpacity ?? 1, lineWidth: config.dumbbellConnectorWidth ?? 3, lineDash: connectorType === 'dashed' ? [8, 5] : connectorType === 'dotted' ? [2, 4] : undefined, lineCap: 'round' } },
-            ...(config.dumbbellShowDifference && item ? [(() => {
-              const position = config.dumbbellDifferencePosition ?? 'middle'
-              const offset = config.valueText.size / 2 + (orientation === 'horizontal' ? 6 : 8)
-              const middle = [(left[0] + right[0]) / 2, (left[1] + right[1]) / 2]
-              const style = orientation === 'horizontal'
-                ? position === 'start' ? { x: Math.min(left[0], right[0]) - offset, y: middle[1], textAlign: 'right', textVerticalAlign: 'middle' } : position === 'end' ? { x: Math.max(left[0], right[0]) + offset, y: middle[1], textAlign: 'left', textVerticalAlign: 'middle' } : { x: middle[0], y: middle[1] - offset, textAlign: 'center', textVerticalAlign: 'middle' }
-                : position === 'start' ? { x: middle[0], y: Math.min(left[1], right[1]) - 8, textAlign: 'center', textVerticalAlign: 'bottom' } : position === 'end' ? { x: middle[0], y: Math.max(left[1], right[1]) + 8, textAlign: 'center', textVerticalAlign: 'top' } : { x: middle[0] + offset, y: middle[1], textAlign: 'left', textVerticalAlign: 'middle' }
-              return { type: 'text', style: { ...style, text: changeLabel(item), fill: config.dumbbellColorByChange ? color : config.valueText.color, font: `${config.valueText.italic ? 'italic ' : ''}${config.valueText.weight} ${config.valueText.size}px ${config.valueText.fontFamily}` } }
-            })()] : []),
-          ] }
-        },
-      },
-      { name: startField, type: 'scatter', triggerEvent: true, symbol: config.seriesStyles[startField]?.markerShape ?? 'circle', symbolSize: config.seriesStyles[startField]?.markerSize ?? 12, itemStyle: { color: startColor }, data: items.map((item) => point(item, startField, item.start, item.end, startColor)), z: 10, zlevel: 1 },
-      { name: endField, type: 'scatter', triggerEvent: true, symbol: config.seriesStyles[endField]?.markerShape ?? 'circle', symbolSize: config.seriesStyles[endField]?.markerSize ?? 12, itemStyle: { color: endColor }, data: items.map((item) => point(item, endField, item.end, item.start, endColor)), z: 10, zlevel: 1 },
-      ...edgeAffixes,
-    ]
-    if (option.legend) option.legend.data = [startField, endField]
-    option.tooltip = { trigger: 'axis', formatter: (input: unknown) => {
-      const entries = (Array.isArray(input) ? input : [input]) as Array<{ dataIndex?: number }>
-      const item = items[entries[0]?.dataIndex ?? 0]
-      return item ? `<b>${escapeHtml(item.label)}</b><br/>${escapeHtml(startField)}: <b>${escapeHtml(formatChartNumber(item.start, config))}</b><br/>${escapeHtml(endField)}: <b>${escapeHtml(formatChartNumber(item.end, config))}</b><br/>Изменение: <b>${escapeHtml(changeLabel(item))}</b>` : ''
-    } }
-    return option
-  },
+  buildOption: legacyComparisonStemBuilderGuard,
 }
 
 export const waterfallSteps = (values: Array<number | null>) => {
@@ -1056,47 +972,7 @@ const lollipop = (id: 'lollipop' | 'horizontal-lollipop', label: string): Legacy
   return {
     ...base, ...pluginModel(id), id, label,
     settings: { ...base.settings, series: ['color', 'markers'], features: { ...base.settings.features, barLayout: false } },
-    buildOption(table, config) {
-      const option = base.buildOption(table, { ...config, barOrientation: horizontal ? 'horizontal' : 'vertical', barValueLabelAbsorption: false }) as { series: Array<Record<string, unknown>>; xAxis: { data?: string[] }; yAxis: { data?: string[] }; grid?: { left?: number; right?: number; top?: number; bottom?: number } }
-      const bars = option.series.filter((series) => series.type === 'bar')
-      const edgeAffixes = option.series.filter((series) => series.name === '__x-axis-edge-affixes' || series.name === '__y-axis-edge-affixes')
-      const categoryData = (horizontal ? option.yAxis.data : option.xAxis.data) ?? []
-      const categoryExtent = horizontal
-        ? (config.canvasHeight ?? 563) - Number(option.grid?.top ?? 0) - Number(option.grid?.bottom ?? 0)
-        : (config.canvasWidth ?? 1000) - Number(option.grid?.left ?? 0) - Number(option.grid?.right ?? 0)
-      const categoryBand = Math.max(1, categoryExtent / Math.max(1, categoryData.length))
-      const stems = bars.flatMap((series) => {
-        const name = String(series.name ?? ''), style = config.seriesStyles[name]
-        const color = style?.color ?? (series.itemStyle as { color?: string } | undefined)?.color ?? config.color
-        return (series.data as Array<Record<string, unknown>>).flatMap((point, index) => typeof point.value === 'number' ? [[categoryData[index], point.value, color, Math.max(1, style?.lineWidth ?? 2), index] as const] : [])
-      }).sort((left, right) => left[4] - right[4] || Math.abs(right[1]) - Math.abs(left[1]))
-      option.series = [
-        { name: '__lollipop-stems', type: 'custom', coordinateSystem: 'cartesian2d', encode: horizontal ? { x: 1, y: 0 } : { x: 0, y: 1 }, silent: true, tooltip: { show: false }, z: 2, data: stems, renderItem: (_params: { dataIndex: number }, api: { value(index: number): string | number; coord(value: [string | number, string | number]): [number, number] }) => {
-          const category = api.value(0), value = Number(api.value(1)), color = String(api.value(2)), width = Number(api.value(3))
-          const start = horizontal ? api.coord([0, category]) : api.coord([category, 0])
-          const end = horizontal ? api.coord([value, category]) : api.coord([category, value])
-          return { type: 'line', shape: { x1: start[0], y1: start[1], x2: end[0], y2: end[1] }, style: { stroke: color, lineWidth: width, opacity: .72, lineCap: 'round' } }
-        } },
-        ...bars.flatMap((series) => {
-        const name = String(series.name ?? '')
-        const style = config.seriesStyles[name]
-        const color = style?.color ?? (series.itemStyle as { color?: string } | undefined)?.color ?? config.color
-        const markerSize = style?.markerSize ?? 12
-        const points = series.data as Array<Record<string, unknown>>
-        return [{ ...series, type: 'scatter', barWidth: undefined, barGap: undefined, symbol: style?.markerShape ?? 'circle', symbolSize: markerSize, itemStyle: { color: style?.markerFill ?? color, borderColor: style?.markerBorder ?? color, borderWidth: style?.markerBorderWidth ?? 1 }, labelLayout: { hideOverlap: config.valueLabelHideOverlap ?? false, moveOverlap: horizontal ? 'shiftY' : 'shiftX' }, data: points.map((point, index) => {
-          const label = (point.directLegendLabel ? point.valueLabel : point.label) as Record<string, unknown> | undefined
-          const labelStyle = label ?? { show: true, formatter: point.displayValue, ...text(config.valueText) }
-          const baseSize = Number(labelStyle.fontSize ?? config.valueText.size), lineHeight = Number(labelStyle.lineHeight ?? Math.round(baseSize * config.valueText.lineHeight / 100))
-          const content = String(labelStyle.formatter ?? point.displayValue ?? '')
-          const textWidth = measureTextWidth(content, baseSize, String(labelStyle.fontFamily ?? config.valueText.fontFamily), Number(labelStyle.fontWeight ?? config.valueText.weight))
-          const stride = denseValueLabelStride(horizontal, categoryBand, textWidth, lineHeight, config.valueLabelHideOverlap ?? false)
-          return { ...point, symbolSize: markerSize, itemStyle: { ...(point.itemStyle as object), color: style?.markerFill ?? (point.itemStyle as { color?: string } | undefined)?.color ?? color, borderColor: style?.markerBorder ?? color, borderWidth: style?.markerBorderWidth ?? 1 }, label: label || config.showValues ? { ...labelStyle, show: Boolean(labelStyle.show ?? config.showValues) && showDenseValueLabel(index, points.length, stride), position: horizontal ? 'right' : 'top', distance: 7, color: String(labelStyle.color ?? config.valueText.color), fontSize: baseSize, lineHeight } : undefined }
-        }), z: 3 }]
-      }),
-        ...edgeAffixes,
-      ]
-      return option
-    },
+    buildOption: legacyComparisonStemBuilderGuard,
   }
 }
 
@@ -1641,11 +1517,16 @@ const nativeDistributionCapabilities: ChartPlugin['capabilities'] = {
   guides: ['legend'], valueLabels: true, markers: true, orientation: ['horizontal', 'vertical'],
 }
 
+const nativeComparisonStemCapabilities: ChartPlugin['capabilities'] = {
+  coordinateSystem: 'cartesian', axes: { category: { placements: ['side'] }, value: { scaleTypes: ['linear', 'log'] } },
+  guides: ['legend', 'direct-series'], valueLabels: true, markers: true, orientation: ['vertical', 'horizontal'],
+}
+
 export const chartRegistry: ChartPlugin[] = legacyChartRegistry.map((plugin) => {
-  const compiler = isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : isNativeSmoothingKind(plugin.id) ? compileNativeSmoothingScene : isNativeIntervalKind(plugin.id) ? compileNativeIntervalScene : isNativeXYKind(plugin.id) ? compileNativeXYScene : isNativeDistributionKind(plugin.id) ? compileNativeDistributionScene : undefined
+  const compiler = isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeComparisonStemKind(plugin.id) ? compileNativeComparisonStemScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : isNativeSmoothingKind(plugin.id) ? compileNativeSmoothingScene : isNativeIntervalKind(plugin.id) ? compileNativeIntervalScene : isNativeXYKind(plugin.id) ? compileNativeXYScene : isNativeDistributionKind(plugin.id) ? compileNativeDistributionScene : undefined
   if (compiler) return {
     ...plugin, compilerMode: 'native' as const,
-    capabilities: isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : isNativeSmoothingKind(plugin.id) ? nativeSmoothingCapabilities : isNativeIntervalKind(plugin.id) ? nativeIntervalCapabilities : isNativeXYKind(plugin.id) ? nativeXYCapabilities(plugin.id) : nativeDistributionCapabilities,
+    capabilities: isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeComparisonStemKind(plugin.id) ? nativeComparisonStemCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : isNativeSmoothingKind(plugin.id) ? nativeSmoothingCapabilities : isNativeIntervalKind(plugin.id) ? nativeIntervalCapabilities : isNativeXYKind(plugin.id) ? nativeXYCapabilities(plugin.id) : nativeDistributionCapabilities,
     validate: isNativeXYKind(plugin.id) ? validateNativeXYMapping : isNativeDistributionKind(plugin.id) ? validateNativeDistributionMapping : plugin.validate,
     compile: compiler,
     buildOption: (table: DataTable, config: ChartConfig) => renderScene(compiler(table, config)),
