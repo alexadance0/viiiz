@@ -73,7 +73,7 @@ Phase 8 started from `b089ab3b5a0eeda0d242ae10482f91496340b82b` and completed in
 
 Scatter and Bubble now dispatch through `plot.kind = 'xy'`, with truthful `x`/`y` channels and a dedicated continuous-axis layout. Only actual data groups live in `plot.series`; trend/band/reference/diagonal/quadrant layers and the size-scale guide have separate semantic types and stable IDs. The renderer consumes no table rows and `ChartCanvas` gained no Scatter geometry branches.
 
-The legacy relationship builder, local bubble callback, fake stacked confidence band, `markLine`, `markArea`, fake size-guide series, legacy tooltip, and legend mutation were removed from `chartRegistry.ts`. Remaining legacy families are Waterfall, Butterfly, Lollipop, Horizontal Lollipop, Dumbbell, Histogram/KDE frequency Distribution, Heatmap, and Treemap.
+The legacy relationship builder, local bubble callback, fake stacked confidence band, `markLine`, `markArea`, fake size-guide series, legacy tooltip, and legend mutation were removed from `chartRegistry.ts`. Remaining legacy families are Waterfall, Butterfly, Lollipop, Horizontal Lollipop, Dumbbell, Heatmap, and Treemap.
 
 The final gate passed three consecutive full E2E runs (44/44 each), the full suite at `--repeat-each=3` (132/132), and the visual file at `--repeat-each=5` (35/35), with no expected snapshot changes. Playwright uses two parallel workers in the supported macOS snapshot environment to avoid host saturation from concurrent SVG/video/trace contexts; this remains a multi-worker verification path.
 
@@ -83,12 +83,12 @@ Phase 9A started from the Phase 8 completion `70bb42f6aa024a92e6f765d08b200fd7e7
 
 Strip, Jitter, Beeswarm, Counts, and Barcode share one semantic `plot.kind = 'distribution'`: continuous numeric observations plus stable semantic lanes. Compiler-owned groups use measure × optional category identity; observations use raw row/field identity; exact Counts aggregates use aggregate identity; all retain their historical override keys separately. Pure statistics preserve interpolated quartiles and 1.5 IQR, while pure jitter preserves the legacy deterministic index seed.
 
-The dedicated layout resolves frame/axes, measured lane labels, lane/value projection, cross-group swarm packing, jitter, Barcode endpoints, summaries, and semantic lane grids. The ECharts adapter receives final geometry and never reads the table or computes statistics/offsets. The five old renderer branches were deleted and guarded; Box, Violin, Raincloud, Histogram, KDE, and Ridgeline deliberately remain legacy.
+The dedicated layout resolves frame/axes, measured lane labels, lane/value projection, cross-group swarm packing, jitter, Barcode endpoints, summaries, and semantic lane grids. The ECharts adapter receives final geometry and never reads the table or computes statistics/offsets. The old renderer branches were deleted and guarded; subsequent phases completed Box, Violin, Raincloud, Ridgeline, Histogram, and KDE.
 
 ## Phase 9B checkpoint — native Distribution shapes
 
 Phase 9B started from `ccd66becf9b7fd293081055675d5295ba1bff026`; implementation completed in `cf3ec028ec87b74cbeb9e9eabb5b7cb6072c4aae`, migrated legacy shape geometry was deleted in `09b480b`, and the documentation checkpoint is `05f13ed4cb45a1b7a1a9e969ac4d9e70343bb172`.
 
-Boxplot, Violin, Raincloud, and Ridgeline now extend `plot.kind = 'distribution'` with discriminated box and density layers. Shared preparation owns stable source groups/observations and is also used by the remaining legacy Histogram/KDE boundary. A pure Gaussian shape transform owns the legacy peak-normalized density profile; layout owns every subgroup slot, side, polygon, summary primitive, raincloud offset, and ridge overlap/domain extension.
+Boxplot, Violin, Raincloud, and Ridgeline extend `plot.kind = 'distribution'` with discriminated box and density layers. Shared preparation owns stable source groups/observations for all eleven kinds. Pure transforms own peak-normalized shape density, normalized frequency KDE, and Histogram bins; layout owns every subgroup slot, side, polygon, bin rectangle, KDE curve, summary primitive, raincloud offset, ridge overlap, and continuous frequency projection.
 
-The renderer remains `DataTable`/statistics/KDE-free, source observations remain editable independently of visibility, and derived shapes never enter value-label selections. The four migrated kinds are explicitly native and their legacy entry point throws. Distribution is not yet fully native: Histogram and KDE remain the Phase 9C frequency-axis migration.
+The renderer remains `DataTable`/statistics/KDE/binning-free, source observations remain editable independently of visibility, and derived shapes never enter value-label selections. All Distribution kinds are explicitly native, their legacy entry point throws, and the final legacy Distribution runtime branch has been removed.

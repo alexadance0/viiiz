@@ -34,6 +34,14 @@ describe('native Distribution renderer', () => {
     for (const kind of ['violinplot', 'raincloud', 'ridgeline'] as const) expect(render(kind).series[0].type).toBe('custom')
   })
 
+  it('adapts resolved Histogram and KDE geometry without renderer-side math', () => {
+    const histogram = render('histogram', { distributionBinCount: 4 })
+    expect(histogram.series).toHaveLength(1)
+    expect(histogram.series[0]).toMatchObject({ type: 'custom', data: expect.arrayContaining([expect.objectContaining({ elementId: expect.any(String), datumId: expect.any(String) })]) })
+    expect(histogram.graphic.some((item) => item.id?.includes('frequency-summary'))).toBe(true)
+    expect(render('kde-plot').series[0]).toMatchObject({ type: 'custom' })
+  })
+
   it('does not import or inspect a DataTable and leaves placement work outside renderer', () => {
     const source = readFileSync(new URL('./renderDistributionScene.ts', import.meta.url), 'utf8')
     expect(source).not.toMatch(/DataTable|Math\.random|fitSwarm|deterministicDistributionOffset|distributionStatistics|distributionDensity|distributionQuantile|bandwidth/)

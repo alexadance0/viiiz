@@ -146,6 +146,31 @@ test('native Distribution statistical shapes stay visually stable', async ({ pag
   await expect(canvas).toHaveScreenshot('distribution-shapes-vertical.png')
 })
 
+test('native Distribution frequency semantics stay visually stable', async ({ page }) => {
+  test.setTimeout(150_000)
+  await openDemoChart(page, 'Распределения', 'Histogram', true)
+  const canvas = page.locator('.chart-canvas-shell')
+  await expect(canvas).toHaveAttribute('data-plot-kind', 'distribution')
+  await expect(canvas).toHaveScreenshot('distribution-histogram-default.png')
+  await updateChart(page, canvas, () => page.getByLabel('Разбить цветом по категории').selectOption('region'))
+  await expect(canvas).toHaveScreenshot('distribution-histogram-grouped.png')
+  await openDesign(page)
+  await openSettings(page, 'Форма распределения')
+  await updateChart(page, canvas, () => page.getByLabel('Количество интервалов').fill('7'))
+  await expect(canvas).toHaveScreenshot('distribution-histogram-seven-bins.png')
+
+  await page.getByRole('button', { name: '← Тип графика' }).click()
+  await updateChart(page, canvas, () => page.getByRole('button', { name: 'KDE plot', exact: true }).click())
+  await expect(canvas).toHaveScreenshot('distribution-kde-grouped.png')
+  await updateChart(page, canvas, () => page.getByLabel('Разбить цветом по категории').selectOption(''))
+  await expect(canvas).toHaveScreenshot('distribution-kde-default.png')
+  await openDesign(page)
+  await openSettings(page, 'Форма распределения')
+  await updateChart(page, canvas, () => page.getByLabel('Сглаживание плотности').fill('0.4'))
+  await updateChart(page, canvas, () => page.getByLabel('Ориентация').selectOption('vertical'))
+  await expect(canvas).toHaveScreenshot('distribution-kde-wide-bandwidth-vertical.png')
+})
+
 test('native Scatter and Bubble semantics stay visually stable', async ({ page }) => {
   test.setTimeout(120_000)
   await openDemoChart(page, 'Временной ряд', 'Точечный', true)

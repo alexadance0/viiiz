@@ -39,7 +39,7 @@ Phase 9B started from `ccd66becf9b7fd293081055675d5295ba1bff026`; implementation
 | barcode-plot | observation tick distribution | native | dedicated lane/value/tick layout | stable raw observation metadata | shared SVG/PNG boundary | no |
 | boxplot | distribution summary shape | native | dedicated lane/value box geometry | raw observations editable; derived box excluded | shared SVG/PNG boundary | no |
 | violinplot / raincloud / ridgeline | statistical density shapes | native | dedicated lane/value density geometry | raw observations editable; derived density excluded | shared SVG/PNG boundary | no |
-| histogram / kde-plot | distribution frequency/density | legacy | legacy continuous frequency axis | legacy | existing legacy path | yes |
+| histogram / kde-plot | distribution frequency/density | native semantic frequency layers | native continuous value × frequency/density axes | stable bins and source observations | shared SVG/PNG boundary | no |
 | heatmap / treemap | matrix / hierarchy | legacy | specialized hybrid | legacy/specialized | existing legacy path | yes |
 
 ## Bar characterization coverage
@@ -87,7 +87,7 @@ Raw and Barcode selections expose every source observation without ECharts intro
 
 Box, Violin, Raincloud, and Ridgeline extend the same stable groups, lanes, observations, statistics, axes, grids, legends, and visitors. Box layers carry actual 1.5-IQR inlier whiskers, Q1/Q3, median styling, and source-ID outlier visibility. Density layers use the legacy peak-normalized Gaussian sum, bandwidth `max(groupSpan × ratio, globalSpan / 1000)`, 81 samples, and 1.75-bandwidth tails with zero endpoints.
 
-Layout owns subgroup slots, full/half/split sides, density polygons, statistic extents, raincloud offsets and point modes, and asymmetric ridge overlap. The shared renderer draws only resolved primitives and structured summary tooltips. Raw observation IDs and legacy override keys do not depend on orientation, bandwidth, side, overlap, or canvas size. Histogram and KDE remain the only legacy Distribution variants.
+Layout owns subgroup slots, full/half/split sides, density polygons, statistic extents, raincloud offsets and point modes, asymmetric ridge overlap, Histogram rectangles, KDE curves, and continuous frequency projection. The shared renderer draws only resolved primitives and structured tooltips. Raw observation IDs and legacy override keys do not depend on orientation, bandwidth, side, overlap, or canvas size. All eleven Distribution variants are native.
 
 Seasonal emphasis and identification are independent: `Seasonal accent ≠ legend mode`. With no legend, accent changes only stroke presentation. The standard Seasonal legend contains individual accent-year items plus one semantic `Остальные` group for ordinary muted non-accent years; a non-accent year with an explicit color remains an individual truthful item. Direct mode uses the shared direct-series guide, defaults accent years on and non-accent years off, and respects explicit per-series overrides.
 
@@ -127,4 +127,4 @@ Stable `IntervalGroupId` values derive from participating `SeriesId` values and 
 
 ## Phase 7.1 integration checkpoint
 
-The interval semantic migration and its integration quality are tracked separately. Integration now uses an explicit revision-aware final-frame contract for preview, transitions, resize/font completion, and export restoration. Full-suite and repeated visual verification capture only `settled` revisions. Unmigrated legacy families remain Waterfall, Butterfly, Lollipop, Dumbbell, Distribution, Heatmap, and Treemap; Phase 8 moved Scatter/Bubble to native XY.
+The interval semantic migration and its integration quality are tracked separately. Integration now uses an explicit revision-aware final-frame contract for preview, transitions, resize/font completion, and export restoration. Full-suite and repeated visual verification capture only `settled` revisions. Unmigrated legacy families remain Waterfall, Butterfly, Lollipop, Dumbbell, Heatmap, and Treemap; Phase 8 moved Scatter/Bubble to native XY and Wave 1 completed Distribution.

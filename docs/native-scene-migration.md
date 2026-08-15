@@ -49,7 +49,7 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 - `buildOption` remains on the plugin interface for unmigrated callers. For ordinary bars its implementation is a native compile/layout/render compatibility facade, not the legacy cartesian builder.
 - Slope keeps persisted `slopeXValues`, family flags, change-label/direction-color settings, legend/direct settings, series styles, callback keys, annotations, and decorations. Old documents omit the new optional fields and retain the previous appearance because change labels and direction colors default off. It does not expose ordinary legend/direct guides, and its local guide/label graphics never create fake semantic or renderer series.
 - Interval groups retain persisted field triples, fill settings, `showBounds`, source styles, element override keys, and auto-grouping. Hidden Confidence bounds remain in domains and band validation but are absent from guides, value-label targets, tooltips, and selection visitors. Bands are silent derived layers and are never editable data rows.
-- Waterfall, butterfly, lollipop, dumbbell, Histogram/KDE frequency Distribution, heatmap, and treemap retain their legacy compilers.
+- Waterfall, butterfly, lollipop, dumbbell, heatmap, and treemap retain their legacy compilers.
 
 ## Tests added
 
@@ -65,7 +65,7 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 
 The shared legacy `cartesian()` source still contains unreachable migrated-family generic code because remaining specialized comparison/relationship charts share the function. The moving-average branches and the complete interval builder—including fake Confidence stacks and custom Range bands—have been deleted. The next safe removal is to split the remaining specialized builders, then delete unreachable generic conditions and compatibility option-shape tests.
 
-Waterfall, butterfly, lollipop, dumbbell, Histogram/KDE frequency Distribution, heatmap, and treemap remain separate migrations.
+Waterfall, butterfly, lollipop, dumbbell, heatmap, and treemap remain separate migrations.
 
 ## Phase 8 native XY
 
@@ -81,15 +81,15 @@ Native `ElementId` uses source-row/measure identity and therefore does not colla
 
 The compiler produces observations, exact-value Counts aggregates, Barcode strokes, full interpolated-quartile/1.5-IQR statistics, and mean/median summary intent. Layout owns the continuous value projection, semantic numeric lane axis, measured label rails, deterministic legacy jitter, cross-group-per-lane swarm packing, Barcode endpoints, summary extents, and lane-grid lines. The dedicated renderer consumes resolved geometry without a `DataTable`, statistics, jitter, swarm, or fake grid series. `DistributionSettings` now imports the neutral series-color helper directly.
 
-The migrated five legacy branches were removed and their legacy entry point throws. Phase 9B subsequently migrated Box, Violin, Raincloud, and Ridgeline; only `histogram` and `kde-plot` remain legacy. Phase 9A verification passed 618 unit tests, 47/47 full E2E, 141/141 at `--repeat-each=3`, and the focused Distribution visual scenario 5/5. Seven macOS Chromium Distribution baselines were added.
+The migrated five legacy branches were removed and their legacy entry point throws. Phase 9B subsequently migrated Box, Violin, Raincloud, and Ridgeline. Wave 1 Track B migrated `histogram` and `kde-plot`, so all eleven Distribution kinds are now native and the final legacy Distribution builder is gone.
 
 ## Phase 9B native Distribution shapes
 
 Phase 9B started from `ccd66becf9b7fd293081055675d5295ba1bff026`; implementation completed in `cf3ec028ec87b74cbeb9e9eabb5b7cb6072c4aae`, migrated legacy shape geometry was deleted in `09b480b`, and the documentation checkpoint is `05f13ed4cb45a1b7a1a9e969ac4d9e70343bb172`.
 
-`prepareDistributionGroups` is now the single pure source of selected fields, categories, stable groups/lanes, raw observations, colors, and interpolated-quartile/1.5-IQR statistics for native Distribution and the temporary legacy Histogram/KDE builder. The pure density transform preserves `Σ exp(-0.5 × ((sample-observation)/bandwidth)²)`, peak normalization, legacy bandwidth fallback, 81 samples, 1.75-bandwidth tails, zero endpoints, and direct Q1/median/Q3 kernel evaluation.
+`prepareDistributionGroups` is now the single pure source of selected fields, categories, stable groups/lanes, raw observations, colors, and interpolated-quartile/1.5-IQR statistics for every Distribution kind. Shape density preserves its peak-normalized 81-sample transform; frequency KDE preserves normalized Gaussian density, 121 samples, bandwidth fallback, 1.75-bandwidth tails, and zero endpoints. Histogram preserves 3–80 bins, inclusive final bounds, custom domains, range formatting, and median-height summaries.
 
-Box summary and density layers have stable `LayerId`s. Layout resolves grouped boxes, full/half/split violins, line/box summaries, one-sided Raincloud composition, hollow point rows, and orientation-specific Ridgeline overlap/domain extension. The ECharts adapter consumes resolved rectangles, lines and polygons without table, statistics, KDE, subgroup, or side decisions. Source observations remain editable through semantic visitors even when their marks are hidden; derived shapes remain non-editable. Histogram and KDE are deliberately deferred to Phase 9C.
+Box summary, density, Histogram, KDE, and frequency-summary layers have stable IDs. Layout resolves grouped boxes, full/half/split violins, line/box summaries, one-sided Raincloud composition, hollow point rows, orientation-specific Ridgeline overlap/domain extension, Histogram rectangles, and KDE curves. The ECharts adapter consumes resolved geometry without table, statistics, KDE, binning, subgroup, or side decisions. Source observations remain editable through semantic visitors even when their marks are hidden; derived shapes remain non-editable.
 
 ## Phase 7.1 render lifecycle
 

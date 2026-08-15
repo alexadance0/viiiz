@@ -475,23 +475,63 @@ export interface DistributionDensityLayerScene {
   }>
 }
 
+export interface DistributionHistogramBinScene {
+  id: ElementId
+  datumId: DatumId
+  groupId: DistributionGroupId
+  index: number
+  start: number
+  end: number
+  center: number
+  amount: number
+  sourceDatumIds: DatumId[]
+  fill: { color: string; opacity: number; stroke: string; strokeWidth: number }
+  label?: { text: string; style: ChartTextStyle }
+  tooltip: { group: string; range: string; amount: number }
+}
+
+export interface DistributionFrequencySummaryScene {
+  id: LayerId
+  groupId: DistributionGroupId
+  value: number
+  amount: number
+  color: string
+  width: number
+  lengthRatio: number
+}
+
+export interface DistributionHistogramLayerScene {
+  kind: 'histogram'
+  groups: Array<{ id: LayerId; groupId: DistributionGroupId; bins: DistributionHistogramBinScene[] }>
+}
+
+export interface DistributionKdeLayerScene {
+  kind: 'kde'
+  groups: Array<{ id: LayerId; groupId: DistributionGroupId; points: Array<{ value: number; density: number }>; stroke: { color: string; width: number }; fill: { color: string; opacity: number }; tooltip: { group: string } }>
+}
+
 export type DistributionLayerScene =
   | { kind: 'observations'; groups: Array<{ groupId: DistributionGroupId; marks: DistributionObservationScene[] }> }
   | { kind: 'counts'; groups: Array<{ groupId: DistributionGroupId; marks: DistributionCountMarkScene[] }> }
   | { kind: 'barcodes'; groups: Array<{ groupId: DistributionGroupId; marks: DistributionBarcodeMarkScene[] }> }
   | { kind: 'summaries'; marks: Array<{ id: ElementId; groupId: DistributionGroupId; value: number; visible: boolean; statistic: 'median' | 'mean'; color: string; width: number; lengthRatio: number }> }
   | { kind: 'boxes'; marks: DistributionBoxMarkScene[] }
+  | DistributionHistogramLayerScene
+  | DistributionKdeLayerScene
+  | { kind: 'frequency-summaries'; marks: DistributionFrequencySummaryScene[] }
   | DistributionDensityLayerScene
 
 export interface DistributionPlotScene {
   kind: 'distribution'
-  variant: 'strip' | 'jitter' | 'beeswarm' | 'counts' | 'barcode' | 'box' | 'violin' | 'raincloud' | 'ridgeline'
+  variant: 'strip' | 'jitter' | 'beeswarm' | 'counts' | 'barcode' | 'box' | 'violin' | 'raincloud' | 'ridgeline' | 'histogram' | 'kde'
   orientation: 'horizontal' | 'vertical'
   layoutMode: 'measures' | 'categories'
   valueAxis: AxisSpec
   laneAxis: AxisSpec
+  frequencyAxis?: AxisSpec
   valueDomain: { min: number; max: number; step: number }
   laneDomain: { min: number; max: number; interval: number }
+  frequencyDomain?: { min: number; max: number; step: number }
   widthRatio: number
   jitterAmount: number
   lanes: DistributionLaneScene[]

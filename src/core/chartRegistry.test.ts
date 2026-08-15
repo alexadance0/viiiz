@@ -375,7 +375,7 @@ describe('individual chart element styles', () => {
     expect(option('violinplot').series.map((series) => series.type)).toEqual(expect.arrayContaining(['custom', 'scatter']))
     expect(option('raincloud').series.map((series) => series.type)).toEqual(expect.arrayContaining(['custom', 'scatter']))
     expect(option('histogram').series.filter((series) => !series.silent).every((series) => series.type === 'custom')).toBe(true)
-    expect(option('kde-plot').series.filter((series) => !series.silent).map((series) => series.type)).toContain('line')
+    expect(option('kde-plot').series.filter((series) => !series.silent).every((series) => series.type === 'custom')).toBe(true)
     expect(option('ridgeline').series.filter((series) => !series.silent).every((series) => series.type === 'custom')).toBe(true)
     expect(option('strip-plot').series.filter((series) => !series.silent).every((series) => series.type === 'scatter')).toBe(true)
     expect(option('counts-plot').series.filter((series) => !series.silent).every((series) => series.type === 'scatter')).toBe(true)
@@ -384,32 +384,21 @@ describe('individual chart element styles', () => {
 
   it('renders histogram bins and distinct density layers', () => {
     const observations: DataTable = { name: 'density', columns: ['profit'], rows: [1, 2, 2, 3, 5, 8, 13].map((profit) => ({ profit })) }
-    const api = { coord: ([value, amount]: number[]) => [value * 10, 600 - amount * 10], size: () => [10, 100] }
-    type RenderApi = { coord(value: number[]): number[]; size(value: number[]): number[] }
-    type ShapeSeries = { name?: string; type: string; silent?: boolean; data: unknown[]; renderItem?: (params: { dataIndex: number }, api: RenderApi) => { type: string; children?: Array<{ type: string; style?: { text?: string } }> } }
-
-    const histogram = getChartPlugin('histogram').buildOption(observations, { ...base('histogram'), yField: 'profit', yFields: ['profit'], distributionBinCount: 5 }) as { series: ShapeSeries[] }
-    const bars = histogram.series.find((series) => series.name === 'profit' && !series.silent)!
-    expect(bars.data).toHaveLength(5)
-    const bar = bars.renderItem!({ dataIndex: 0 }, api)
-    expect(bar.type).toBe('rect')
-    expect((bar as unknown as { shape: { y: number; height: number } }).shape.y + (bar as unknown as { shape: { y: number; height: number } }).shape.height).toBe(600)
-    const labelled = getChartPlugin('histogram').buildOption(observations, { ...base('histogram'), yField: 'profit', yFields: ['profit'], distributionBinCount: 5, distributionHistogramMin: 0, distributionHistogramMax: 10, distributionHistogramLabels: 'range', distributionHistogramRangeDecimals: 2 }) as { series: ShapeSeries[] }
-    const labelledBar = labelled.series.find((series) => series.name === 'profit' && !series.silent)!.renderItem!({ dataIndex: 0 }, api)
-    expect(labelledBar.children?.find((child) => child.type === 'text')?.style?.text).toBe('0,00–2,00')
-    const oneSided = getChartPlugin('histogram').buildOption(observations, { ...base('histogram'), yField: 'profit', yFields: ['profit'], distributionHistogramMin: 20, distributionBinCount: 500 }) as { xAxis: { min: number; max: number }; series: Array<Omit<ShapeSeries, 'data'> & { data: Array<{ range?: [number, number] }> }> }
-    const oneSidedBins = oneSided.series.find((series) => series.name === 'profit' && !series.silent)!.data
-    expect(oneSided.xAxis.max).toBeGreaterThan(oneSided.xAxis.min)
+    const histogram = resolveNativeDistributionScene(compileNativeDistributionScene(observations, { ...base('histogram'), yField: 'profit', yFields: ['profit'], distributionBinCount: 5, distributionHistogramMin: 0, distributionHistogramMax: 10, distributionHistogramLabels: 'range', distributionHistogramRangeDecimals: 2 }))
+    expect(histogram.distributionGeometry.frequencyBins).toHaveLength(5)
+    expect(histogram.plot.layers.find((layer) => layer.kind === 'histogram')?.groups[0].bins[0].label?.text).toBe('0,00–2,00')
+    const oneSided = compileNativeDistributionScene(observations, { ...base('histogram'), yField: 'profit', yFields: ['profit'], distributionHistogramMin: 20, distributionBinCount: 500 })
+    const oneSidedBins = oneSided.plot.layers.find((layer) => layer.kind === 'histogram')!.groups[0].bins
+    expect(oneSided.plot.valueDomain.max).toBeGreaterThan(oneSided.plot.valueDomain.min)
     expect(oneSidedBins).toHaveLength(80)
-    expect(oneSidedBins.every((bin, index) => index === 0 || bin.range![0] >= oneSidedBins[index - 1].range![1])).toBe(true)
+    expect(oneSidedBins.every((bin, index) => index === 0 || bin.start >= oneSidedBins[index - 1].end)).toBe(true)
 
-    const kde = getChartPlugin('kde-plot').buildOption(observations, { ...base('kde-plot'), yField: 'profit', yFields: ['profit'] }) as { yAxis: { min: number; max: number; interval: number }; series: Array<{ name?: string; type: string; data: number[][] }> }
-    const density = kde.series.find((series) => series.name === 'profit' && series.type === 'line')!
-    expect(kde.yAxis.min).toBe(0)
-    expect(kde.yAxis.max / kde.yAxis.interval).toBeLessThanOrEqual(7)
-    expect(kde.yAxis.max).toBeLessThan(.5)
-    expect(density.data[0][1]).toBe(0)
-    expect(density.data.at(-1)![1]).toBe(0)
+    const kde = resolveNativeDistributionScene(compileNativeDistributionScene(observations, { ...base('kde-plot'), yField: 'profit', yFields: ['profit'] }))
+    expect(kde.plot.frequencyDomain!.min).toBe(0)
+    expect(kde.plot.frequencyDomain!.max / kde.plot.frequencyDomain!.step).toBeLessThanOrEqual(7)
+    expect(kde.plot.frequencyDomain!.max).toBeLessThan(.5)
+    expect(kde.plot.layers.find((layer) => layer.kind === 'kde')?.groups[0].points[0].density).toBe(0)
+    expect(kde.plot.layers.find((layer) => layer.kind === 'kde')?.groups[0].points.at(-1)?.density).toBe(0)
 
     const ridgeline = resolveNativeDistributionScene(compileNativeDistributionScene(observations, { ...base('ridgeline'), yField: 'profit', yFields: ['profit'] }))
     expect(ridgeline.distributionGeometry.densityShapes[0]).toMatchObject({ polygon: expect.any(Array), outline: expect.any(Array), baseline: expect.any(Object) })
