@@ -57,4 +57,17 @@ describe('native Distribution layout', () => {
       expect(resolveNativeDistributionScene(compileNativeDistributionScene(table, config('ridgeline', { distributionOrientation }))).distributionGeometry.densityShapes[0].baseline).toBeDefined()
     }
   })
+
+  it('resolves Histogram and KDE geometry on continuous axes in both orientations', () => {
+    for (const distributionOrientation of ['horizontal', 'vertical'] as const) {
+      const histogram = resolveNativeDistributionScene(compileNativeDistributionScene(table, config('histogram', { distributionOrientation, distributionBinCount: 4 })))
+      expect(histogram.distributionGeometry.frequencyBins).toHaveLength(4)
+      expect(histogram.distributionGeometry.frequencyBins.every((bin) => bin.rect.width >= 0 && bin.rect.height >= 0)).toBe(true)
+      expect(histogram.distributionGeometry.frequencySummaries).toHaveLength(1)
+      const kde = resolveNativeDistributionScene(compileNativeDistributionScene(table, config('kde-plot', { distributionOrientation })))
+      expect(kde.distributionGeometry.frequencyCurves[0].points).toHaveLength(121)
+      expect(kde.distributionGeometry.frequencyCurves[0].polygon).toHaveLength(123)
+      expect(kde.geometry.axes).toHaveProperty('frequency')
+    }
+  })
 })

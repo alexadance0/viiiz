@@ -12,10 +12,33 @@ const table: DataTable = { name: 'distribution', columns: ['group', 'value', 'ot
 ] }
 
 describe('native Distribution compiler', () => {
-  it('registers nine native variants and keeps only Histogram/KDE legacy', () => {
-    expect(NATIVE_DISTRIBUTION_KINDS.map((kind) => getChartPlugin(kind).compilerMode)).toEqual(Array(9).fill('native'))
-    expect(['histogram', 'kde-plot'].map((kind) => getChartPlugin(kind as ChartConfig['kind']).compilerMode)).toEqual(Array(2).fill('legacy'))
-    expect(legacyDistributionBuilderGuard).toThrow('Legacy Distribution observation/shape builder was removed')
+  it('registers all eleven variants as native and guards the removed legacy builder', () => {
+    expect(NATIVE_DISTRIBUTION_KINDS.map((kind) => getChartPlugin(kind).compilerMode)).toEqual(Array(11).fill('native'))
+    expect(legacyDistributionBuilderGuard).toThrow('Legacy Distribution builder was removed')
+  })
+
+  it('compiles Histogram bins with stable IDs and source identities', () => {
+    const scene = compileNativeDistributionScene(table, config('histogram', { distributionGroupField: 'group', distributionBinCount: 3, distributionHistogramMin: 0, distributionHistogramMax: 6 }))
+    const layer = scene.plot.layers.find((item) => item.kind === 'histogram')!
+    expect(scene.plot).toMatchObject({ variant: 'histogram', frequencyDomain: { min: 0 } })
+    expect(layer.groups[0].bins).toHaveLength(3)
+    expect(layer.groups[0].bins.map((bin) => bin.amount)).toEqual([0, 2, 0])
+    expect(layer.groups[0].bins[1].sourceDatumIds).toHaveLength(2)
+    expect(nativeMarkSelections(scene)).toHaveLength(4)
+    const renamed = compileNativeDistributionScene(table, config('histogram', { distributionGroupField: 'group', distributionBinCount: 3, distributionHistogramMin: 0, distributionHistogramMax: 6, distributionCategoryStyles: { A: { label: 'Renamed', color: '#123456' } } }))
+    expect(renamed.plot.layers.find((item) => item.kind === 'histogram')!.groups[0].bins.map((bin) => bin.id)).toEqual(layer.groups[0].bins.map((bin) => bin.id))
+    const clipped = compileNativeDistributionScene(table, config('histogram', { distributionHistogramMin: 20, distributionHistogramMax: 30 }))
+    expect(clipped.plot.layers.find((item) => item.kind === 'frequency-summaries')?.marks[0].amount).toBe(0)
+  })
+
+  it('compiles normalized KDE samples and median summaries', () => {
+    const scene = compileNativeDistributionScene(table, config('kde-plot'))
+    const layer = scene.plot.layers.find((item) => item.kind === 'kde')!
+    expect(scene.plot).toMatchObject({ variant: 'kde', frequencyDomain: { min: 0 } })
+    expect(layer.groups[0].points).toHaveLength(121)
+    expect(layer.groups[0].points[0].density).toBe(0)
+    expect(scene.plot.layers.find((item) => item.kind === 'frequency-summaries')?.marks).toHaveLength(1)
+    expect(nativeMarkSelections(scene)).toHaveLength(4)
   })
 
   it('compiles stable box and density layers without renderer vocabulary', () => {
@@ -74,7 +97,7 @@ describe('native Distribution compiler', () => {
   })
 
   it('keeps compiler, preparation, statistics and density renderer-neutral', () => {
-    for (const file of ['compiler.ts', 'prepare.ts', 'statistics.ts', 'density.ts', 'layout.ts']) {
+    for (const file of ['compiler.ts', 'prepare.ts', 'statistics.ts', 'density.ts', 'frequency.ts', 'layout.ts']) {
       const source = readFileSync(new URL(file, import.meta.url), 'utf8')
       expect(source).not.toMatch(/echarts|zrender|ChartCanvas/)
     }

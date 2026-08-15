@@ -4,7 +4,7 @@ import { axisAffixApplies, formatChartNumber, formatXAxisNumber, formatYAxisNumb
 import { measureTextWidth, wrapMeasuredText } from './textMetrics'
 import { niceNumericScale, orderedBounds, prepareVisibleChartData, slopePositionKey } from './chartScale'
 import { effectiveDateStepUnit, moveDateContextToVisibleLabels, planCategoryDateLabels, stackedContextFormat } from './chartDateAxis'
-import { isAreaChart, isBarChart, isDistributionChart, isHorizontalBarChart, isNormalizedStackedChart, isStackedBarChart, isStackedChart } from './chartKinds'
+import { isAreaChart, isBarChart, isHorizontalBarChart, isNormalizedStackedChart, isStackedBarChart, isStackedChart } from './chartKinds'
 import { barChartDefinitions } from '../features/chart-types/bar'
 import { lineChartDefinitions, intervalChartDefinitions } from '../features/chart-types/line'
 import { areaChartDefinitions } from '../features/chart-types/area'
@@ -22,8 +22,6 @@ import { compileNativeSmoothingScene, isNativeSmoothingKind } from '../features/
 import { compileNativeIntervalScene, isNativeIntervalKind } from '../features/chart-types/interval/compiler'
 import { compileNativeXYScene, isNativeXYKind, validateNativeXYMapping } from '../features/chart-types/xy/compiler'
 import { compileNativeDistributionScene, isNativeDistributionKind, validateNativeDistributionMapping } from '../features/chart-types/distribution/compiler'
-import { distributionStatistics } from '../features/chart-types/distribution/statistics'
-import { prepareDistributionGroups } from '../features/chart-types/distribution/prepare'
 export { fitSwarmClouds, fitSwarmOffsets, packSwarmOffsets } from '../features/chart-types/distribution/swarm'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 import { nativeMarkSelections } from '../entities/chart/model/sceneVisitors'
@@ -1564,6 +1562,7 @@ export const legacyRelationshipBuilderGuard = () => { throw new Error('Legacy Sc
 const scatter: LegacyChartPlugin = { ...pluginModel('scatter'), id: 'scatter', label: relationshipChartDefinitions[0][1], category: 'relationship', settings: relationshipSettings, buildOption: legacyRelationshipBuilderGuard }
 const bubble: LegacyChartPlugin = { ...pluginModel('bubble'), id: 'bubble', label: relationshipChartDefinitions[1][1], category: 'relationship', settings: relationshipSettings, buildOption: legacyRelationshipBuilderGuard }
 
+export const legacyDistributionBuilderGuard = () => { throw new Error('Legacy Distribution builder was removed; use the native Distribution compiler.') }
 const distribution: LegacyChartPlugin = {
   ...pluginModel('boxplot'), id: 'boxplot', label: distributionChartDefinitions[0][1], category: 'distribution',
   settings: { sections: ['series', 'annotations', 'grid', 'text', 'headings', 'axes', 'legend-values', 'credits'], series: ['color', 'markers'], features: { directLabels: false, barLayout: false, dataPreparation: false, normalizedStack: false, areaLayout: false, scatterLayout: false, distributionLayout: true, lineVariant: false } },
@@ -1571,171 +1570,8 @@ const distribution: LegacyChartPlugin = {
     const fields = config.yFields.filter((field) => table.rows.some((row) => typeof row[field] === 'number' && Number.isFinite(row[field])))
     return fields.length ? { ok: true, errors: [] } : { ok: false, errors: [{ field: 'yFields', message: 'Выберите хотя бы один числовой показатель для распределения.' }] }
   },
-  buildOption(table, config) {
-    if (!(['histogram', 'kde-plot'] as ChartConfig['kind'][]).includes(config.kind)) throw new Error(`Legacy Distribution builder cannot render ${config.kind}.`)
-    const prepared = prepareDistributionGroups(table, config)
-    const { selectedFields, groupField, categories, layoutMode } = prepared
-    const groups = prepared.groups.map((group) => ({ field: group.field, fieldIndex: selectedFields.indexOf(group.field), category: group.categoryKey ?? null, categoryIndex: categories.indexOf(group.categoryKey ?? null), laneIndex: prepared.lanes.find((lane) => lane.id === group.laneId)!.index, subgroupIndex: group.subgroupIndex, subgroupCount: group.subgroupCount, seriesKey: group.seriesKey, name: group.sourceSeriesName, displayName: group.displayName, observations: group.observations.map((item) => ({ value: item.value, displayLabel: item.displayLabel, displayValue: item.displayValue, displayCategory: item.displayCategory, elementKey: item.legacyKey, sourceSeriesName: group.sourceSeriesName })), values: group.observations.map(({ value }) => value) }))
-    const groupColor = (group: typeof groups[number]) => layoutMode === 'measures' && groupField
-      ? config.distributionCategoryStyles?.[String(group.category)]?.color ?? getSeriesColor(config, group.seriesKey, group.categoryIndex)
-      : getSeriesColor(config, group.field, group.fieldIndex)
-    const laneLabels = prepared.laneLabels
-    const values = groups.flatMap((group) => group.values)
-    const rawMin = prepared.rawMinimum, rawMax = prepared.rawMaximum, rawSpan = prepared.rawSpan
-    const bandwidthRatio = config.distributionBandwidth ?? .14
-    const densityTail = config.kind === 'kde-plot' ? Math.max(...groups.map((group) => (group.values.at(-1)! - group.values[0]) * bandwidthRatio), rawSpan / 1000) * 1.75 : 0
-    const scale = niceNumericScale(densityTail ? [...values, rawMin - densityTail, rawMax + densityTail] : values)
-    const horizontal = (config.distributionOrientation ?? 'horizontal') === 'horizontal'
-    const duplicateYAxisTitle = horizontal && laneLabels.some((label) => label.trim() === config.yAxisTitle.trim())
-    const base = commonOption(table, duplicateYAxisTitle ? { ...config, showYAxisTitle: false } : config) as Record<string, unknown>
-    const axisLineStyle = { color: config.axisLineColor, width: config.axisLineWidth, type: config.axisLineType }
-    const baseXAxis = base.xAxis as Record<string, unknown>, baseYAxis = base.yAxis as Record<string, unknown>
-    const configuredLegendIcon = ({ circle: 'circle', square: 'rect', line: 'path://M0 4H24V7H0Z', diamond: 'diamond', triangle: 'triangle' } as const)[config.legendMarker as 'circle' | 'square' | 'line' | 'diamond' | 'triangle']
-    const stats = groups.map((group) => { const result = distributionStatistics(group.observations.map((observation) => ({ value: observation.value, datumId: observation.elementKey }))); return { min: result.minimumInlier, q1: result.q1, median: result.median, mean: result.mean, q3: result.q3, max: result.maximumInlier, outliers: group.observations.filter((observation) => result.outlierDatumIds.includes(observation.elementKey)).map((observation) => observation.value) } })
-    const histogram = config.kind === 'histogram'
-      const [requestedHistogramMin, requestedHistogramMax] = orderedBounds(config.distributionHistogramMin, config.distributionHistogramMax)
-      const automaticDomainMin = histogram && rawMin === rawMax ? rawMin - .5 : histogram ? rawMin : scale.min
-      const automaticDomainMax = histogram && rawMin === rawMax ? rawMax + .5 : histogram ? rawMax : scale.max
-      const selectedDomainMin = histogram ? requestedHistogramMin ?? automaticDomainMin : automaticDomainMin
-      const selectedDomainMax = histogram ? requestedHistogramMax ?? automaticDomainMax : automaticDomainMax
-      const fallbackSpan = Math.max(1, automaticDomainMax - automaticDomainMin)
-      const domainMin = selectedDomainMin === selectedDomainMax ? selectedDomainMin - .5 : selectedDomainMin > selectedDomainMax && requestedHistogramMin == null ? selectedDomainMax - fallbackSpan : selectedDomainMin
-      const domainMax = selectedDomainMin === selectedDomainMax ? selectedDomainMax + .5 : selectedDomainMin > selectedDomainMax && requestedHistogramMax == null ? selectedDomainMin + fallbackSpan : selectedDomainMax
-      const binCount = Math.min(80, Math.max(3, Math.round(config.distributionBinCount ?? 12)))
-      const binWidth = (domainMax - domainMin) / binCount
-      const sampleCount = 121
-      const normalizer = Math.sqrt(2 * Math.PI)
-      const distributions = groups.map((group, groupIndex) => {
-        if (histogram) {
-          const bins = Array.from({ length: binCount }, (_, index) => {
-            const start = domainMin + index * binWidth, end = index === binCount - 1 ? domainMax : start + binWidth
-            const count = group.values.filter((value) => value >= start && (index === binCount - 1 ? value <= end : value < end)).length
-            return { start, end, center: (start + end) / 2, amount: count }
-          })
-          return { group, groupIndex, bins, points: [] as number[][] }
-        }
-        const bandwidth = Math.max((group.values.at(-1)! - group.values[0]) * bandwidthRatio, rawSpan / 1000)
-        const samples = Array.from({ length: sampleCount }, (_, index) => domainMin + (domainMax - domainMin) * index / (sampleCount - 1))
-        const points = samples.map((value) => [value, group.values.reduce((sum, current) => sum + Math.exp(-.5 * ((value - current) / bandwidth) ** 2), 0) / (group.values.length * bandwidth * normalizer)])
-        points[0][1] = 0; points[points.length - 1][1] = 0
-        return { group, groupIndex, bins: [] as Array<{ start: number; end: number; center: number; amount: number }>, points }
-      })
-      const amounts = distributions.flatMap((distribution) => histogram ? distribution.bins.map((bin) => bin.amount) : distribution.points.map((entry) => entry[1]))
-      const frequencyScale = niceNumericScale([0, ...amounts], true)
-      const frequencyMax = histogram ? Math.max(frequencyScale.max, 1) : frequencyScale.max
-      const displayDomainScale = niceNumericScale([domainMin, domainMax])
-      const displayDomainMin = histogram && requestedHistogramMin == null ? displayDomainScale.min : domainMin
-      const displayDomainMax = histogram && requestedHistogramMax == null ? displayDomainScale.max : domainMax
-      const rangeDecimals = Math.max(0, Math.min(6, Math.round(config.distributionHistogramRangeDecimals ?? 1)))
-      const formatBoundary = (value: number) => value.toLocaleString(config.numberLocale ?? 'ru-RU', { minimumFractionDigits: rangeDecimals, maximumFractionDigits: rangeDecimals, useGrouping: config.numberGrouping })
-      const formatRange = (range: [number, number]) => `${formatBoundary(range[0])}–${formatBoundary(range[1])}`
-      const standardName = (group: typeof groups[number]) => selectedFields.length === 1 ? group.name : group.displayName
-      const axis = (source: Record<string, unknown>, min: number, max: number, interval: number | undefined, showLine: boolean, showTicks: boolean, showGrid: boolean) => ({
-        ...source,
-        type: 'value',
-        data: undefined,
-        boundaryGap: false,
-        min,
-        max,
-        interval,
-        axisLabel: { ...(source.axisLabel as object), formatter: (value: number) => formatChartNumber(value, config) },
-        axisLine: { show: showLine, onZero: false, lineStyle: axisLineStyle },
-        axisTick: { show: showTicks, length: config.tickLength, lineStyle: axisLineStyle },
-        splitLine: { show: showGrid, lineStyle: { color: config.gridColor, width: config.gridWidth, type: config.gridType } },
-      })
-      const domainAxis = axis(horizontal ? baseXAxis : baseYAxis, config.yAxisMin ?? displayDomainMin, config.yAxisMax ?? displayDomainMax, config.yAxisStep ?? displayDomainScale.step, horizontal ? config.showXAxisLine : config.showYAxisLine, horizontal ? config.showXTicks : config.showYTicks, horizontal ? config.showVerticalGrid : config.showHorizontalGrid)
-      const frequencyAxis = axis(horizontal ? baseYAxis : baseXAxis, 0, frequencyMax, frequencyScale.step, horizontal ? config.showYAxisLine : config.showXAxisLine, horizontal ? config.showYTicks : config.showXTicks, horizontal ? config.showHorizontalGrid : config.showVerticalGrid)
-      const chartPoint = (value: number, amount: number) => horizontal ? [value, amount] : [amount, value]
-      const standardOption = {
-        ...base,
-        animationDuration: 180,
-        animationDurationUpdate: 180,
-        legend: {
-          ...(base.legend as object),
-          show: Boolean(config.showLegend && groups.length > 1),
-          data: groups.map((group) => ({ name: standardName(group), icon: configuredLegendIcon ?? (histogram ? 'rect' : 'path://M0 4H24V7H0Z'), itemStyle: { color: groupColor(group), borderWidth: 0 } })),
-          itemWidth: configuredLegendIcon === 'path://M0 4H24V7H0Z' || (!configuredLegendIcon && !histogram) ? 24 : 10,
-          itemHeight: 10,
-        },
-        grid: { ...(base.grid as object), containLabel: true },
-        xAxis: { ...(horizontal ? domainAxis : frequencyAxis), position: config.xAxisPosition },
-        yAxis: { ...(horizontal ? frequencyAxis : domainAxis), position: config.yAxisPosition },
-        tooltip: { trigger: histogram ? 'item' : 'axis', formatter: (input: unknown) => {
-          const items = (Array.isArray(input) ? input : [input]) as Array<{ marker?: string; seriesName?: string; data?: { range?: [number, number]; amount?: number }; value?: number[] }>
-          if (histogram) {
-            const item = items[0], range = item?.data?.range, amount = item?.data?.amount ?? 0
-            return `${item?.marker ?? ''}<b>${escapeHtml(item?.seriesName ?? '')}</b><br/>${range ? escapeHtml(formatRange(range)) : ''}<br/>Наблюдений: <b>${amount}</b>`
-          }
-          const value = items[0]?.value?.[horizontal ? 0 : 1]
-          return [`<b>${escapeHtml(formatChartNumber(value ?? 0, config))}</b>`, ...items.filter((item) => item.seriesName && !item.seriesName.startsWith('__')).map((item) => `${item.marker ?? ''}${escapeHtml(item.seriesName!)}: <b>${Number(item.value?.[horizontal ? 1 : 0] ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 4 })}</b>`)].join('<br/>')
-        } },
-        series: [] as Array<Record<string, unknown>>,
-      }
-      distributions.forEach(({ group, groupIndex, bins, points }) => {
-        const color = groupColor(group)
-        const stat = stats[groupIndex]
-        const summaryColor = config.seriesStyles[group.name]?.distributionSummaryColor ?? config.seriesStyles[group.seriesKey]?.distributionSummaryColor ?? color
-        const summaryWidth = config.seriesStyles[group.name]?.distributionSummaryWidth ?? config.seriesStyles[group.seriesKey]?.distributionSummaryWidth ?? config.distributionSummaryWidth ?? 3
-        const summaryLength = (config.seriesStyles[group.name]?.distributionSummaryLength ?? config.seriesStyles[group.seriesKey]?.distributionSummaryLength ?? config.distributionSummaryLength ?? 100) / 100
-        const summaryAmount = histogram
-          ? bins.find((bin, index) => stat.median >= bin.start && (index === bins.length - 1 ? stat.median <= bin.end : stat.median < bin.end))?.amount ?? 0
-          : points.reduce((closest, entry) => Math.abs(entry[0] - stat.median) < Math.abs(closest[0] - stat.median) ? entry : closest, points[0])[1]
-        if (histogram) {
-          standardOption.series.push({
-            name: standardName(group),
-            type: 'custom',
-            coordinateSystem: 'cartesian2d',
-            data: bins.map((bin) => ({ value: chartPoint(bin.center, bin.amount), range: [bin.start, bin.end], amount: bin.amount })),
-            renderItem: (params: { dataIndex: number }, api: { coord(value: number[]): number[] }) => {
-              const bin = bins[params.dataIndex]
-              const zero = api.coord(chartPoint(bin.start, 0)), top = api.coord(chartPoint(bin.end, bin.amount))
-              const rect = { type: 'rect', shape: horizontal
-                ? { x: Math.min(zero[0], top[0]), y: Math.min(zero[1], top[1]), width: Math.max(1, Math.abs(top[0] - zero[0]) - 1), height: Math.abs(zero[1] - top[1]), r: 0 }
-                : { x: Math.min(zero[0], top[0]), y: Math.min(zero[1], top[1]), width: Math.abs(top[0] - zero[0]), height: Math.max(1, Math.abs(zero[1] - top[1]) - 1), r: 0 },
-              style: { fill: color, stroke: color, lineWidth: 1, opacity: config.distributionPointOpacity ?? .4 } }
-              const labelMode = config.distributionHistogramLabels ?? 'none'
-              if (labelMode === 'none' || !bin.amount) return rect
-              const label = labelMode === 'count' ? String(bin.amount) : formatRange([bin.start, bin.end])
-              const labelStyle = horizontal
-                ? { x: (zero[0] + top[0]) / 2, y: Math.min(zero[1], top[1]) - 5, text: label, ...graphicText(config.valueText), align: 'center', verticalAlign: 'bottom' }
-                : { x: Math.max(zero[0], top[0]) + 5, y: (zero[1] + top[1]) / 2, text: label, ...graphicText(config.valueText), align: 'left', verticalAlign: 'middle' }
-              return { type: 'group', children: [rect, { type: 'text', style: labelStyle }] }
-            },
-            z: 3 + groupIndex,
-          })
-        } else {
-          standardOption.series.push({
-            name: standardName(group),
-            type: 'line',
-            data: points.map(([value, amount]) => chartPoint(value, amount)),
-            showSymbol: false,
-            symbol: 'none',
-            smooth: false,
-            lineStyle: { color, width: config.seriesStyles[group.name]?.lineWidth ?? config.seriesStyles[group.seriesKey]?.lineWidth ?? 2 },
-            areaStyle: { color, opacity: config.distributionDensityFillOpacity ?? .2 },
-            itemStyle: { color },
-            z: 3 + groupIndex,
-          })
-        }
-        if (config.distributionShowMedian ?? true) standardOption.series.push({
-          name: standardName(group),
-          type: 'custom',
-          coordinateSystem: 'cartesian2d',
-          silent: true,
-          tooltip: { show: false },
-          data: [chartPoint(stat.median, 0)],
-          renderItem: (_params: unknown, api: { coord(value: number[]): number[] }) => {
-            const start = api.coord(chartPoint(stat.median, 0)), end = api.coord(chartPoint(stat.median, summaryAmount * summaryLength))
-            return { type: 'line', shape: { x1: start[0], y1: start[1], x2: end[0], y2: end[1] }, style: { stroke: summaryColor, lineWidth: summaryWidth } }
-          },
-          z: 20,
-        })
-      })
-    return standardOption
-  },
+  buildOption: legacyDistributionBuilderGuard,
 }
-
-export const legacyDistributionBuilderGuard = () => { throw new Error('Legacy Distribution observation/shape builder was removed; use the native Distribution compiler.') }
 
 const legacyChartRegistry = [
   ...barChartDefinitions.flatMap(([id, label, category]) => id === 'waterfall' || id === 'lollipop' || id === 'horizontal-lollipop' ? [] : [cartesian(id, label, category)]),
@@ -1752,7 +1588,7 @@ const legacyChartRegistry = [
   ...areaChartDefinitions.map(([id, label]) => cartesian(id, label, 'area')),
   scatter,
   bubble,
-  ...distributionChartDefinitions.map(([id, label]) => ({ ...distribution, ...pluginModel(id), id, label, buildOption: isNativeDistributionKind(id) ? legacyDistributionBuilderGuard : distribution.buildOption })),
+  ...distributionChartDefinitions.map(([id, label]) => ({ ...distribution, ...pluginModel(id), id, label, buildOption: legacyDistributionBuilderGuard })),
   heatmap,
   treemap,
 ]
@@ -1822,7 +1658,7 @@ export function getChartPlugin(id: ChartConfig['kind']) {
 }
 
 export function chartValueLabelSelections(table: DataTable, config: ChartConfig): ChartElementSelection[] {
-  const listingConfig = isDistributionChart(config.kind) && !isNativeDistributionKind(config.kind) ? { ...config, distributionShowAllPoints: true, distributionShowPoints: true } : config
+  const listingConfig = config
   const plugin = getChartPlugin(config.kind)
   if (plugin.compilerMode === 'native') {
     if (!plugin.validate(table, listingConfig).ok) return []
