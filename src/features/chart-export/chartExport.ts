@@ -1,4 +1,5 @@
 import type { ChartConfig, ChartTextStyle } from '../../core/types'
+import { fontCatalog, localFontFaces } from '../../core/textFonts'
 
 export interface ExportTextRun { text: string; color: string; fontFamily?: string; fontSize?: number; fontWeight?: number; italic?: boolean; underline?: boolean; backgroundColor?: string }
 export interface ExportTextBlock { left: number; top: number; width: number; style: ChartTextStyle; runs: ExportTextRun[] }
@@ -7,8 +8,10 @@ export const customFontCss = (fonts: ChartConfig['customFonts']) => (fonts ?? []
   `@font-face{font-family:"${name.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}";src:url("${dataUrl}");font-weight:${weight};font-style:${style};}`
 ).join('')
 
-const googleFamilies = new Set(['DM Sans', 'Golos Text', 'IBM Plex Sans', 'Inter', 'Lato', 'Manrope', 'Montserrat', 'Nunito', 'Onest', 'Open Sans', 'PT Sans', 'Roboto', 'Source Sans 3'])
+const webFontFamilies = new Set(fontCatalog.filter(({ source }) => source !== 'system').map(({ family }) => family))
+const remoteFontFamilies = new Set(fontCatalog.filter(({ source }) => source === 'remote').map(({ family }) => family))
 const embeddedGoogleFonts = new Map<string, Promise<string>>()
+const embeddedLocalFonts = new Map<string, Promise<string>>()
 
 const dataUrl = (buffer: ArrayBuffer, type: string) => {
   const bytes = new Uint8Array(buffer)
@@ -20,7 +23,7 @@ const dataUrl = (buffer: ArrayBuffer, type: string) => {
 const fontRequests = (svg: SVGSVGElement) => [...svg.querySelectorAll<SVGElement>('[font-family], [style]')].reduce((requests, element) => {
   const style = element.getAttribute('style') ?? ''
   const family = (element.getAttribute('font-family') ?? style.match(/font-family:\s*([^;]+)/i)?.[1] ?? '').replace(/["']/g, '').split(',')[0].trim()
-  if (!googleFamilies.has(family)) return requests
+  if (!webFontFamilies.has(family)) return requests
   const weight = element.getAttribute('font-weight') ?? style.match(/font-weight:\s*([^;]+)/i)?.[1]?.trim() ?? '400'
   const italic = element.getAttribute('font-style') === 'italic' || /font-style:\s*italic/i.test(style)
   requests.add(`${family}|${italic ? 1 : 0}|${weight}`)
@@ -74,7 +77,7 @@ const appendStyledText = (svg: SVGSVGElement, blocks: ExportTextBlock[]) => {
 }
 
 const embedGoogleFonts = async (svg: SVGSVGElement) => {
-  const requests = [...fontRequests(svg)]
+  const requests = [...fontRequests(svg)].filter((request) => remoteFontFamilies.has(request.split('|')[0]))
   if (!requests.length) return ''
   const key = requests.sort().join(',')
   if (!embeddedGoogleFonts.has(key)) embeddedGoogleFonts.set(key, (async () => {
@@ -101,6 +104,15 @@ const embedGoogleFonts = async (svg: SVGSVGElement) => {
   return embeddedGoogleFonts.get(key)!
 }
 
+const embedLocalFonts = async (svg: SVGSVGElement) => {
+  const families = new Set([...fontRequests(svg)].map((request) => request.split('|')[0]))
+  const faces = localFontFaces.filter(({ family }) => families.has(family))
+  return (await Promise.all(faces.map((face) => {
+    if (!embeddedLocalFonts.has(face.url)) embeddedLocalFonts.set(face.url, fetch(face.url).then(async (response) => response.ok ? dataUrl(await response.arrayBuffer(), 'font/woff2') : '').catch(() => ''))
+    return embeddedLocalFonts.get(face.url)!.then((url) => url ? `@font-face{font-family:"${face.family}";src:url("${url}") format("woff2");font-weight:400 700;font-style:normal;unicode-range:${face.unicodeRange};}` : '')
+  }))).join('')
+}
+
 const prepareSvg = async (svg: SVGSVGElement, config: Pick<ChartConfig, 'canvasWidth' | 'canvasHeight' | 'customFonts'>, scale = 1, textBlocks: ExportTextBlock[] = []) => {
   const width = Math.min(1000, Math.round(config.canvasWidth ?? svg.clientWidth))
   const height = Math.min(1000, Math.round(config.canvasHeight ?? svg.clientHeight))
@@ -109,7 +121,7 @@ const prepareSvg = async (svg: SVGSVGElement, config: Pick<ChartConfig, 'canvasW
   exported.setAttribute('width', String(width * scale))
   exported.setAttribute('height', String(height * scale))
   appendStyledText(exported, textBlocks)
-  const css = `${await embedGoogleFonts(exported)}${customFontCss(config.customFonts)}`
+  const css = `${await embedLocalFonts(exported)}${await embedGoogleFonts(exported)}${customFontCss(config.customFonts)}`
   if (css) {
     const style = document.createElementNS('http://www.w3.org/2000/svg', 'style')
     style.textContent = css

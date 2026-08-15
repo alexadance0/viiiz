@@ -63,7 +63,7 @@ Phase 7 stabilization started from: `a264fc3e2056939e27ba042f9cf52fda295159b3`.
 Render-lifecycle implementation completed in: `a642d2c6a8f7f767906c7fe6ab04700d1263e979`.
 Full stabilization completed in: `521224f`.
 
-The old `renderedChartKind === config.kind` readiness flag described only initial layout availability. The authoritative preview contract is now a monotonic render revision with explicit loading, compiling, rendering, post-processing, settled, and error states. Settlement occurs after all option/graphic mutations, font readiness, logical resize, ZRender flush, and two animation frames; stale async work and temporary export swaps cannot publish a settled preview.
+The old `renderedChartKind === config.kind` readiness flag described only initial layout availability. The authoritative preview contract is now a monotonic render revision with explicit module loading, font loading, compiling, rendering, post-processing, settled, and error states. The central font loader resolves the chart's configured families before compilation; settlement then occurs after all option/graphic mutations, logical resize, ZRender flush, and two animation frames. Stale async work and temporary export swaps cannot publish a settled preview.
 
 Playwright waits for a newer settled revision after interactions, verifies semantic/rendered kinds, reduced-motion animation state, SVG presence, and stable canvas bounds. Native Confidence direct-label rules were removed from the legacy helper. Line/Area, Smoothing, and Interval now call a typed Cartesian point base without disguising specialized plots as `plot.kind = 'line'`. At the Phase 7.1 checkpoint, Scatter/Bubble remained out of scope pending complete deterministic verification.
 

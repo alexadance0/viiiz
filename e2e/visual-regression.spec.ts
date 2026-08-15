@@ -50,9 +50,8 @@ const updateChart = async (page: Page, canvas: Locator, action: () => Promise<un
 
 const waitForLayout = (page: Page) => waitForChartSettled(page)
 
-const openDemoChart = async (page: Page, demo: string, chart?: string, preloadFont = false) => {
+const openDemoChart = async (page: Page, demo: string, chart?: string) => {
   await page.goto('/editor')
-  if (preloadFont) await page.evaluate(() => document.fonts.load('18px Onest'))
   await page.getByRole('button', { name: demo, exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Проверьте данные' })).toBeVisible()
   await page.getByRole('button', { name: /Выбрать график/ }).click()
@@ -76,7 +75,7 @@ const openSettings = async (page: Page, name: string) => {
 
 test('native Distribution observation semantics stay visually stable', async ({ page }) => {
   test.setTimeout(120_000)
-  await openDemoChart(page, 'Распределения', 'Strip plot', true)
+  await openDemoChart(page, 'Распределения', 'Strip plot')
   const canvas = page.locator('.chart-canvas-shell')
   await expect(canvas).toHaveAttribute('data-plot-kind', 'distribution')
   await expect(canvas).toHaveScreenshot('distribution-strip-default.png')
@@ -105,7 +104,7 @@ test('native Distribution observation semantics stay visually stable', async ({ 
 
 test('native Distribution statistical shapes stay visually stable', async ({ page }) => {
   test.setTimeout(180_000)
-  await openDemoChart(page, 'Распределения', 'Box plot', true)
+  await openDemoChart(page, 'Распределения', 'Box plot')
   const canvas = page.locator('.chart-canvas-shell')
   await expect(canvas).toHaveAttribute('data-plot-kind', 'distribution')
   await expect(canvas).toHaveScreenshot('distribution-boxplot-default.png')
@@ -148,7 +147,7 @@ test('native Distribution statistical shapes stay visually stable', async ({ pag
 
 test('native Scatter and Bubble semantics stay visually stable', async ({ page }) => {
   test.setTimeout(120_000)
-  await openDemoChart(page, 'Временной ряд', 'Точечный', true)
+  await openDemoChart(page, 'Временной ряд', 'Точечный')
   const canvas = page.locator('.chart-canvas-shell')
   await expect(canvas).toHaveAttribute('data-plot-kind', 'xy')
   await expect(canvas).toHaveScreenshot('scatter-default.png')

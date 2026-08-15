@@ -10,7 +10,7 @@ async function failOnRuntimeErrors(page: Page) {
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
   page.on('response', (response) => {
-    if (response.status() >= 400 && !response.url().startsWith('https://fonts.gstatic.com/')) errors.push(`${response.status()} ${response.url()}`)
+    if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`)
   })
   page.on('console', (message) => {
     if (message.type() === 'error' && !message.text().startsWith('Failed to load resource:') || message.type() === 'warning' && message.text().includes("Can't get DOM width or height")) errors.push(message.text())
@@ -87,6 +87,48 @@ test('editor opens demo data, renders charts and exposes export actions', async 
   await expect((await download).suggestedFilename()).toMatch(/\.png$/)
 
   assertNoErrors()
+})
+
+test('critical fonts keep preview, SVG and PNG deterministic without Google Fonts', async ({ page }) => {
+  test.setTimeout(90_000)
+  const googleRequests: string[] = []
+  const localFonts: string[] = []
+  await page.route(/https:\/\/fonts\.(?:googleapis|gstatic)\.com\//, (route) => { googleRequests.push(route.request().url()); return route.abort() })
+  page.on('response', (response) => { if (/\/fonts\/(?:dm-sans|manrope|onest)-/.test(response.url())) localFonts.push(response.url()) })
+  await loadDemo(page)
+  await page.getByRole('button', { name: /^Столбцы$/ }).click()
+  await expectRenderedChart(page)
+  await page.getByRole('button', { name: /Настроить оформление/ }).click()
+
+  const preview = await page.locator('.canvas-paper svg').first().evaluate((svg) => ({
+    width: svg.clientWidth,
+    height: svg.clientHeight,
+    text: svg.textContent ?? '',
+    fonts: [...document.fonts].filter((font) => /DM Sans|Manrope|Onest/.test(font.family)).map((font) => `${font.family}:${font.status}`),
+  }))
+  expect(preview.text).toContain('Заголовок графика')
+  expect(preview.fonts.length).toBeGreaterThan(0)
+  expect(preview.fonts.every((font) => font.endsWith(':loaded'))).toBe(true)
+
+  await openExport(page)
+  const svgDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Скачать SVG' }).click()
+  const svg = await readFile(await (await svgDownload).path()!, 'utf8')
+  expect(svg).toContain('Заголовок графика')
+  expect(svg).toMatch(/@font-face\s*{[^}]*font-family:"Onest"/i)
+  expect(svg).toContain('data:font/woff2;base64,')
+  expect(svg).not.toContain('fonts.googleapis.com')
+  const exportedWidth = Number(svg.match(/<svg[^>]*\bwidth="([^"]+)"/i)?.[1])
+  const exportedHeight = Number(svg.match(/<svg[^>]*\bheight="([^"]+)"/i)?.[1])
+  expect(exportedWidth / exportedHeight).toBeCloseTo(preview.width / preview.height, 3)
+
+  const pngDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Скачать PNG' }).click()
+  const png = await readFile(await (await pngDownload).path()!)
+  expect(png.subarray(1, 4).toString()).toBe('PNG')
+  expect(png.readUInt32BE(16) / png.readUInt32BE(20)).toBeCloseTo(preview.width / preview.height, 3)
+  expect(localFonts.length).toBeGreaterThan(0)
+  expect(googleRequests).toEqual([])
 })
 
 test('waterfall renders cumulative steps, total and semantic controls', async ({ page }) => {

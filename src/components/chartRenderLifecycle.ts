@@ -1,4 +1,4 @@
-export type ChartRenderStatus = 'loading-modules' | 'compiling' | 'rendering' | 'post-processing' | 'settled' | 'error'
+export type ChartRenderStatus = 'loading-modules' | 'loading-fonts' | 'compiling' | 'rendering' | 'post-processing' | 'settled' | 'error'
 
 export interface ChartRenderLifecycle {
   revision: number

@@ -28,9 +28,10 @@ import { isAreaChart, isBarChart, isDistributionChart, isStackedBarChart, isStac
 import type { ChartExportOptions, ExportTextBlock } from '../features/chart-export/chartExport'
 import { DEFAULT_COMPOSITION_SPACING } from '../entities/chart/model/defaults'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
-import { layoutText, plainTextDocument } from '../features/chart-layout/textLayout'
+import { invalidateTextLayoutCache, layoutText, plainTextDocument } from '../features/chart-layout/textLayout'
 import { legacySelection, type ChartSelection } from '../entities/chart/model/ChartSelection'
 import { advanceChartRender, failChartRender, initialChartRenderLifecycle, settleChartRender, type ChartRenderStatus } from './chartRenderLifecycle'
+import { collectFontFamilies, waitForChartFonts } from '../core/textFonts'
 
 const AnnotationOverlay = lazy(() => import('./AnnotationOverlay').then(({ AnnotationOverlay: Component }) => ({ default: Component })))
 const CanvasTextOverlay = lazy(() => import('./CanvasTextOverlay').then(({ CanvasTextOverlay: Component }) => ({ default: Component })))
@@ -1011,7 +1012,11 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     const [renderedPlotKind, setRenderedPlotKind] = useState('')
     const [renderAnimationEnabled, setRenderAnimationEnabled] = useState(false)
     const [renderLifecycle, setRenderLifecycle] = useState(initialChartRenderLifecycle)
-    const [fontRevision, setFontRevision] = useState(0)
+    const requestedFontFamilies = useMemo(() => collectFontFamilies(config), [config])
+    const fontSignature = `${requestedFontFamilies.join('|')}|${(config.customFonts ?? []).map(({ name, dataUrl, weight, style }) => `${name}:${weight ?? 400}:${style ?? 'normal'}:${dataUrl}`).join('|')}`
+    const fontRequest = useRef({ families: requestedFontFamilies, customFonts: config.customFonts })
+    fontRequest.current = { families: requestedFontFamilies, customFonts: config.customFonts }
+    const [readyFontSignature, setReadyFontSignature] = useState('')
     const [plotBounds, setPlotBounds] = useState<PlotBounds | null>(null)
     const [richLayouts, setRichLayouts] = useState<Partial<Record<'title' | 'subtitle' | 'note' | 'source', RichLayout>>>({})
     const [categoryLabelLayout, setCategoryLabelLayout] = useState<CategoryLabelLayout | null>(null)
@@ -1049,18 +1054,32 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
 
     useEffect(() => {
       let active = true
-      const revision = beginRenderCycle('loading-modules')
+      beginRenderCycle('loading-modules')
       setReadyKind(null)
       setRenderError('')
       loadEchartsForKind(config.kind)
         .then(() => { if (active) setReadyKind(config.kind) })
         .catch((cause) => {
           if (!active) return
-          setRenderLifecycle((current) => failChartRender(current, revision))
+          setRenderLifecycle((current) => failChartRender(current, renderRevision.current))
           setRenderError(cause instanceof Error ? cause.message : 'Не удалось загрузить модуль графика')
         })
       return () => { active = false }
     }, [config.kind])
+
+    useEffect(() => {
+      let active = true
+      const revision = beginRenderCycle('loading-fonts')
+      setReadyFontSignature('')
+      void waitForChartFonts(fontRequest.current.families, fontRequest.current.customFonts).then(() => {
+        if (!active) return
+        invalidateTextLayoutCache()
+        setReadyFontSignature(fontSignature)
+      }).catch(() => {
+        if (active) setRenderLifecycle((current) => failChartRender(current, revision))
+      })
+      return () => { active = false }
+    }, [fontSignature])
 
     useEffect(() => {
       if (!container.current) return
@@ -1112,9 +1131,8 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
 
     useEffect(() => {
       const instance = chart.current
-      if (!instance || instance.isDisposed() || readyKind !== config.kind) return
+      if (!instance || instance.isDisposed() || readyKind !== config.kind || readyFontSignature !== fontSignature) return
       const revision = beginRenderCycle('compiling')
-      const fontsWerePending = document.fonts.status !== 'loaded'
       try {
       const selectDecoration = onDecorationSelect ?? ((id: string) => { const decoration = config.decorations?.find((item) => item.id === id); if (decoration) onDecorationChange?.(decoration) })
       const visibleTitle = config.showTitle === false ? '' : config.title
@@ -1662,10 +1680,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       void (async () => {
         await document.fonts.ready
         if (revision !== renderRevision.current || instance.isDisposed() || chart.current !== instance) return
-        if (fontsWerePending) {
-          setFontRevision((current) => current + 1)
-          return
-        }
         instance.resize({ width: Math.min(1000, config.canvasWidth ?? 1000), height: Math.min(1000, config.canvasHeight ?? 563), animation: { duration: 0 } })
         instance.getZr().flush()
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
@@ -1683,7 +1697,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         setRenderLifecycle((current) => failChartRender(current, revision))
         setRenderError(cause instanceof Error ? cause.message : 'Не удалось отрисовать график')
       }
-    }, [activeCategoryLabel, table, config, fontRevision, hoveredSeriesName, onAnnotationSelect, onDecorationChange, onDecorationSelect, onSelect, onSeriesSelect, onSettingsFocus, readyKind, selectedAnnotationId, selectedElementKey, selectedElementTarget, selectedSeriesName, selectedSettingsSection])
+    }, [activeCategoryLabel, table, config, fontSignature, hoveredSeriesName, onAnnotationSelect, onDecorationChange, onDecorationSelect, onSelect, onSeriesSelect, onSettingsFocus, readyFontSignature, readyKind, selectedAnnotationId, selectedElementKey, selectedElementTarget, selectedSeriesName, selectedSettingsSection])
 
     useEffect(() => {
       const instance = chart.current
@@ -2047,7 +2061,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         const instance = chart.current
         if (!instance || !exportOption.current) return
         const revision = beginRenderCycle('post-processing')
-        await document.fonts.ready
+        await waitForChartFonts(requestedFontFamilies, config.customFonts)
         instance.setOption(exportOption.current, true)
         instance.getZr().flush()
         if (config.kind === 'treemap') applyTreemapLayout(instance, container.current)
@@ -2072,7 +2086,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         const instance = chart.current
         if (!instance || !exportOption.current) return
         const revision = beginRenderCycle('post-processing')
-        await document.fonts.ready
+        await waitForChartFonts(requestedFontFamilies, config.customFonts)
         instance.setOption(exportOption.current, true)
         instance.getZr().flush()
         if (config.kind === 'treemap') applyTreemapLayout(instance, container.current)
@@ -2093,7 +2107,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           if (!instance.isDisposed() && chart.current === instance && revision === renderRevision.current) setRenderLifecycle((current) => settleChartRender(current, revision))
         }
       },
-    }), [config, richLayouts, selectedElementKey])
+    }), [config, requestedFontFamilies, richLayouts, selectedElementKey])
 
     const selected = config.annotations.find((annotation) => annotation.id === selectedAnnotationId)
     const selectedDecoration = config.decorations?.find((decoration) => decoration.id === selectedDecorationId)
