@@ -217,6 +217,9 @@ test('Butterfly mirrors two measures around a shared category axis', async ({ pa
   const categoryBox = await category.boundingBox()
   expect(categoryBox).not.toBeNull()
   const center = categoryBox!.x + categoryBox!.width / 2
+  await category.click({ force: true })
+  await expect(page.locator('.canvas-rich-text-content').filter({ hasText: /^Север$/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Снять выделение' }).click()
   const leftPaths = page.locator('.canvas-paper svg path[fill="#0072b2"]')
   const rightPaths = page.locator('.canvas-paper svg path[fill="#e69f00"]')
   const leftBar = (await Promise.all([...Array(await leftPaths.count()).keys()].map((index) => leftPaths.nth(index).boundingBox()))).filter((box): box is NonNullable<typeof box> => box != null && box.width > 20).sort((a, b) => b.width - a.width)[0]
@@ -239,7 +242,14 @@ test('Butterfly mirrors two measures around a shared category axis', async ({ pa
   await expect(page.getByLabel('Положение категорий')).toHaveValue('center')
   await page.locator('summary').filter({ hasText: /^Подписи значений$/ }).click()
   await setCheckbox(page.getByRole('checkbox', { name: 'Показывать подписи значений' }), true)
-  await expect(page.locator('.canvas-paper svg text').filter({ hasText: /^42$/ }).first()).toBeVisible()
+  await page.getByLabel('Положение подписей').selectOption('bottom')
+  const leftValue = page.locator('.canvas-paper svg text').filter({ hasText: /^42$/ }).first(), rightValue = page.locator('.canvas-paper svg text').filter({ hasText: /^57$/ }).first()
+  await expect(leftValue).toBeVisible()
+  await expect(rightValue).toBeVisible()
+  const leftValueBox = await leftValue.boundingBox(), rightValueBox = await rightValue.boundingBox()
+  const currentCategoryBox = await category.boundingBox(), currentCenter = currentCategoryBox!.x + currentCategoryBox!.width / 2
+  expect(leftValueBox!.x + leftValueBox!.width / 2).toBeLessThan(currentCenter)
+  expect(rightValueBox!.x + rightValueBox!.width / 2).toBeGreaterThan(currentCenter)
   const selectedBarIndex = (await Promise.all([...Array(await leftPaths.count()).keys()].map(async (index) => ({ index, box: await leftPaths.nth(index).boundingBox() })))).filter((item) => item.box && item.box.width > 20).sort((a, b) => b.box!.width - a.box!.width)[0].index
   await leftPaths.nth(selectedBarIndex).click({ force: true })
   await expect(page.locator('.series-editor')).toBeVisible()

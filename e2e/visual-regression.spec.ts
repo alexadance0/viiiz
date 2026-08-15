@@ -101,6 +101,45 @@ test('native comparison and stem charts preserve both orientations and dense cha
   await expect(canvas).toHaveScreenshot('native-dumbbell-vertical-change.png')
 })
 
+test('native Waterfall semantics stay visually stable', async ({ page }) => {
+  await openDemoChart(page, 'До → после', 'Waterfall')
+  const canvas = page.locator('.chart-canvas-shell')
+  await expect(canvas).toHaveAttribute('data-plot-kind', 'waterfall')
+  await expect(canvas).toHaveScreenshot('waterfall-default.png')
+
+  await openDesign(page)
+  await openSettings(page, 'Компоновка столбцов')
+  await updateChart(page, canvas, () => setCheckbox(page.getByRole('checkbox', { name: 'Показывать итоговый столбец' }), false))
+  await expect(canvas).toHaveScreenshot('waterfall-without-total.png')
+
+  await updateChart(page, canvas, () => setCheckbox(page.getByRole('checkbox', { name: 'Показывать итоговый столбец' }), true))
+  await openSettings(page, 'Подписи значений')
+  await updateChart(page, canvas, () => setCheckbox(page.getByRole('checkbox', { name: 'Показывать подписи значений' }), true))
+  await updateChart(page, canvas, () => page.getByLabel('Что показывать').selectOption('both'))
+  await updateChart(page, canvas, () => page.getByLabel('Знаки изменений').selectOption('plus-minus'))
+  await expect(canvas).toHaveScreenshot('waterfall-change-and-cumulative.png')
+})
+
+test('native Butterfly semantics stay visually stable', async ({ page }) => {
+  await openDemoChart(page, 'До → после', 'Butterfly')
+  const canvas = page.locator('.chart-canvas-shell')
+  await expect(canvas).toHaveAttribute('data-plot-kind', 'butterfly')
+  await expect(canvas).toHaveScreenshot('butterfly-center.png')
+
+  await openDesign(page)
+  await openSettings(page, 'Подписи значений')
+  await updateChart(page, canvas, () => setCheckbox(page.getByRole('checkbox', { name: 'Показывать подписи значений' }), true))
+  await updateChart(page, canvas, () => page.getByLabel('Положение подписей').selectOption('bottom'))
+  await expect(canvas).toHaveScreenshot('butterfly-bottom-labels.png')
+  await updateChart(page, canvas, () => setCheckbox(page.getByRole('checkbox', { name: 'Показывать подписи значений' }), false))
+
+  await openSettings(page, 'Оси, шкалы и подписи')
+  await updateChart(page, canvas, () => page.getByLabel('Положение категорий').selectOption('left'))
+  await expect(canvas).toHaveScreenshot('butterfly-categories-left.png')
+  await updateChart(page, canvas, () => page.getByLabel('Положение категорий').selectOption('right'))
+  await expect(canvas).toHaveScreenshot('butterfly-categories-right.png')
+})
+
 test('native Distribution observation semantics stay visually stable', async ({ page }) => {
   test.setTimeout(120_000)
   await openDemoChart(page, 'Распределения', 'Strip plot')

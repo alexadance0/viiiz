@@ -106,3 +106,15 @@ Wave 2 started from `57a9357` after integrating the deterministic-font and Distr
 Lollipop, Horizontal Lollipop, and Dumbbell now share semantic `plot.kind = 'comparison-stem'`. Endpoints are the only source-editable marks. Stems, pair connectors, change labels, direct-guide leaders, and category grid lines are derived layers or resolved geometry. Explicit Dumbbell start/end fields own their roles regardless of generic series ordering, stale bar sorting is ignored, incomplete pairs are omitted, and sorting never changes endpoint identity.
 
 The comparison layout owns linear/log projection, positive log domains, both orientations, dense value-label visibility, direct-label note/leader/collision placement, and category-grid coordinates. Its renderer consumes no table and exposes endpoint/guide metadata at the callback boundary. `ChartCanvas` does not calculate comparison geometry or convert its grid positions. Both legacy runtime builders were removed and replaced with a throwing guard.
+
+## Wave 3 checkpoint — native Waterfall and Butterfly
+
+Wave 3 started from `57a9357`; implementation completed in `db638ea`, legacy cleanup in `31dc990`, and review stabilization in `bb53313`.
+
+Waterfall now compiles `plot.kind = 'waterfall'`: source steps retain raw/aggregate identity, cumulative start/end values are semantic, and the optional total owns a stable synthetic datum ID independent of its editable label. Connectors and change/cumulative label intent are scene data. Its dedicated layout resolves floating rectangles, connector endpoints, label fit/placement, and dense-label visibility before rendering.
+
+Butterfly now compiles `plot.kind = 'butterfly'`: left/right fields are explicit semantic sides, magnitudes are normalized once, each side stacks independently, and the value domain is symmetric. Its dedicated layout owns mirrored rectangles and center/left/right category placement; the renderer consumes resolved geometry and exposes a renderer-neutral hit map to the outer callback adapter.
+
+Both plugins are explicitly native, their legacy entry points throw, and their old `ChartCanvas` split-axis/category/bar-hit and Waterfall pointer-geometry helpers were removed. Representative visual baselines cover three states per family plus Butterfly bottom-label placement. Remaining legacy families are Heatmap and Treemap.
+
+The blocking-review stabilization makes this boundary strict: Butterfly side segments share one category row and touch at cumulative stack edges; category placement is semantic before frame reservation, and resolved category rectangles drive both central editing and selection. Waterfall null steps keep finite cumulative connectors across their slots, while element colors and label placements—including the synthetic total—remain authoritative. Both compilers restore the source-family `ChartDocument`, Butterfly validation composes generic duplicate-category checks with side mapping, and the outer canvas contains no Waterfall/Butterfly family event or category-geometry branch.

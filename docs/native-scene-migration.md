@@ -15,14 +15,16 @@ Phase 9A started from `70bb42f6aa024a92e6f765d08b200fd7e723e85c` and its native 
 
 Wave 2 native Lollipop/Dumbbell started from `57a9357`; the first implementation completed in `f8ea4a4` and the blocking-review stabilization is recorded by this checkpoint.
 
-Migrated kinds: the six ordinary bar kinds plus `line`, `spline`, `step-line`, `indexed-line`, `seasonal-line`, `area`, `stacked-area`, `normalized-stacked-area`, `slope`, `moving-average-line`, `moving-average-scatter`, `range-line`, `step-range-line`, `confidence-line`, `scatter`, `bubble`, all Distribution kinds, `lollipop`, `horizontal-lollipop`, and `dumbbell`.
+Wave 3 native Waterfall/Butterfly started from `57a9357`; implementation completed in `db638ea`, legacy cleanup in `31dc990`, and review stabilization in `bb53313`.
+
+Migrated kinds: the six ordinary bar kinds plus `waterfall`, `butterfly`, `lollipop`, `horizontal-lollipop`, `dumbbell`, `line`, `spline`, `step-line`, `indexed-line`, `seasonal-line`, `area`, `stacked-area`, `normalized-stacked-area`, `slope`, `moving-average-line`, `moving-average-scatter`, `range-line`, `step-range-line`, `confidence-line`, `scatter`, `bubble`, and all eleven Distribution kinds.
 
 ## Render path
 
 ```text
 legacy ChartConfig adapter
-  → native bar, prepared-line, area, dedicated Slope/smoothing/interval/XY/Distribution/comparison-stem semantic compiler
-  → NativeChartScene (discriminated bar/line/area/slope/smoothing/interval/xy/distribution/comparison-stem plot, axes, guides, stable IDs)
+  → native bar, prepared-line, area, dedicated Slope/smoothing/interval/XY/Distribution/comparison-stem/Waterfall/Butterfly semantic compiler
+  → NativeChartScene (discriminated bar/line/area/slope/smoothing/interval/xy/distribution/comparison-stem/waterfall/butterfly plot, axes, guides, stable IDs)
   → shared frame/text/axis/reservation layout plus family-local resolved geometry
   → ResolvedScene
   → native ECharts adapter selected by semantic plot kind
@@ -35,8 +37,8 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 
 - `entities/chart/model`: explicit native/legacy scene union, discriminated bar/line/area/slope/smoothing/interval plots, typed series/layer/group/datum IDs, and family-neutral semantic mark visitors.
 - `features/chart-layout`: independent X/Y spacing, identified/resolved rails, styled-run text measurement, and authoritative native bar geometry.
-- `features/chart-types/bar`, `line`, `area`, `slope`, `smoothing`, `interval`, `xy`, `distribution`, and `comparison-stem`: semantic compilers, pure specialized transforms, and family-owned resolved geometry.
-- `features/chart-renderer/echarts`: native adapters selected only by semantic plot kind; comparison-stem consumes resolved endpoint/connector/grid/direct-guide geometry without table access.
+- `features/chart-types/bar`, `line`, `area`, `slope`, `smoothing`, `interval`, `xy`, `distribution`, `comparison-stem`, `waterfall`, and `butterfly`: semantic compilers, pure specialized transforms, and family-owned resolved geometry.
+- `features/chart-renderer/echarts`: native adapters selected only by semantic plot kind; migrated families consume resolved geometry without table access.
 - `core/chartRegistry.ts`: explicit compiler modes/capabilities and semantic helper branches.
 - `components/ChartCanvas.tsx`: native geometry is preserved across the temporary legacy composition block; native category formatters are not post-mutated; renderer IDs are adapted to existing callbacks at the outer boundary.
 - `src/test-fixtures/charts/bar.ts`, `lineArea.ts`, and adjacent architecture tests: deterministic parity harness and guardrails.
@@ -51,7 +53,7 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 - `buildOption` remains on the plugin interface for unmigrated callers. For ordinary bars its implementation is a native compile/layout/render compatibility facade, not the legacy cartesian builder.
 - Slope keeps persisted `slopeXValues`, family flags, change-label/direction-color settings, legend/direct settings, series styles, callback keys, annotations, and decorations. Old documents omit the new optional fields and retain the previous appearance because change labels and direction colors default off. It does not expose ordinary legend/direct guides, and its local guide/label graphics never create fake semantic or renderer series.
 - Interval groups retain persisted field triples, fill settings, `showBounds`, source styles, element override keys, and auto-grouping. Hidden Confidence bounds remain in domains and band validation but are absent from guides, value-label targets, tooltips, and selection visitors. Bands are silent derived layers and are never editable data rows.
-- Waterfall, Butterfly, Heatmap, and Treemap retain their legacy compilers.
+- Heatmap and Treemap retain their legacy compilers.
 
 ## Tests added
 
@@ -68,7 +70,15 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 
 The shared legacy `cartesian()` source still contains unreachable migrated-family generic code because remaining specialized comparison/relationship charts share the function. The moving-average branches and the complete interval builder—including fake Confidence stacks and custom Range bands—have been deleted. The next safe removal is to split the remaining specialized builders, then delete unreachable generic conditions and compatibility option-shape tests.
 
-Waterfall, Butterfly, Heatmap, and Treemap remain separate migrations.
+Heatmap and Treemap remain separate migrations.
+
+## Wave 3 native Waterfall and Butterfly
+
+Wave 3 started from `57a9357`; implementation completed in `db638ea`. Waterfall and Butterfly have distinct semantic plot discriminants, compilers, authoritative layouts, and ECharts adapters. Waterfall resolves cumulative floating bars, a stable synthetic total, connectors, and labels. Butterfly resolves independent side stacks, symmetric magnitude axes, mirrored rectangles, and center/left/right category rails. The outer canvas consumes resolved mark-hit rectangles for callback compatibility; it no longer reconstructs either family's bars, connectors, or split axes.
+
+Focused verification covers compiler identity/semantics, layout determinism, renderer isolation, existing interaction parity, production build, and six visual baselines (three per family). Both legacy entry points are throwing guards.
+
+Review stabilization additionally pins source-family documents, combined Butterfly mapping/category validation, contiguous same-row side stacks, mirrored inside/outside labels with contrast, typed center-category selection/edit metadata, null-safe Waterfall connectors, and per-element Waterfall color/label-position precedence. `ChartCanvas` consumes renderer-neutral hit and category-layout metadata and no longer branches on either persisted family kind.
 
 ## Phase 8 native XY
 

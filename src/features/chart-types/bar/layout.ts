@@ -43,7 +43,7 @@ function measuredAxis(scene: NativeCartesianScene, source: AxisSpec, estimatedPl
   return { ...source, labels: { ...source.labels, size }, title }
 }
 
-export function resolveNativeCartesianScene(sourceScene: NativeChartScene): ResolvedScene & NativeCartesianScene {
+export function resolveNativeCartesianScene(sourceScene: NativeChartScene, extraReservations: LayoutReservation[] = []): ResolvedScene & NativeCartesianScene {
   if (sourceScene.plot.kind === 'slope') throw new Error('Slope requires its dedicated layout.')
   const scene = sourceScene as NativeCartesianScene
   const config = scene.compatibilityConfig
@@ -55,7 +55,7 @@ export function resolveNativeCartesianScene(sourceScene: NativeChartScene): Reso
     const directHeight = Math.max(...directGuide.items.filter((item) => item.visible).map((item) => lineHeight(item.style)))
     valueAxis = { ...valueAxis, labels: { ...valueAxis.labels, gap: valueAxis.labels.gap + directHeight + scene.document.composition.directLabelPlot } }
   }
-  const reservations: LayoutReservation[] = []
+  const reservations: LayoutReservation[] = [...extraReservations]
   const header = scene.frameElements.filter((item) => item.role === 'title' || item.role === 'subtitle')
   if (header.length) {
     const height = header.reduce((sum, item, index) => sum + layoutText({ document: plainTextDocument(item.text, item.style), maxWidth: initial.content.width }).size.height + (index ? scene.document.composition.titleSubtitle : 0), 0)

@@ -23,6 +23,10 @@ import { compileNativeIntervalScene, isNativeIntervalKind } from '../features/ch
 import { compileNativeXYScene, isNativeXYKind, validateNativeXYMapping } from '../features/chart-types/xy/compiler'
 import { compileNativeDistributionScene, isNativeDistributionKind, validateNativeDistributionMapping } from '../features/chart-types/distribution/compiler'
 import { compileNativeComparisonStemScene, isNativeComparisonStemKind } from '../features/chart-types/comparison-stem/compiler'
+import { compileNativeWaterfallScene, legacyWaterfallBuilderGuard } from '../features/chart-types/waterfall/compiler'
+import { waterfallSteps } from '../features/chart-types/waterfall/transform'
+export { formatWaterfallChange, waterfallLabelPlacement, waterfallSteps, waterfallValueLabel } from '../features/chart-types/waterfall/transform'
+import { compileNativeButterflyScene, legacyButterflyBuilderGuard, validateNativeButterflyMapping } from '../features/chart-types/butterfly/compiler'
 export { fitSwarmClouds, fitSwarmOffsets, packSwarmOffsets } from '../features/chart-types/distribution/swarm'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 import { nativeMarkSelections } from '../entities/chart/model/sceneVisitors'
@@ -69,11 +73,6 @@ const validateMapping = (table: DataTable, config: ChartConfig) => {
   if ((config.kind === 'scatter' || config.kind === 'bubble') && !table.rows.some((row) => typeof row[config.xField] === 'number' || row[config.xField] instanceof Date)) errors.push({ field: 'xField', message: 'Для этого графика ось X должна быть числовой или датой.' })
   if (config.kind === 'bubble' && !numeric(config.scatterSizeField)) errors.push({ field: 'scatterSizeField', message: 'Выберите числовую колонку для размера пузырька.' })
   if (config.kind === 'dumbbell' && (!numeric(config.dumbbellStartField) || !numeric(config.dumbbellEndField) || config.dumbbellStartField === config.dumbbellEndField)) errors.push({ field: 'dumbbellFields', message: 'Выберите две разные числовые колонки для гантельной диаграммы.' })
-  if (config.kind === 'butterfly') {
-    const left = config.butterflyLeftFields?.length ? config.butterflyLeftFields : config.yFields.slice(0, 1)
-    const right = config.butterflyRightFields?.length ? config.butterflyRightFields : config.yFields.slice(1, 2)
-    if (!left.length || !right.length || new Set([...left, ...right]).size !== left.length + right.length || ![...left, ...right].every(numeric)) errors.push({ field: 'yFields', message: 'Для Butterfly выберите хотя бы по одному разному числовому показателю с каждой стороны.' })
-  }
   if ((config.kind === 'range-line' || config.kind === 'step-range-line') && (!numeric(config.rangeLowerField) || !numeric(config.rangeUpperField) || config.rangeLowerField === config.rangeUpperField)) errors.push({ field: 'rangeFields', message: 'Выберите две разные числовые границы диапазона.' })
   if (config.kind === 'confidence-line' && !(config.intervalGroups?.some((group) => new Set([group.main, group.lower, group.upper]).size === 3 && numeric(group.main) && numeric(group.lower) && numeric(group.upper)) || config.yFields.length >= 3 && new Set(config.yFields.slice(0, 3)).size === 3 && config.yFields.slice(0, 3).every(numeric))) errors.push({ field: 'intervalGroups', message: 'Настройте три разных числовых поля: основное значение и две границы.' })
   if (config.aggregation === 'none' && repeatedChartCategories(table, config).length) errors.push({ field: 'aggregation', message: 'Для повторяющихся значений X выберите способ агрегации.' })
@@ -81,20 +80,6 @@ const validateMapping = (table: DataTable, config: ChartConfig) => {
 }
 
 const pluginModel = (id: ChartConfig['kind']) => ({ defaultConfig: { kind: id }, inferMapping, validate: validateMapping })
-
-export const prepareButterflyChartData = (table: DataTable, config: ChartConfig) => {
-  const left = config.butterflyLeftFields?.length ? config.butterflyLeftFields : config.yFields.slice(0, 1)
-  const right = config.butterflyRightFields?.length ? config.butterflyRightFields : config.yFields.slice(1, 2)
-  const fields = [...left, ...right]
-  const prepared = prepareVisibleChartData(table, { ...config, seriesField: '', yFields: fields, yField: fields[0] ?? config.yField })
-  return {
-    ...prepared,
-    series: prepared.series.map((series) => ({
-      ...series,
-      data: series.data.map((value) => value == null ? null : Math.abs(value)),
-    })),
-  }
-}
 
 const text = (style: ChartConfig['titleText']) => ({
   fontFamily: style.fontFamily, fontSize: style.size, color: style.color, fontWeight: style.weight,
@@ -339,7 +324,7 @@ const commonOption = (table: DataTable, config: ChartConfig, prepared = prepareV
     const index = items[0]?.dataIndex ?? 0
     const rows = items.filter((item) => item.seriesName && !item.seriesName.startsWith('__')).map((item) => {
       const rawValue = Array.isArray(item.value) ? item.value.at(-1) : item.value
-      const value = config.kind === 'butterfly' && typeof rawValue === 'number' ? Math.abs(rawValue) : rawValue
+      const value = rawValue
       return `${item.marker ?? ''}${escapeHtml(item.seriesName)}: <b>${escapeHtml(value == null ? 'пропуск' : formatChartNumber(value, config))}</b>`
     })
     return [`<b>${escapeHtml(tooltipLabels[index] ?? categoryLabels[index] ?? '')}</b>`, ...rows].join('<br/>')
@@ -411,9 +396,8 @@ const cartesian = (id: Exclude<ChartConfig['kind'], 'scatter' | 'bubble' | 'dumb
       : sourceConfig
     const area = isAreaChart(id), stacked = isStackedChart(id)
     const absorbBarLabels = isBarChart(id) && Boolean(config.barValueLabelAbsorption)
-    const prepared = id === 'butterfly' ? prepareButterflyChartData(table, config) : prepareVisibleChartData(table, config)
-    const butterflyLeftFields = new Set(config.butterflyLeftFields?.length ? config.butterflyLeftFields : config.yFields.slice(0, 1))
-    const displayValue = (value: number | null) => formatChartNumber(id === 'butterfly' && value != null ? Math.abs(value) : value, config)
+    const prepared = prepareVisibleChartData(table, config)
+    const displayValue = (value: number | null) => formatChartNumber(value, config)
     const directLabels = Boolean(config.showDirectLabels)
     const directLabelsLeft = directLabels && id !== 'seasonal-line' && config.barOrientation !== 'horizontal' && config.yAxisPosition === 'right'
     const directWidth = directLabelWidth(config, prepared.series)
@@ -456,10 +440,7 @@ const cartesian = (id: Exclude<ChartConfig['kind'], 'scatter' | 'bubble' | 'dumb
           note: { color: style?.directLabelText?.color ?? color, fontFamily: directTextStyle.fontFamily, fontSize: Math.max(8, directTextStyle.size - 2), opacity: .75 },
         },
       }
-      const butterflyPosition = (configured = config.valueLabelPosition ?? 'auto') => butterflyLeftFields.has(series.name)
-        ? ({ auto: 'left', top: 'left', bottom: 'right', 'inside-top': 'insideLeft', 'inside-center': 'inside', 'inside-bottom': 'insideRight' } as const)[configured]
-        : valueLabelPosition(config, id)
-      const seriesValueLabel = { show: config.showValues && !absorbBarLabels, position: id === 'butterfly' ? butterflyPosition() : valueLabelPosition(config, id), formatter: (params: { value?: unknown }) => { const value = Array.isArray(params.value) ? params.value.at(-1) : params.value; return formatChartNumber(id === 'butterfly' && typeof value === 'number' ? Math.abs(value) : value, config) }, ...text(config.valueText), color: isBarChart(id) && isInsideValueLabel(config) && (config.valueLabelAutoContrast ?? true) ? contrastText(color) : config.valueText.color }
+      const seriesValueLabel = { show: config.showValues && !absorbBarLabels, position: valueLabelPosition(config, id), formatter: (params: { value?: unknown }) => { const value = Array.isArray(params.value) ? params.value.at(-1) : params.value; return formatChartNumber(value, config) }, ...text(config.valueText), color: isBarChart(id) && isInsideValueLabel(config) && (config.valueLabelAutoContrast ?? true) ? contrastText(color) : config.valueText.color }
       return {
       name: series.name,
       type: isBarChart(id) ? 'bar' : 'line',
@@ -490,7 +471,6 @@ const cartesian = (id: Exclude<ChartConfig['kind'], 'scatter' | 'bubble' | 'dumb
       data: series.data.map((value, index) => {
         const category = prepared.categories[index]
           const point = pointData(config, series.name, category, value)
-          if (id === 'butterfly' && value != null) point.displayValue = formatChartNumber(Math.abs(value), config)
         if (isBarChart(id)) {
           const element = config.elementStyles[elementKey(series.name, category)]
           const itemStyle = element && (element.color != null || element.fillOpacity != null || element.borderColor != null || element.borderWidth != null) ? { color: element.color ?? color, opacity: element.fillOpacity ?? style?.fillOpacity ?? config.barFillOpacity ?? 1, borderColor: element.borderColor ?? style?.borderColor ?? config.barBorderColor ?? color, borderWidth: element.borderWidth ?? style?.borderWidth ?? config.barBorderWidth ?? 0 } : point.itemStyle
@@ -498,7 +478,7 @@ const cartesian = (id: Exclude<ChartConfig['kind'], 'scatter' | 'bubble' | 'dumb
           const fillItemStyle = itemStyle ? Object.fromEntries(Object.entries(itemStyle).filter(([key]) => key !== 'borderColor' && key !== 'borderWidth')) : undefined
           const pointItemStyle = customWidth ? { ...fillItemStyle, color: 'rgba(0,0,0,0)', opacity: 1 } : fillItemStyle
           const labelStyle = element?.valueText ?? config.valueText
-          const label = !absorbBarLabels && (point.label || customWidth && config.showValues) ? { formatter: formatChartNumber(id === 'butterfly' && value != null ? Math.abs(value) : value, config), ...(point.label ?? { show: true, ...text(labelStyle) }), position: id === 'butterfly' ? butterflyPosition() : valueLabelPosition(config, id), color: isInsideValueLabel(config) && (config.valueLabelAutoContrast ?? true) ? contrastText(element?.color ?? color) : labelStyle.color } : undefined
+          const label = !absorbBarLabels && (point.label || customWidth && config.showValues) ? { formatter: formatChartNumber(value, config), ...(point.label ?? { show: true, ...text(labelStyle) }), position: valueLabelPosition(config, id), color: isInsideValueLabel(config) && (config.valueLabelAutoContrast ?? true) ? contrastText(element?.color ?? color) : labelStyle.color } : undefined
           const barPoint = { ...point, ...(pointItemStyle ? { itemStyle: pointItemStyle } : {}), ...(absorbBarLabels ? { label: { show: false }, emphasis: { label: { show: false } } } : label ? { label, emphasis: { label } } : {}) }
           return showSeriesDirectLabel && index === lastIndex ? { ...barPoint, directLegendLabel: true, valueLabel: barPoint.label ?? seriesValueLabel, label: { show: true, position: 'right', distance: config.directLabelGap ?? 14, ...directLabelStyle }, labelLine: { show: showLeader, length: config.directLabelGap ?? 14, length2: 8, lineStyle: { color, width: config.directLabelLineWidth ?? 1, type: config.directLabelLineType ?? 'solid' } } } : barPoint
         }
@@ -582,7 +562,7 @@ const cartesian = (id: Exclude<ChartConfig['kind'], 'scatter' | 'bubble' | 'dumb
         if (!(override?.showLabel ?? config.showValues)) return null
         const previous = stacked ? prepared.series.slice(0, seriesIndex).reduce((sum, candidate) => {
           const part = candidate.data[dataIndex] ?? 0
-          const sameSide = id === 'butterfly' ? butterflyLeftFields.has(candidate.name) === butterflyLeftFields.has(series.name) : Math.sign(part) === Math.sign(value)
+          const sameSide = Math.sign(part) === Math.sign(value)
           return sameSide ? sum + part : sum
         }, 0) : 0
         const endpoint = stacked ? previous + value : value
@@ -688,44 +668,13 @@ const cartesian = (id: Exclude<ChartConfig['kind'], 'scatter' | 'bubble' | 'dumb
       const categoryTitleRail = xTitleReserve
       if (config.yAxisPosition === 'right') mutable.grid.right = (config.canvasMarginRight ?? 24) + categoryTitleRail + categoryLabelSpace
       else mutable.grid.left = (config.canvasMarginLeft ?? CONTENT_LEFT) + categoryTitleRail + categoryLabelSpace
-      if (id === 'butterfly') {
-        const categoryPosition = config.butterflyCategoryPosition ?? 'center'
-        const titlePosition = categoryPosition === 'center' ? config.yAxisPosition : categoryPosition
-        const leftCategoryRail = categoryPosition === 'left' ? categoryLabelSpace : 0
-        const rightCategoryRail = categoryPosition === 'right' ? categoryLabelSpace : 0
-        const leftTitleRail = titlePosition === 'left' ? categoryTitleRail : 0
-        const rightTitleRail = titlePosition === 'right' ? categoryTitleRail : 0
-        mutable.grid.left = (config.canvasMarginLeft ?? CONTENT_LEFT) + leftCategoryRail + leftTitleRail
-        mutable.grid.right = (config.canvasMarginRight ?? 24) + rightCategoryRail + rightTitleRail
-        if (config.xAxisPosition === 'top' && config.showLegend && config.legendPosition === 'top') {
-          const legendBottom = (config.subtitle ? 72 : 54) + Math.round(config.legendText.size * config.legendText.lineHeight / 100)
-          mutable.grid.top = Math.max(mutable.grid.top, legendBottom + valueLabelHeight + (config.showXTicks ? config.tickLength : 0) + (config.yAxisLabelGap ?? 8) + 18)
-        }
-        mutable.legend = { ...mutable.legend, left: 'center', right: undefined }
-      }
       mutable.xAxis = { ...valueAxis, position: config.xAxisPosition, name: config.showYAxisTitle ? config.yAxisTitle : '', nameRotate: 0, nameGap: valueLabelHeight + (config.showXTicks ? config.tickLength : 0) + ((config.showYAxisLabels ?? true) ? config.yAxisLabelGap ?? 8 : 0) + config.yAxisTitleGap, axisLabel: { ...(valueAxis.axisLabel as object), show: config.showYAxisLabels ?? true, margin: config.yAxisLabelGap ?? 8, formatter: (value: number) => {
         const position = axisTickPosition(value, Number(valueAxis.min), Number(valueAxis.max))
         if (isNormalizedStackedChart(id)) return usesYAxisEdgeOverlay(config) && axisAffixApplies(config.yAxisAffixScope, position) ? '' : formatYAxisNumber(value, config, position)
-        return usesXAxisEdgeOverlay(config) && axisAffixApplies(config.xAxisAffixScope, position) ? '' : formatXAxisNumber(id === 'butterfly' ? Math.abs(value) : value, config, position)
+        return usesXAxisEdgeOverlay(config) && axisAffixApplies(config.xAxisAffixScope, position) ? '' : formatXAxisNumber(value, config, position)
       } } }
-      const butterflyCategoryPosition = config.butterflyCategoryPosition ?? 'center'
-      const categoryPosition = id === 'butterfly' && butterflyCategoryPosition !== 'center' ? butterflyCategoryPosition : config.yAxisPosition
-      mutable.yAxis = { ...categoryAxis, inverse: config.categoryAxisInverse ?? true, position: categoryPosition, name: '', axisLine: { ...(categoryAxis.axisLine as object), onZero: id === 'butterfly' && butterflyCategoryPosition === 'center' }, axisLabel: { ...(categoryAxis.axisLabel as object), show: id === 'butterfly' ? butterflyCategoryPosition !== 'center' && (config.showXAxisLabels ?? true) : config.showXAxisLabels ?? true, align: categoryPosition === 'right' ? 'left' : 'right', margin: config.xAxisLabelGap ?? 8, rotate: 0, width: categoryLabelWidth, overflow: undefined, hideOverlap: false, formatter: (_value: string, index: number) => categoryLabels[index] ?? '' } }
-      if (id === 'butterfly') {
-        const maximum = Math.max(0, ...prepared.categories.flatMap((_category, index) => {
-          const sides = prepared.series.reduce<[number, number]>((totals, series) => {
-            const value = series.data[index] ?? 0
-            totals[butterflyLeftFields.has(series.name) ? 0 : 1] += Math.abs(value)
-            return totals
-          }, [0, 0])
-          return sides
-        }))
-        const scale = niceNumericScale([-maximum, maximum], true)
-        const extent = Math.max(Math.abs(scale.min), Math.abs(scale.max), 1)
-        mutable.xAxis.min = -extent
-        mutable.xAxis.max = extent
-        mutable.xAxis.interval = scale.step
-      }
+      const categoryPosition = config.yAxisPosition
+      mutable.yAxis = { ...categoryAxis, inverse: config.categoryAxisInverse ?? true, position: categoryPosition, name: '', axisLine: { ...(categoryAxis.axisLine as object) }, axisLabel: { ...(categoryAxis.axisLabel as object), show: config.showXAxisLabels ?? true, align: categoryPosition === 'right' ? 'left' : 'right', margin: config.xAxisLabelGap ?? 8, rotate: 0, width: categoryLabelWidth, overflow: undefined, hideOverlap: false, formatter: (_value: string, index: number) => categoryLabels[index] ?? '' } }
       mutable.graphic = [
         ...mutable.graphic.filter((item) => item.id !== 'chart-y-axis-title'),
         ...(config.showXAxisTitle && config.xAxisTitle ? [{ id: 'chart-y-axis-title', type: 'text', left: config.yAxisPosition === 'left' ? config.canvasMarginLeft ?? CONTENT_LEFT : undefined, right: config.yAxisPosition === 'right' ? config.canvasMarginRight ?? 24 : undefined, top: 'middle', rotation: config.yAxisPosition === 'right' ? -Math.PI / 2 : Math.PI / 2, style: { text: config.xAxisTitle, ...graphicText(xTitleStyle), lineHeight: Math.round(xTitleStyle.size * xTitleStyle.lineHeight / 100), align: 'center', verticalAlign: 'middle' } }] : []),
@@ -752,16 +701,6 @@ const dumbbell: LegacyChartPlugin = {
   category: 'comparison',
   settings: { ...dumbbellBase.settings, series: ['color', 'markers'], features: { ...dumbbellBase.settings.features, directLabels: false, barLayout: false, lineVariant: true } },
   buildOption: legacyComparisonStemBuilderGuard,
-}
-
-export const waterfallSteps = (values: Array<number | null>) => {
-  let total = 0
-  const steps = values.map((delta) => {
-    const start = total
-    if (delta != null && Number.isFinite(delta)) total += delta
-    return { delta, start, end: total }
-  })
-  return { steps, total }
 }
 
 export function waterfallElementColor(table: DataTable, config: ChartConfig, key: string) {
@@ -797,174 +736,10 @@ export function chartElementColor(table: DataTable, config: ChartConfig, key: st
   return undefined
 }
 
-export const formatWaterfallChange = (value: number, config: ChartConfig) => {
-  const mode = config.waterfallSignMode ?? 'negative-only'
-  if (mode === 'negative-only') return formatChartNumber(value, config)
-  const unsigned = formatChartNumber(Math.abs(value), config)
-  if (mode === 'none' || value === 0) return unsigned
-  if (mode === 'plus-minus') return `${value > 0 ? '+' : '-'}${unsigned}`
-  return `${value > 0 ? config.waterfallPositivePrefix ?? '' : config.waterfallNegativePrefix ?? ''}${unsigned}`
-}
-
-export const waterfallValueLabel = (change: number, cumulative: number, total: boolean, config: ChartConfig) => {
-  if (total) return formatChartNumber(cumulative, config)
-  const changeLabel = formatWaterfallChange(change, config)
-  const cumulativeLabel = formatChartNumber(cumulative, config)
-  return config.waterfallLabelContent === 'cumulative' ? cumulativeLabel
-    : config.waterfallLabelContent === 'both' ? `${changeLabel} → ${cumulativeLabel}`
-    : changeLabel
-}
-
-export const waterfallLabelPlacement = (
-  startY: number,
-  endY: number,
-  barWidth: number,
-  labelWidth: number,
-  labelHeight: number,
-  position: NonNullable<ChartConfig['valueLabelPosition']>,
-  gap: number,
-) => {
-  const direction = endY <= startY ? -1 : 1
-  const fits = Math.abs(startY - endY) >= labelHeight + gap * 2 && barWidth >= labelWidth + 8
-  const resolved = position === 'auto' ? fits ? 'inside-center' : 'top' : position
-  if (resolved === 'inside-center') return { y: (startY + endY) / 2, verticalAlign: 'middle' as const, inside: true }
-  if (resolved === 'inside-top') return { y: endY - direction * gap, verticalAlign: direction < 0 ? 'top' as const : 'bottom' as const, inside: true }
-  if (resolved === 'inside-bottom') return { y: startY + direction * gap, verticalAlign: direction < 0 ? 'bottom' as const : 'top' as const, inside: true }
-  if (resolved === 'bottom') return { y: startY - direction * gap, verticalAlign: direction < 0 ? 'top' as const : 'bottom' as const, inside: false }
-  return { y: endY + direction * gap, verticalAlign: direction < 0 ? 'bottom' as const : 'top' as const, inside: false }
-}
-
-const waterfall: LegacyChartPlugin = (() => {
-  const base = cartesian('bar', 'Waterfall', 'comparison')
-  return {
-    ...base,
-    ...pluginModel('waterfall'),
-    id: 'waterfall',
-    label: 'Waterfall',
-    settings: { ...base.settings, series: [], features: { ...base.settings.features, directLabels: false } },
-    buildOption(table, config) {
-      const prepared = prepareVisibleChartData(table, { ...config, yFields: [config.yFields[0] ?? config.yField], seriesField: '', barCategorySort: 'none' })
-      const source = prepared.series[0] ?? { name: config.yField, data: [] }
-      const { steps, total } = waterfallSteps(source.data)
-      const showTotal = config.waterfallShowTotal ?? true
-      const totalLabel = config.waterfallTotalLabel?.trim() || 'Итого'
-      const categoryLabels = prepared.categories.map((category) => category instanceof Date ? formatTimeValue(category, table.timeProfiles?.[config.xField], config.dateLabelFormat) : String(category ?? ''))
-      const rows = [...categoryLabels, ...(showTotal ? [totalLabel] : [])].map((category, index) => ({ __waterfall_category: category, __waterfall_value: index }))
-      const synthetic: DataTable = { name: table.name, columns: ['__waterfall_category', '__waterfall_value'], rows }
-      const scoped = { ...config, xField: '__waterfall_category', yField: '__waterfall_value', yFields: ['__waterfall_value'], seriesField: '', barCategorySort: 'none' as const, barValueLabelAbsorption: false, showDirectLabels: false }
-      const option = base.buildOption(synthetic, scoped) as {
-        tooltip?: Record<string, unknown>
-        legend?: Record<string, unknown>
-        grid?: { left?: number; right?: number }
-        xAxis: Record<string, unknown>
-        yAxis: { min?: number; max?: number; interval?: number }
-        series: Array<Record<string, unknown>>
-      }
-      const entries = [
-        ...steps.map((step, index) => ({ ...step, category: prepared.categories[index], label: categoryLabels[index], total: false })),
-        ...(showTotal ? [{ delta: total, start: 0, end: total, category: totalLabel, label: totalLabel, total: true }] : []),
-      ]
-      const increase = config.waterfallIncreaseColor ?? '#36a476'
-      const decrease = config.waterfallDecreaseColor ?? '#db5a5a'
-      const totalColor = config.waterfallTotalColor ?? '#6956e8'
-      if (option.grid) {
-        const widestLabel = entries.reduce((width, entry) => {
-          const element = config.elementStyles[elementKey(source.name, entry.category)]
-          if (entry.delta == null || !(element?.showLabel ?? config.showValues) || entry.total && !(config.waterfallShowTotalValue ?? true)) return width
-          const style = element?.valueText ?? config.valueText
-          const label = element?.label || waterfallValueLabel(entry.delta, entry.end, entry.total, config)
-          return Math.max(width, ...label.split('\n').map((line) => measureTextWidth(line, style.size, style.fontFamily, style.weight)))
-        }, 0)
-        const sideReserve = Math.ceil(widestLabel / 2 + 6)
-        option.grid.right = Number(option.grid.right ?? 0) + sideReserve
-      }
-      const data = entries.map((entry, index) => {
-        const element = config.elementStyles[elementKey(source.name, entry.category)]
-        return {
-          value: [index, entry.start, entry.end],
-          elementKey: elementKey(source.name, entry.category),
-          sourceSeriesName: source.name,
-          displayCategory: entry.label,
-          displayValue: entry.delta == null ? 'пропуск' : waterfallValueLabel(entry.delta, entry.end, entry.total, config),
-          displayChange: entry.delta == null ? 'пропуск' : formatWaterfallChange(entry.delta, config),
-          displayCumulative: formatChartNumber(entry.end, config),
-          waterfallTotal: entry.total,
-          itemStyle: { color: element?.color ?? (entry.total ? totalColor : (entry.delta ?? 0) >= 0 ? increase : decrease), opacity: element?.fillOpacity ?? config.barFillOpacity ?? 1 },
-        }
-      })
-      const bars = {
-        name: source.name,
-        type: 'custom',
-        coordinateSystem: 'cartesian2d',
-        clip: false,
-        z: 40,
-        renderItem: (params: { dataIndex: number }, api: { value(index: number): number; coord(value: [number, number]): [number, number]; size(value: [number, number]): [number, number] }) => {
-          const entry = entries[params.dataIndex]
-          if (!entry || entry.delta == null) return null
-          const index = api.value(0), start = api.coord([index, api.value(1)]), end = api.coord([index, api.value(2)])
-          const element = config.elementStyles[elementKey(source.name, entry.category)]
-          const width = Math.abs(api.size([1, 0])[0]) * Math.max(.1, Math.min(1, (element?.barWidth ?? config.barWidth ?? 68) / 100))
-          const height = Math.max(1, Math.abs(start[1] - end[1]))
-          const style = element?.valueText ?? config.valueText
-          const showLabel = (element?.showLabel ?? config.showValues) && (!entry.total || (config.waterfallShowTotalValue ?? true))
-          const color = element?.color ?? (entry.total ? totalColor : entry.delta >= 0 ? increase : decrease)
-          const label = element?.label || waterfallValueLabel(entry.delta, entry.end, entry.total, config)
-          const lineHeight = Math.round(style.size * style.lineHeight / 100)
-          const labelWidth = Math.max(...label.split('\n').map((line) => measureTextWidth(line, style.size, style.fontFamily, style.weight)))
-          const labelHeight = lineHeight * label.split('\n').length
-          const requestedPosition = element?.waterfallLabelPosition ?? config.valueLabelPosition ?? 'auto'
-          const position = entry.total ? requestedPosition === 'bottom' ? 'top' : requestedPosition === 'inside-bottom' ? 'inside-top' : requestedPosition : requestedPosition
-          const placement = waterfallLabelPlacement(start[1], end[1], width, labelWidth, labelHeight, position, config.waterfallLabelGap ?? 6)
-          const categoryBand = Math.abs(api.size([1, 0])[0])
-          const labelStride = Math.max(1, Math.ceil((labelWidth + 8) / Math.max(1, categoryBand)))
-          const showRenderedLabel = showLabel && (element?.showLabel === true || !(config.valueLabelHideOverlap ?? false) || entry.total || index % labelStride === 0)
-          const info = { elementKey: elementKey(source.name, entry.category), sourceSeriesName: source.name, displayCategory: entry.label, displayValue: entry.delta == null ? 'пропуск' : waterfallValueLabel(entry.delta, entry.end, entry.total, config), displayColor: color }
-          return {
-            type: 'group',
-            info,
-            children: [
-              { type: 'rect', info, shape: { x: end[0] - width / 2, y: Math.min(start[1], end[1]), width, height, r: Math.max(0, config.barBorderRadius ?? 0) }, style: { fill: color, opacity: data[params.dataIndex]?.itemStyle.opacity ?? 1, stroke: element?.borderColor ?? config.barBorderColor ?? color, lineWidth: element?.borderWidth ?? config.barBorderWidth ?? 0 } },
-              ...(showRenderedLabel ? [{ type: 'text', info, style: { x: end[0], y: placement.y, text: label, ...graphicText(style), fill: placement.inside && (config.valueLabelAutoContrast ?? true) ? contrastText(color) : style.color, align: 'center', verticalAlign: placement.verticalAlign } }] : []),
-            ],
-          }
-        },
-        data,
-      }
-      const connectors = {
-        name: '__waterfall-connectors',
-        type: 'custom',
-        coordinateSystem: 'cartesian2d',
-        silent: true,
-        tooltip: { show: false },
-        clip: true,
-        z: 35,
-        renderItem: (_params: unknown, api: { value(index: number): number; coord(value: [number, number]): [number, number]; size(value: [number, number]): [number, number] }) => {
-          const index = api.value(0), y = api.value(1)
-          const from = api.coord([index, y]), to = api.coord([index + 1, y])
-          const half = Math.abs(api.size([1, 0])[0]) * Math.max(.1, Math.min(1, (config.barWidth ?? 68) / 100)) / 2
-          return { type: 'line', shape: { x1: from[0] + half, y1: from[1], x2: to[0] - half, y2: to[1] }, style: { stroke: config.waterfallConnectorColor ?? '#8a8791', lineWidth: 1, lineDash: [4, 3] } }
-        },
-        data: entries.slice(0, -1).map((entry, index) => [index, entry.end]),
-      }
-      const scale = niceNumericScale(entries.flatMap((entry) => [entry.start, entry.end]), true)
-      if (config.yAxisMin == null) option.yAxis.min = scale.min
-      if (config.yAxisMax == null) option.yAxis.max = scale.max
-      if (config.yAxisStep == null) option.yAxis.interval = scale.step
-      option.legend = { ...(option.legend ?? {}), show: false }
-      option.tooltip = {
-        trigger: 'item',
-        formatter: (input: unknown) => {
-          const item = input as { data?: { displayCategory?: string; displayChange?: string; displayCumulative?: string; waterfallTotal?: boolean }; marker?: string }
-          return item.data?.waterfallTotal
-            ? `<b>${escapeHtml(item.data.displayCategory ?? '')}</b><br/>${item.marker ?? ''}${escapeHtml(source.name)}: <b>${escapeHtml(item.data.displayCumulative ?? '')}</b>`
-            : `<b>${escapeHtml(item.data?.displayCategory ?? '')}</b><br/>${item.marker ?? ''}Изменение: <b>${escapeHtml(item.data?.displayChange ?? '')}</b><br/>После шага: <b>${escapeHtml(item.data?.displayCumulative ?? '')}</b>`
-        },
-      }
-      option.series = [connectors, bars]
-      return option
-    },
-  }
-})()
+const waterfallBase = cartesian('bar', 'Waterfall', 'comparison')
+const waterfall: LegacyChartPlugin = { ...waterfallBase, ...pluginModel('waterfall'), id: 'waterfall', label: 'Waterfall', settings: { ...waterfallBase.settings, series: [], features: { ...waterfallBase.settings.features, directLabels: false } }, buildOption: legacyWaterfallBuilderGuard }
+const butterflyBase = cartesian('horizontal-bar', 'Butterfly', 'bar-horizontal')
+const butterfly: LegacyChartPlugin = { ...butterflyBase, ...pluginModel('butterfly'), id: 'butterfly', label: 'Butterfly', settings: butterflyBase.settings, buildOption: legacyButterflyBuilderGuard }
 
 const lollipop = (id: 'lollipop' | 'horizontal-lollipop', label: string): LegacyChartPlugin => {
   const horizontal = id === 'horizontal-lollipop'
@@ -1450,8 +1225,9 @@ const distribution: LegacyChartPlugin = {
 }
 
 const legacyChartRegistry = [
-  ...barChartDefinitions.flatMap(([id, label, category]) => id === 'waterfall' || id === 'lollipop' || id === 'horizontal-lollipop' ? [] : [cartesian(id, label, category)]),
+  ...barChartDefinitions.flatMap(([id, label, category]) => id === 'waterfall' || id === 'butterfly' || id === 'lollipop' || id === 'horizontal-lollipop' ? [] : [cartesian(id, label, category)]),
   waterfall,
+  butterfly,
   lollipop('lollipop', 'Леденцовая'),
   lollipop('horizontal-lollipop', 'Леденцовая горизонтальная'),
   dumbbell,
@@ -1523,11 +1299,11 @@ const nativeComparisonStemCapabilities: ChartPlugin['capabilities'] = {
 }
 
 export const chartRegistry: ChartPlugin[] = legacyChartRegistry.map((plugin) => {
-  const compiler = isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeComparisonStemKind(plugin.id) ? compileNativeComparisonStemScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : isNativeSmoothingKind(plugin.id) ? compileNativeSmoothingScene : isNativeIntervalKind(plugin.id) ? compileNativeIntervalScene : isNativeXYKind(plugin.id) ? compileNativeXYScene : isNativeDistributionKind(plugin.id) ? compileNativeDistributionScene : undefined
+  const compiler = plugin.id === 'waterfall' ? compileNativeWaterfallScene : plugin.id === 'butterfly' ? compileNativeButterflyScene : isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeComparisonStemKind(plugin.id) ? compileNativeComparisonStemScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : isNativeSmoothingKind(plugin.id) ? compileNativeSmoothingScene : isNativeIntervalKind(plugin.id) ? compileNativeIntervalScene : isNativeXYKind(plugin.id) ? compileNativeXYScene : isNativeDistributionKind(plugin.id) ? compileNativeDistributionScene : undefined
   if (compiler) return {
     ...plugin, compilerMode: 'native' as const,
-    capabilities: isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeComparisonStemKind(plugin.id) ? nativeComparisonStemCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : isNativeSmoothingKind(plugin.id) ? nativeSmoothingCapabilities : isNativeIntervalKind(plugin.id) ? nativeIntervalCapabilities : isNativeXYKind(plugin.id) ? nativeXYCapabilities(plugin.id) : nativeDistributionCapabilities,
-    validate: isNativeXYKind(plugin.id) ? validateNativeXYMapping : isNativeDistributionKind(plugin.id) ? validateNativeDistributionMapping : plugin.validate,
+    capabilities: plugin.id === 'waterfall' ? { ...nativeBarCapabilities, orientation: ['vertical'] } : plugin.id === 'butterfly' ? { ...nativeBarCapabilities, axes: { category: { placements: ['side', 'internal'] }, value: { scaleTypes: ['linear'] } }, orientation: ['horizontal'], stacking: ['stacked'] } : isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeComparisonStemKind(plugin.id) ? nativeComparisonStemCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : isNativeSmoothingKind(plugin.id) ? nativeSmoothingCapabilities : isNativeIntervalKind(plugin.id) ? nativeIntervalCapabilities : isNativeXYKind(plugin.id) ? nativeXYCapabilities(plugin.id) : nativeDistributionCapabilities,
+    validate: plugin.id === 'butterfly' ? (table: DataTable, config: ChartConfig) => { const generic = plugin.validate(table, config), native = validateNativeButterflyMapping(table, config); return { ok: generic.ok && native.ok, errors: [...generic.errors, ...native.errors] } } : isNativeXYKind(plugin.id) ? validateNativeXYMapping : isNativeDistributionKind(plugin.id) ? validateNativeDistributionMapping : plugin.validate,
     compile: compiler,
     buildOption: (table: DataTable, config: ChartConfig) => renderScene(compiler(table, config)),
   }
@@ -1545,7 +1321,7 @@ export function chartValueLabelSelections(table: DataTable, config: ChartConfig)
     if (!plugin.validate(table, listingConfig).ok) return []
     const scene = plugin.compile(table, listingConfig)
     if (scene.migrationMode !== 'native') throw new Error(`Native plugin ${plugin.id} returned a legacy scene.`)
-    return nativeMarkSelections(scene).filter((mark) => mark.value != null).map((mark) => ({ key: mark.legacyKey, seriesName: mark.seriesName, category: mark.displayCategory, value: mark.displayValue, label: listingConfig.elementStyles[mark.legacyKey]?.label ?? mark.displayLabel, color: listingConfig.elementStyles[mark.legacyKey]?.color, target: 'value-label' as const }))
+    return nativeMarkSelections(scene).filter((mark) => mark.value != null).map((mark) => ({ key: mark.legacyKey, seriesName: mark.seriesName, category: mark.displayCategory, value: mark.displayValue, label: listingConfig.elementStyles[mark.legacyKey]?.label ?? mark.displayLabel, color: listingConfig.elementStyles[mark.legacyKey]?.color ?? (config.kind === 'waterfall' || config.kind === 'butterfly' ? mark.color : undefined), target: 'value-label' as const }))
   }
   const option = plugin.buildOption(table, listingConfig) as { series?: Array<{ name?: string; data?: unknown[]; labelItems?: unknown[] }> }
   const nestedItems = (items: unknown[]): unknown[] => items.flatMap((raw) => raw && typeof raw === 'object' ? [raw, ...nestedItems((raw as { children?: unknown[] }).children ?? [])] : [])

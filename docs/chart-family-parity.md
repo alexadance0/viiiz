@@ -10,6 +10,8 @@ Phase 8 started from `b089ab3b5a0eeda0d242ae10482f91496340b82b` and completed in
 Phase 9A started from that completion and its implementation completed in `abef01b4d646512ead007420b62ec7b308694ed5`.
 Phase 9B started from `ccd66becf9b7fd293081055675d5295ba1bff026`; implementation completed in `cf3ec028ec87b74cbeb9e9eabb5b7cb6072c4aae`, migrated legacy shape geometry was deleted in `09b480b`, and the documentation checkpoint is `05f13ed4cb45a1b7a1a9e969ac4d9e70343bb172`.
 Wave 1 started from `457e501d21403f7a30e81d18894c042b59d6b951`; font determinism completed in `237d7bf465f151e4eaa1ea06a4e64f9d4e52205c`, Histogram/KDE in `4b3f45eae17860ef13836b0ee74eccc9a1edac6b`, and integration in `97a0d14432a65dc88a66b262d5a656d87b1a52d1`.
+Wave 2 started from `57a9357`; native Lollipop/Dumbbell implementation completed in `f8ea4a4` and review stabilization in `7e89a2d`.
+Wave 3 started from `57a9357`; native Waterfall/Butterfly implementation completed in `db638ea`, legacy cleanup in `31dc990`, and review stabilization in `bb53313`.
 
 | Kind | Family | Compiler | Layout | Interaction | Export | Legacy `buildOption` reachable? |
 |---|---|---|---|---|---|---|
@@ -28,10 +30,10 @@ Wave 1 started from `457e501d21403f7a30e81d18894c042b59d6b951`; font determinism
 | stacked-area | area | native | shared native Cartesian frame/axes | native point metadata → callback adapter | existing SVG/PNG boundary | no |
 | normalized-stacked-area | area | native | shared native Cartesian frame/axes | native point metadata → callback adapter | existing SVG/PNG boundary | no |
 | slope | specialized comparison | native | dedicated native Slope layout inside shared frame | native endpoint metadata → callback adapter | shared SVG/PNG boundary | no |
-| waterfall | waterfall | legacy | legacy/hybrid | legacy | existing legacy path | yes |
-| butterfly | butterfly | legacy | legacy/hybrid | legacy | existing legacy path | yes |
 | lollipop / horizontal-lollipop | comparison stem | native | shared native Cartesian frame/axes + resolved stems/grid/direct guides | native endpoint and guide metadata | shared SVG/PNG boundary | no |
 | dumbbell | paired comparison stem | native | shared native Cartesian frame/axes + resolved pair/change geometry | native endpoint and guide metadata; connectors derived | shared SVG/PNG boundary | no |
+| waterfall | cumulative comparison | native | dedicated floating-bar/connector/label layout | resolved hit metadata → callback adapter | shared SVG/PNG boundary | no |
+| butterfly | mirrored comparison | native | dedicated symmetric side-stack/category-rail layout | resolved hit metadata → callback adapter | shared SVG/PNG boundary | no |
 | range-line / step-range-line / confidence-line | interval | native | shared native Cartesian frame/axes | visible source point metadata; derived bands excluded | shared SVG/PNG boundary | no |
 | moving-average-line / moving-average-scatter | smoothing transform | native | shared native Cartesian frame/axes | raw native point metadata; derived layer non-editable | shared SVG/PNG boundary | no |
 | scatter / bubble | continuous XY relationship | native | dedicated continuous XY layout inside shared frame | unique native point IDs; derived analytics excluded | shared SVG/PNG boundary | no |
@@ -134,4 +136,12 @@ The value domain is linear or strictly positive logarithmic in either orientatio
 
 ## Phase 7.1 integration checkpoint
 
-The interval semantic migration and its integration quality are tracked separately. Integration now uses an explicit revision-aware final-frame contract for preview, transitions, resize/font completion, and export restoration. Full-suite and repeated visual verification capture only `settled` revisions. Phase 8 moved Scatter/Bubble to native XY, Wave 1 completed Distribution, and Wave 2 completed Lollipop/Dumbbell. Current unmigrated legacy families are Waterfall, Butterfly, Heatmap, and Treemap.
+The interval semantic migration and its integration quality are tracked separately. Integration now uses an explicit revision-aware final-frame contract for preview, transitions, resize/font completion, and export restoration. Full-suite and repeated visual verification capture only `settled` revisions. Phase 8 moved Scatter/Bubble to native XY, Wave 1 completed Distribution, Wave 2 completed Lollipop/Dumbbell, and Wave 3 completed Waterfall/Butterfly. Current unmigrated legacy families are Heatmap and Treemap.
+
+## Wave 3 Waterfall and Butterfly parity
+
+Waterfall preserves cumulative steps, mixed signs and missing deltas, optional total/total value, connector styling, change/cumulative/both labels, sign modes, automatic inside/outside placement, overlap hiding, per-element styles, tooltips, selection, and stable export. The total uses `syntheticDatumId('waterfall-total', measure)` so changing its display label does not change native identity.
+
+Butterfly preserves absolute magnitudes, distinct left/right field mapping, independent multi-measure side stacks, symmetric axes, center/left/right category placement, date/category overrides, series and element styles, labels, tooltips, two-stage series/element selection, and export. Compiler and layout tests prove side/domain/geometry ownership; renderer tests prove resolved custom geometry and selection identity; three visual cases per family pin the main layout variants.
+
+Post-review parity also covers null Waterfall steps at the beginning/middle/end, element-specific Waterfall colors and label positions, contiguous Butterfly stack segments, duplicate-category validation, source-family document specs, mirrored label placement/contrast, and selectable center categories whose editor rectangles come directly from native layout. The legacy Butterfly entry uses the same throwing-guard boundary as Waterfall and is excluded from the generic cartesian factory.
