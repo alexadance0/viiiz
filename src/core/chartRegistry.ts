@@ -22,6 +22,10 @@ import { compileNativeSmoothingScene, isNativeSmoothingKind } from '../features/
 import { compileNativeIntervalScene, isNativeIntervalKind } from '../features/chart-types/interval/compiler'
 import { compileNativeXYScene, isNativeXYKind, validateNativeXYMapping } from '../features/chart-types/xy/compiler'
 import { compileNativeDistributionScene, isNativeDistributionKind, validateNativeDistributionMapping } from '../features/chart-types/distribution/compiler'
+import { compileNativeWaterfallScene, legacyWaterfallBuilderGuard } from '../features/chart-types/waterfall/compiler'
+import { formatWaterfallChange, waterfallLabelPlacement, waterfallSteps, waterfallValueLabel } from '../features/chart-types/waterfall/transform'
+export { formatWaterfallChange, waterfallLabelPlacement, waterfallSteps, waterfallValueLabel } from '../features/chart-types/waterfall/transform'
+import { compileNativeButterflyScene, validateNativeButterflyMapping } from '../features/chart-types/butterfly/compiler'
 export { fitSwarmClouds, fitSwarmOffsets, packSwarmOffsets } from '../features/chart-types/distribution/swarm'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 import { nativeMarkSelections } from '../entities/chart/model/sceneVisitors'
@@ -838,16 +842,6 @@ const dumbbell: LegacyChartPlugin = {
   },
 }
 
-export const waterfallSteps = (values: Array<number | null>) => {
-  let total = 0
-  const steps = values.map((delta) => {
-    const start = total
-    if (delta != null && Number.isFinite(delta)) total += delta
-    return { delta, start, end: total }
-  })
-  return { steps, total }
-}
-
 export function waterfallElementColor(table: DataTable, config: ChartConfig, key: string) {
   const prepared = prepareVisibleChartData(table, { ...config, yFields: [config.yFields[0] ?? config.yField], seriesField: '', barCategorySort: 'none' })
   const source = prepared.series[0]
@@ -879,43 +873,6 @@ export function chartElementColor(table: DataTable, config: ChartConfig, key: st
     return getSeriesColor(config, String(point.sourceSeriesName ?? series.name ?? ''), seriesIndex)
   }
   return undefined
-}
-
-export const formatWaterfallChange = (value: number, config: ChartConfig) => {
-  const mode = config.waterfallSignMode ?? 'negative-only'
-  if (mode === 'negative-only') return formatChartNumber(value, config)
-  const unsigned = formatChartNumber(Math.abs(value), config)
-  if (mode === 'none' || value === 0) return unsigned
-  if (mode === 'plus-minus') return `${value > 0 ? '+' : '-'}${unsigned}`
-  return `${value > 0 ? config.waterfallPositivePrefix ?? '' : config.waterfallNegativePrefix ?? ''}${unsigned}`
-}
-
-export const waterfallValueLabel = (change: number, cumulative: number, total: boolean, config: ChartConfig) => {
-  if (total) return formatChartNumber(cumulative, config)
-  const changeLabel = formatWaterfallChange(change, config)
-  const cumulativeLabel = formatChartNumber(cumulative, config)
-  return config.waterfallLabelContent === 'cumulative' ? cumulativeLabel
-    : config.waterfallLabelContent === 'both' ? `${changeLabel} → ${cumulativeLabel}`
-    : changeLabel
-}
-
-export const waterfallLabelPlacement = (
-  startY: number,
-  endY: number,
-  barWidth: number,
-  labelWidth: number,
-  labelHeight: number,
-  position: NonNullable<ChartConfig['valueLabelPosition']>,
-  gap: number,
-) => {
-  const direction = endY <= startY ? -1 : 1
-  const fits = Math.abs(startY - endY) >= labelHeight + gap * 2 && barWidth >= labelWidth + 8
-  const resolved = position === 'auto' ? fits ? 'inside-center' : 'top' : position
-  if (resolved === 'inside-center') return { y: (startY + endY) / 2, verticalAlign: 'middle' as const, inside: true }
-  if (resolved === 'inside-top') return { y: endY - direction * gap, verticalAlign: direction < 0 ? 'top' as const : 'bottom' as const, inside: true }
-  if (resolved === 'inside-bottom') return { y: startY + direction * gap, verticalAlign: direction < 0 ? 'bottom' as const : 'top' as const, inside: true }
-  if (resolved === 'bottom') return { y: startY - direction * gap, verticalAlign: direction < 0 ? 'top' as const : 'bottom' as const, inside: false }
-  return { y: endY + direction * gap, verticalAlign: direction < 0 ? 'bottom' as const : 'top' as const, inside: false }
 }
 
 const waterfall: LegacyChartPlugin = (() => {
@@ -1049,6 +1006,7 @@ const waterfall: LegacyChartPlugin = (() => {
     },
   }
 })()
+waterfall.buildOption = legacyWaterfallBuilderGuard
 
 const lollipop = (id: 'lollipop' | 'horizontal-lollipop', label: string): LegacyChartPlugin => {
   const horizontal = id === 'horizontal-lollipop'
@@ -1642,11 +1600,11 @@ const nativeDistributionCapabilities: ChartPlugin['capabilities'] = {
 }
 
 export const chartRegistry: ChartPlugin[] = legacyChartRegistry.map((plugin) => {
-  const compiler = isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : isNativeSmoothingKind(plugin.id) ? compileNativeSmoothingScene : isNativeIntervalKind(plugin.id) ? compileNativeIntervalScene : isNativeXYKind(plugin.id) ? compileNativeXYScene : isNativeDistributionKind(plugin.id) ? compileNativeDistributionScene : undefined
+  const compiler = plugin.id === 'waterfall' ? compileNativeWaterfallScene : plugin.id === 'butterfly' ? compileNativeButterflyScene : isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : isNativeSmoothingKind(plugin.id) ? compileNativeSmoothingScene : isNativeIntervalKind(plugin.id) ? compileNativeIntervalScene : isNativeXYKind(plugin.id) ? compileNativeXYScene : isNativeDistributionKind(plugin.id) ? compileNativeDistributionScene : undefined
   if (compiler) return {
     ...plugin, compilerMode: 'native' as const,
-    capabilities: isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : isNativeSmoothingKind(plugin.id) ? nativeSmoothingCapabilities : isNativeIntervalKind(plugin.id) ? nativeIntervalCapabilities : isNativeXYKind(plugin.id) ? nativeXYCapabilities(plugin.id) : nativeDistributionCapabilities,
-    validate: isNativeXYKind(plugin.id) ? validateNativeXYMapping : isNativeDistributionKind(plugin.id) ? validateNativeDistributionMapping : plugin.validate,
+    capabilities: plugin.id === 'waterfall' ? { ...nativeBarCapabilities, orientation: ['vertical'] } : plugin.id === 'butterfly' ? { ...nativeBarCapabilities, axes: { category: { placements: ['side', 'internal'] }, value: { scaleTypes: ['linear'] } }, orientation: ['horizontal'], stacking: ['stacked'] } : isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : isNativeSmoothingKind(plugin.id) ? nativeSmoothingCapabilities : isNativeIntervalKind(plugin.id) ? nativeIntervalCapabilities : isNativeXYKind(plugin.id) ? nativeXYCapabilities(plugin.id) : nativeDistributionCapabilities,
+    validate: plugin.id === 'butterfly' ? validateNativeButterflyMapping : isNativeXYKind(plugin.id) ? validateNativeXYMapping : isNativeDistributionKind(plugin.id) ? validateNativeDistributionMapping : plugin.validate,
     compile: compiler,
     buildOption: (table: DataTable, config: ChartConfig) => renderScene(compiler(table, config)),
   }
@@ -1664,7 +1622,7 @@ export function chartValueLabelSelections(table: DataTable, config: ChartConfig)
     if (!plugin.validate(table, listingConfig).ok) return []
     const scene = plugin.compile(table, listingConfig)
     if (scene.migrationMode !== 'native') throw new Error(`Native plugin ${plugin.id} returned a legacy scene.`)
-    return nativeMarkSelections(scene).filter((mark) => mark.value != null).map((mark) => ({ key: mark.legacyKey, seriesName: mark.seriesName, category: mark.displayCategory, value: mark.displayValue, label: listingConfig.elementStyles[mark.legacyKey]?.label ?? mark.displayLabel, color: listingConfig.elementStyles[mark.legacyKey]?.color, target: 'value-label' as const }))
+    return nativeMarkSelections(scene).filter((mark) => mark.value != null).map((mark) => ({ key: mark.legacyKey, seriesName: mark.seriesName, category: mark.displayCategory, value: mark.displayValue, label: listingConfig.elementStyles[mark.legacyKey]?.label ?? mark.displayLabel, color: listingConfig.elementStyles[mark.legacyKey]?.color ?? (config.kind === 'waterfall' || config.kind === 'butterfly' ? mark.color : undefined), target: 'value-label' as const }))
   }
   const option = plugin.buildOption(table, listingConfig) as { series?: Array<{ name?: string; data?: unknown[]; labelItems?: unknown[] }> }
   const nestedItems = (items: unknown[]): unknown[] => items.flatMap((raw) => raw && typeof raw === 'object' ? [raw, ...nestedItems((raw as { children?: unknown[] }).children ?? [])] : [])

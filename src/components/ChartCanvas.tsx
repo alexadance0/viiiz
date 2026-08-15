@@ -305,7 +305,9 @@ export function directLegendGraphics(instance: echarts.ECharts, table: DataTable
     return graphics
   })
 }
+const nativeFamilyOwnsGeometry = (kind: ChartConfig['kind']): boolean => kind === 'waterfall' || kind === 'butterfly'
 function valueLabelHitGraphics(instance: echarts.ECharts, table: DataTable, config: ChartConfig, allSelected: boolean, onSelect?: (selection: ChartElementSelection) => void, onFocus?: (section: ChartSettingsSection) => void, selectedElementKey?: string | null, selectedElementTarget?: ChartElementSelection['target']) {
+  if (nativeFamilyOwnsGeometry(config.kind)) return []
   if (config.kind === 'waterfall') {
     const prepared = prepareVisibleChartData(table, config), source = prepared.series[0]
     if (!source) return []
@@ -447,7 +449,7 @@ export function butterflyCategoryLayout(table: DataTable, config: ChartConfig) {
   const gap = Math.min(naturalGap, maximumGap)
   return { prepared, style, labels, gap, wrapped: naturalGap > maximumGap }
 }
-function splitCenteredButterflyAxes(option: Record<string, unknown>, table: DataTable, config: ChartConfig) {
+export function splitCenteredButterflyAxes(option: Record<string, unknown>, table: DataTable, config: ChartConfig) {
   if (config.kind !== 'butterfly' || (config.butterflyCategoryPosition ?? 'center') !== 'center' || Array.isArray(option.grid)) return
   const grid = option.grid as { left?: number; right?: number; top?: number; bottom?: number; containLabel?: boolean } | undefined
   const xAxis = option.xAxis as Record<string, unknown> | undefined
@@ -526,7 +528,7 @@ function splitCenteredButterflyAxes(option: Record<string, unknown>, table: Data
     }
   })
 }
-function butterflyCategoryGraphics(instance: echarts.ECharts, table: DataTable, config: ChartConfig, selectedSettingsSection?: ChartSettingsSection | null, onSelect?: (selection: ChartElementSelection) => void, onFocus?: (section: ChartSettingsSection) => void, selectedCategory?: string | null, clean = false) {
+export function butterflyCategoryGraphics(instance: echarts.ECharts, table: DataTable, config: ChartConfig, selectedSettingsSection?: ChartSettingsSection | null, onSelect?: (selection: ChartElementSelection) => void, onFocus?: (section: ChartSettingsSection) => void, selectedCategory?: string | null, clean = false) {
   if (config.kind !== 'butterfly' || config.showXAxisLabels === false || (config.butterflyCategoryPosition ?? 'center') !== 'center') return []
   const { prepared, style, labels, gap, wrapped } = butterflyCategoryLayout(table, config)
   let leftZero: unknown, rightZero: unknown
@@ -586,7 +588,7 @@ function butterflyCategoryGraphics(instance: echarts.ECharts, table: DataTable, 
     }]
   })]
 }
-function butterflyBarHitGraphics(instance: echarts.ECharts, table: DataTable, config: ChartConfig, selectedSeriesName?: string | null, onSeriesSelect?: (selection: ChartSeriesSelection) => void, onSelect?: (selection: ChartElementSelection) => void, onFocus?: (section: ChartSettingsSection) => void) {
+export function butterflyBarHitGraphics(instance: echarts.ECharts, table: DataTable, config: ChartConfig, selectedSeriesName?: string | null, onSeriesSelect?: (selection: ChartSeriesSelection) => void, onSelect?: (selection: ChartElementSelection) => void, onFocus?: (section: ChartSettingsSection) => void) {
   if (config.kind !== 'butterfly') return []
   const prepared = prepareButterflyChartData(table, config)
   const leftFields = new Set(config.butterflyLeftFields?.length ? config.butterflyLeftFields : config.yFields.slice(0, 1))
@@ -1155,7 +1157,10 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const compiledScene = plugin.compile(table, renderConfig)
       const plotKind = compiledScene.migrationMode === 'native' ? compiledScene.plot.kind : 'legacy'
       const rendererOwnsDirectLabels = compiledScene.migrationMode === 'native' && compiledScene.plot.kind !== 'bar'
-      const option = renderScene(compiledScene) as Record<string, unknown> & { graphic?: unknown[] }
+      type NativeSelectionHit = { rect: { x: number; y: number; width: number; height: number }; info: { elementKey: string; sourceSeriesName: string; displayCategory: string; displayValue: string; displayColor?: string; selectionTarget?: ChartElementSelection['target'] } }
+      const option = renderScene(compiledScene) as Record<string, unknown> & { graphic?: unknown[]; nativeSelectionHits?: NativeSelectionHit[] }
+      const nativeSelectionHits = option.nativeSelectionHits ?? []
+      delete option.nativeSelectionHits
       const nativeLayoutSnapshot = plugin.compilerMode === 'native' ? cloneChartOption({ grid: option.grid, xAxis: option.xAxis, yAxis: option.yAxis, legend: option.legend }) : null
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       setRenderAnimationEnabled(!reducedMotion)
@@ -1510,8 +1515,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         return item
       })
       cleanOption.graphic = [...cleanLabels, ...decorationGraphics(config.decorations ?? []), ...cleanTitleHits, ...annotations.map((annotation) => ({ ...annotation, style: { ...annotation.style, opacity: 1 } }))]
-      splitCenteredButterflyAxes(option, table, config)
-      splitCenteredButterflyAxes(cleanOption as Record<string, unknown>, table, config)
       setRenderLifecycle((current) => advanceChartRender(current, revision, 'rendering'))
       const animateTreemapUpdate = config.kind === 'treemap' && renderedKind.current === 'treemap'
       if (animateTreemapUpdate) instance.setOption(option, { replaceMerge: ['series', 'graphic'] })
@@ -1650,11 +1653,20 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         option.graphic = [...(Array.isArray(option.graphic) ? option.graphic : []), ...valueLabelHits]
         instance.setOption({ graphic: option.graphic }, { replaceMerge: ['graphic'] })
       }
-      const butterflyCategories = butterflyCategoryGraphics(instance, table, config, selectedSettingsSection, onSelect, onSettingsFocus, activeCategoryLabel?.axis === 'y' ? activeCategoryLabel.category : null)
-      const butterflyHits = butterflyBarHitGraphics(instance, table, config, selectedSeriesName, onSeriesSelect, onSelect, onSettingsFocus)
-      if (butterflyCategories.length || butterflyHits.length) {
-        option.graphic = [...(Array.isArray(option.graphic) ? option.graphic : []), ...butterflyHits, ...butterflyCategories]
-        cleanOption.graphic = [...(Array.isArray(cleanOption.graphic) ? cleanOption.graphic : []), ...butterflyCategoryGraphics(instance, table, config, null, undefined, undefined, null, true)]
+      if (nativeSelectionHits.length) {
+        const hits = nativeSelectionHits.map((hit, index) => ({ id: `native-selection-hit-${index}`, type: 'rect', z: 140, cursor: 'pointer', shape: hit.rect, style: hit.info.elementKey === selectedElementKey && hit.info.selectionTarget === selectedElementTarget ? { fill: 'rgba(0,0,0,0)', stroke: '#6956e8', lineWidth: 1 } : { fill: 'rgba(0,0,0,0)' }, onclick: () => {
+          const point = hit.info, seriesName = point.sourceSeriesName
+          if (config.kind === 'butterfly' && clickedSeries.current !== seriesName) {
+            const seriesIndex = prepareChartData(table, config).series.findIndex((item) => item.name === seriesName)
+            onSeriesSelect?.({ name: seriesName, color: getSeriesColor(config, seriesName, Math.max(0, seriesIndex)) })
+            clickedSeries.current = seriesName
+            onSettingsFocus?.('series')
+            return
+          }
+          onSelect?.({ key: point.elementKey, seriesName, category: point.displayCategory, value: point.displayValue, color: point.displayColor, target: point.selectionTarget })
+          onSettingsFocus?.('element')
+        } }))
+        option.graphic = [...(Array.isArray(option.graphic) ? option.graphic : []), ...hits]
         instance.setOption({ graphic: option.graphic }, { replaceMerge: ['graphic'] })
       }
       displayOption.current = option
@@ -1770,7 +1782,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         if (text) selectWaterfallAt(lastPointer.current, 'value-label')
         else if (filledPath) selectWaterfallAt(lastPointer.current)
       }
-      canvas?.addEventListener('click', clickHandler, true)
+      void clickHandler
       const highlightGuide = (pointer: [number, number] | null) => {
         if (!pointer || !selectedSeriesName) return
         const current = instance.getOption() as { series?: Array<{ name?: string }> }
@@ -1869,14 +1881,26 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       }
       const legendHandler = () => onSettingsFocus?.('legend')
       const backgroundHandler = (event: { target?: unknown }) => { if (!event.target) { onClearSettingsFocus?.(); onAnnotationSelect?.('') } }
-      const waterfallElementHandler = (event: { target?: { type?: string; info?: { elementKey?: string; sourceSeriesName?: string; displayCategory?: string; displayValue?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target'] }; parent?: { type?: string; info?: { elementKey?: string; sourceSeriesName?: string; displayCategory?: string; displayValue?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target'] } } } }) => {
-        if (config.kind !== 'waterfall') return
-        const point = event.target?.info?.elementKey ? event.target.info : event.target?.parent?.info
+      const waterfallElementHandler = (event: { target?: { type?: string; info?: { elementKey?: string; sourceSeriesName?: string; displayCategory?: string; displayValue?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target'] }; parent?: unknown } }) => {
+        if (config.kind !== 'waterfall' && config.kind !== 'butterfly') return
+        type Node = { type?: string; info?: { elementKey?: string; sourceSeriesName?: string; displayCategory?: string; displayValue?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target'] }; parent?: Node }
+        let node = event.target as Node | undefined
+        while (node && !node.info?.elementKey) node = node.parent
+        const point = node?.info
         if (!point?.elementKey) return
-        const target = point.selectionTarget ?? (event.target?.type === 'text' || event.target?.parent?.type === 'text' ? 'value-label' : undefined)
-        onSelect?.({ key: point.elementKey, seriesName: point.sourceSeriesName ?? '', category: point.displayCategory ?? '', value: point.displayValue ?? '', color: point.displayColor, target })
+        const seriesName = point.sourceSeriesName ?? ''
+        if (config.kind === 'butterfly' && clickedSeries.current !== seriesName) {
+          const seriesIndex = prepareChartData(table, config).series.findIndex((item) => item.name === seriesName)
+          onSeriesSelect?.({ name: seriesName, color: getSeriesColor(config, seriesName, Math.max(0, seriesIndex)) })
+          clickedSeries.current = seriesName
+          onSettingsFocus?.('series')
+          return
+        }
+        const target = point.selectionTarget ?? (node?.type === 'text' ? 'value-label' : undefined)
+        onSelect?.({ key: point.elementKey, seriesName, category: point.displayCategory ?? '', value: point.displayValue ?? '', color: point.displayColor, target })
         onSettingsFocus?.('element')
       }
+      void waterfallElementHandler
       // Keep the renderer that was alive when the handlers were registered.
       // During StrictMode teardown the chart-init effect may dispose ECharts
       // before this effect gets a chance to remove its listeners, at which
@@ -2036,7 +2060,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       renderer.on('mousemove', treemapMove)
       renderer.on('mouseup', finishTreemapDrag)
       return () => {
-        canvas?.removeEventListener('click', clickHandler, true)
         canvas?.removeEventListener('mousemove', moveHandler)
         canvas?.removeEventListener('mouseleave', leaveHandler)
         if (!instance.isDisposed()) {

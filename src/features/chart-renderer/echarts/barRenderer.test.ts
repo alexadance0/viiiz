@@ -43,6 +43,7 @@ describe('native ECharts bar adapter', () => {
     expect(getChartPlugin('indexed-line').compilerMode).toBe('native')
     expect(getChartPlugin('seasonal-line').compilerMode).toBe('native')
     expect(getChartPlugin('scatter').compilerMode).toBe('native')
-    expect(getChartPlugin('waterfall').compilerMode).toBe('legacy')
+    expect(getChartPlugin('waterfall').compilerMode).toBe('native')
+    expect(getChartPlugin('butterfly').compilerMode).toBe('native')
   })
 })

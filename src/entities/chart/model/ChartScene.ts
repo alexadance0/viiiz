@@ -54,6 +54,49 @@ export interface CartesianBarPlotScene {
   series: BarSeriesScene[]
 }
 
+export interface WaterfallMarkScene extends Omit<BarMarkScene, 'value'> {
+  value: number | null
+  start: number
+  end: number
+  total: boolean
+  displayChange: string
+  displayCumulative: string
+}
+
+export interface WaterfallPlotScene {
+  kind: 'waterfall'
+  categories: CartesianBarPlotScene['categories']
+  categoryAxis: AxisSpec
+  valueAxis: AxisSpec
+  valueDomain: { min: number; max: number; step: number }
+  barWidth: number
+  marks: WaterfallMarkScene[]
+  connectors: Array<{ id: ElementId; fromId: ElementId; toId: ElementId; value: number; color: string }>
+}
+
+export interface ButterflyMarkScene extends BarMarkScene {
+  side: 'left' | 'right'
+  stackStart: number
+  stackEnd: number
+}
+
+export interface ButterflySeriesScene extends Omit<BarSeriesScene, 'marks'> {
+  side: 'left' | 'right'
+  marks: ButterflyMarkScene[]
+}
+
+export interface ButterflyPlotScene {
+  kind: 'butterfly'
+  categoryPlacement: 'center' | 'left' | 'right'
+  categories: CartesianBarPlotScene['categories']
+  categoryAxis: AxisSpec
+  valueAxis: AxisSpec
+  valueDomain: { min: number; max: number; step: number }
+  barWidth: number
+  seriesGap: number
+  series: ButterflySeriesScene[]
+}
+
 export interface CartesianPointScene {
   type: 'point'
   id: ElementId
@@ -540,7 +583,7 @@ export interface DistributionPlotScene {
   grid: { valueVisible: boolean; laneVisible: boolean; color: string; width: number; type: 'solid' | 'dashed' | 'dotted' }
 }
 
-export type NativePlotScene = CartesianBarPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene | DistributionPlotScene
+export type NativePlotScene = CartesianBarPlotScene | WaterfallPlotScene | ButterflyPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene | DistributionPlotScene
 
 export interface NativeChartScene extends ChartSceneBase {
   migrationMode: 'native'
@@ -552,6 +595,8 @@ export interface NativeChartScene extends ChartSceneBase {
 }
 
 export type NativeBarChartScene = NativeChartScene & { plot: CartesianBarPlotScene }
+export type NativeWaterfallChartScene = NativeChartScene & { plot: WaterfallPlotScene }
+export type NativeButterflyChartScene = NativeChartScene & { plot: ButterflyPlotScene }
 export type NativeLineChartScene = NativeChartScene & { plot: CartesianLinePlotScene }
 export type NativeAreaChartScene = NativeChartScene & { plot: CartesianAreaPlotScene }
 export type NativeSlopeChartScene = NativeChartScene & { plot: CartesianSlopePlotScene }

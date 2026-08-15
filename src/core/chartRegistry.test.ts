@@ -39,15 +39,14 @@ describe('waterfall chart', () => {
       grid: { left: number; right: number }
       xAxis: { data: string[] }
       yAxis: { min: number; max: number }
-      series: Array<{ name: string; data: Array<{ value: number[]; displayValue: string }> }>
+      series: Array<{ name: string; type: string; data: Array<{ value: number[]; displayValue: string }> }>
     }
     const barOption = getChartPlugin('bar').buildOption(data, { ...base('bar'), xField: 'factor', yField: 'change', yFields: ['change'], showValues: true }) as { grid: { left: number } }
     expect(option.grid.left).toBeGreaterThan(0)
     expect(barOption.grid.left).toBeGreaterThan(0)
     expect(option.xAxis.data).toHaveLength(4)
-    expect(option.series[1].name).toBe('change')
-    expect(option.series[1].data.map((item) => item.value)).toEqual([[0, 0, 100], [1, 100, 70], [2, 70, 90], [3, 0, 90]])
-    expect(option.series[1].data.map((item) => item.displayValue)).toEqual(['100', '-30', '20', '90'])
+    expect(option.series[0]).toMatchObject({ name: 'change', type: 'custom' })
+    expect(option.series[0].data.map((item) => item.displayValue)).toEqual(['100', '-30', '20', '90'])
     expect(waterfallElementColor(data, { ...base('waterfall'), xField: 'factor', yField: 'change', yFields: ['change'] }, 'change\u001fstring:Выручка')).toBe('#36a476')
     expect(waterfallElementColor(data, { ...base('waterfall'), xField: 'factor', yField: 'change', yFields: ['change'] }, 'change\u001fstring:Расходы')).toBe('#db5a5a')
     expect(waterfallElementColor(data, { ...base('waterfall'), xField: 'factor', yField: 'change', yFields: ['change'] }, 'change\u001fstring:Итого')).toBe('#6956e8')
@@ -1029,24 +1028,21 @@ describe('individual chart element styles', () => {
     const config = { ...base('butterfly'), xField: 'group', yField: 'left', yFields: ['left', 'right'], showValues: true }
     const plugin = getChartPlugin('butterfly')
     const option = plugin.buildOption(butterflyTable, config) as {
-      xAxis: { min: number; max: number; axisLabel: { formatter(value: number): string } }
-      yAxis: { axisLine: { onZero: boolean }; axisLabel: { show: boolean } }
-      series: Array<{ name: string; type: string; stack?: string; label: { position: string; formatter(params: { value: number }): string }; data: Array<{ value: number; displayValue: string }> }>
+      xAxis: Array<{ min: number; max: number; axisLabel: { formatter(value: number): string } }>
+      yAxis: Array<{ axisLabel: { show: boolean } }>
+      series: Array<{ name: string; type: string; data: Array<{ value: number[]; displayValue: string }> }>
     }
-    const bars = option.series.filter((series) => series.type === 'bar')
+    const bars = option.series.filter((series) => series.type === 'custom')
     expect(plugin.validate(butterflyTable, config).ok).toBe(true)
     expect(plugin.validate(butterflyTable, { ...config, yFields: ['left'] }).ok).toBe(false)
-    expect(bars.map((series) => series.stack)).toEqual(['total', 'total'])
-    expect(bars[0].data.map((point) => point.value)).toEqual([20, 45])
-    expect(bars[1].data.map((point) => point.value)).toEqual([30, 36])
+    expect(bars.map((series) => series.name)).toEqual(['left', 'right'])
+    expect(bars[0].data.map((point) => point.value[0])).toEqual([20, 45])
+    expect(bars[1].data.map((point) => point.value[0])).toEqual([30, 36])
     expect(bars[0].data.map((point) => point.displayValue)).toEqual(['20', '45'])
-    expect(bars[0].label.position).toBe('left')
-    expect(bars[1].label.position).toBe('right')
-    expect(bars[0].label.formatter({ value: -20 })).toBe('20')
-    expect(option.xAxis.min).toBe(-option.xAxis.max)
-    expect(option.xAxis.axisLabel.formatter(-20)).toBe('20')
-    expect(option.yAxis.axisLine.onZero).toBe(true)
-    expect(option.yAxis.axisLabel.show).toBe(false)
+    expect(option.xAxis).toHaveLength(2)
+    expect(option.xAxis[0].max).toBe(option.xAxis[1].max)
+    expect(option.xAxis[0].axisLabel.formatter(-20)).toBe('20')
+    expect(option.yAxis.every((axis) => axis.axisLabel.show === false)).toBe(true)
   })
 
   it('stacks multiple Butterfly measures independently and can move categories outside the centre', () => {
@@ -1067,17 +1063,15 @@ describe('individual chart element styles', () => {
     const option = plugin.buildOption(butterflyTable, config) as {
       xAxis: { min: number; max: number }
       yAxis: { position: string; axisLine: { onZero: boolean }; axisLabel: { show: boolean } }
-      series: Array<{ name: string; type: string; stack?: string; data: Array<{ value: number }> }>
+      series: Array<{ name: string; type: string; data: Array<{ value: number[] }> }>
     }
-    const bars = option.series.filter((series) => series.type === 'bar')
+    const bars = option.series.filter((series) => series.type === 'custom')
     expect(plugin.validate(butterflyTable, config).ok).toBe(true)
     expect(bars.map((series) => series.name)).toEqual(['leftA', 'leftB', 'rightA', 'rightB'])
-    expect(bars.map((series) => series.data[0].value)).toEqual([20, 35, 30, 50])
-    expect(bars.every((series) => series.stack === 'total')).toBe(true)
+    expect(bars.map((series) => series.data[0].value[0])).toEqual([20, 55, 30, 80])
     expect(option.xAxis.max).toBeGreaterThanOrEqual(80)
     expect(option.xAxis.min).toBe(-option.xAxis.max)
     expect(option.yAxis.position).toBe('right')
-    expect(option.yAxis.axisLine.onZero).toBe(false)
     expect(option.yAxis.axisLabel.show).toBe(true)
   })
 
