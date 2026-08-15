@@ -99,6 +99,12 @@ test('native Butterfly semantics stay visually stable', async ({ page }) => {
   await expect(canvas).toHaveScreenshot('butterfly-center.png')
 
   await openDesign(page)
+  await openSettings(page, 'Подписи значений')
+  await updateChart(page, canvas, () => setCheckbox(page.getByRole('checkbox', { name: 'Показывать подписи значений' }), true))
+  await updateChart(page, canvas, () => page.getByLabel('Положение подписей').selectOption('bottom'))
+  await expect(canvas).toHaveScreenshot('butterfly-bottom-labels.png')
+  await updateChart(page, canvas, () => setCheckbox(page.getByRole('checkbox', { name: 'Показывать подписи значений' }), false))
+
   await openSettings(page, 'Оси, шкалы и подписи')
   await updateChart(page, canvas, () => page.getByLabel('Положение категорий').selectOption('left'))
   await expect(canvas).toHaveScreenshot('butterfly-categories-left.png')

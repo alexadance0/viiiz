@@ -1,6 +1,7 @@
 import { measureTextWidth } from '../../../core/textMetrics'
 import type { ElementId } from '../../../entities/chart/model/ChartElement'
 import type { NativeWaterfallChartScene, ResolvedNativeChartScene } from '../../../entities/chart/model/ChartScene'
+import type { LayoutReservation } from '../../chart-layout/reservations'
 import { resolveNativeCartesianScene } from '../bar/layout'
 import { waterfallLabelPlacement } from './transform'
 
@@ -8,8 +9,19 @@ export interface ResolvedWaterfallMarkGeometry { rect: { x: number; y: number; w
 export type ResolvedWaterfallScene = ResolvedNativeChartScene & { plot: NativeWaterfallChartScene['plot']; waterfallGeometry: { marks: Record<ElementId, ResolvedWaterfallMarkGeometry>; connectors: Record<string, { x1: number; y1: number; x2: number; y2: number }> } }
 
 export function resolveNativeWaterfallScene(source: NativeWaterfallChartScene): ResolvedWaterfallScene {
-  const fake = { ...source, plot: { kind: 'bar' as const, categoryPlacement: 'band' as const, orientation: 'vertical' as const, stacking: 'none' as const, categories: source.plot.categories, categoryAxis: source.plot.categoryAxis, valueAxis: source.plot.valueAxis, valueDomain: source.plot.valueDomain, barWidth: source.plot.barWidth, seriesGap: 0, series: [{ id: source.plot.marks[0]?.seriesId ?? 'waterfall', name: '', color: '', visible: true, marks: source.plot.marks }] } }
-  const base = resolveNativeCartesianScene(fake)
+  const labelRails = new Map<'top' | 'bottom', number>()
+  source.plot.marks.forEach((mark) => {
+    if (!mark.label.visible) return
+    const requested = mark.total && mark.label.position === 'bottom' ? 'top' : mark.total && mark.label.position === 'inside-bottom' ? 'inside-top' : mark.label.position ?? 'auto'
+    if (requested.startsWith('inside-')) return
+    const outward = requested !== 'bottom', increasing = mark.end >= mark.start
+    const side = outward === increasing ? 'top' : 'bottom'
+    const height = Math.round(mark.label.style.size * mark.label.style.lineHeight / 100) * Math.max(1, mark.label.text.split('\n').length) + 8
+    labelRails.set(side, Math.max(labelRails.get(side) ?? 0, height))
+  })
+  const reservations: LayoutReservation[] = [...labelRails].map(([side, size]) => ({ id: `waterfall:value-labels:${side}`, side, size, gap: 0, mode: 'outside', priority: 60 }))
+  const fake = { ...source, compatibilityConfig: { ...source.compatibilityConfig, barValueLabelAbsorption: false }, plot: { kind: 'bar' as const, categoryPlacement: 'band' as const, orientation: 'vertical' as const, stacking: 'none' as const, categories: source.plot.categories, categoryAxis: source.plot.categoryAxis, valueAxis: source.plot.valueAxis, valueDomain: source.plot.valueDomain, barWidth: source.plot.barWidth, seriesGap: 0, series: [{ id: source.plot.marks[0]?.seriesId ?? 'waterfall', name: '', color: '', visible: true, marks: source.plot.marks }] } }
+  const base = resolveNativeCartesianScene(fake, reservations)
   const plot = base.geometry.plot, count = Math.max(1, source.plot.marks.length), band = plot.width / count
   const project = (value: number) => plot.y + plot.height * (source.plot.valueDomain.max - value) / Math.max(1e-9, source.plot.valueDomain.max - source.plot.valueDomain.min)
   const marks: ResolvedWaterfallScene['waterfallGeometry']['marks'] = {}

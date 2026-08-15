@@ -26,6 +26,18 @@ describe('native Waterfall compiler and layout', () => {
     expect(Object.keys(resolved.waterfallGeometry.connectors)).toHaveLength(3)
   })
 
+  it.each([
+    ['auto', 'top'],
+    ['bottom', 'bottom'],
+  ] as const)('reserves the native %s rail and keeps an external extrema label inside content', (valueLabelPosition, side) => {
+    const resolved = resolveNativeWaterfallScene(compileNativeWaterfallScene(table, config({ valueLabelPosition, barValueLabelAbsorption: false })))
+    expect(resolved.geometry.reservations[`waterfall:value-labels:${side}`]).toBeTruthy()
+    const labels = Object.values(resolved.waterfallGeometry.marks).flatMap((mark) => mark.label && !mark.label.inside ? [mark.label] : [])
+    const edges = labels.map((label) => ({ top: label.verticalAlign === 'top' ? label.y : label.verticalAlign === 'bottom' ? label.y - label.height : label.y - label.height / 2, bottom: label.verticalAlign === 'bottom' ? label.y : label.verticalAlign === 'top' ? label.y + label.height : label.y + label.height / 2 }))
+    expect(Math.min(...edges.map((edge) => edge.top))).toBeGreaterThanOrEqual(resolved.geometry.content.y)
+    expect(Math.max(...edges.map((edge) => edge.bottom))).toBeLessThanOrEqual(resolved.geometry.content.y + resolved.geometry.content.height)
+  })
+
   it('keeps source-family document semantics and honors element color and label-position overrides', () => {
     const initial = compileNativeWaterfallScene(table, config())
     const sourceKey = initial.plot.marks[1].legacyKey, totalKey = initial.plot.marks.at(-1)!.legacyKey

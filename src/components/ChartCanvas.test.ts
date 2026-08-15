@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as echarts from 'echarts'
-import { applySeriesVisualState, barVerticalGridGraphics, directLegendGraphics, fitTreemapLabelBoxes, heatmapPlotBounds, heatmapScaleSideOffset, materializeTreemapHyphens, outlineSelectedTreemapGroup, positionHeatmapScaleGraphics, suppressBuiltInDirectLabels, wrapTreemapLabelText } from './ChartCanvas'
+import { applySeriesVisualState, barVerticalGridGraphics, directLegendGraphics, fitTreemapLabelBoxes, heatmapPlotBounds, heatmapScaleSideOffset, materializeTreemapHyphens, outlineSelectedTreemapGroup, positionHeatmapScaleGraphics, positionYAxisTitleGraphic, suppressBuiltInDirectLabels, wrapTreemapLabelText } from './ChartCanvas'
 import { customFontCss } from '../features/chart-export/chartExport'
 import { decorationGraphics } from './chartDecorations'
 import { getChartPlugin } from '../core/chartRegistry'
@@ -16,6 +16,15 @@ const config: ChartConfig = {
 const table: DataTable = { name: 'line', columns: ['year', 'a', 'b', 'c'], rows: [{ year: 2022, a: 10, b: 9.8, c: 9.6 }, { year: 2023, a: 10, b: 9.9, c: 9.8 }] }
 
 describe('heatmap title layout', () => {
+  it.each([
+    [{ left: 24 }, 'left'],
+    [{ right: 24 }, 'right'],
+  ] as const)('keeps a native category-axis title on its resolved %s side', (side, key) => {
+    const positioned = positionYAxisTitleGraphic({ id: 'chart-y-axis-title', ...side, top: 'middle' }, 700, 250, true)
+    expect(positioned).toMatchObject({ [key]: 24, y: 250 })
+    expect(positioned.x).toBeUndefined()
+  })
+
   it('reserves the scale width on the same side as the Y title', () => {
     expect(heatmapScaleSideOffset({ ...config, kind: 'heatmap', yAxisPosition: 'left', heatmapScalePosition: 'left', heatmapShowScale: true })).toBe(80)
     expect(heatmapScaleSideOffset({ ...config, kind: 'heatmap', yAxisPosition: 'right', heatmapScalePosition: 'right', heatmapShowScale: true })).toBe(80)

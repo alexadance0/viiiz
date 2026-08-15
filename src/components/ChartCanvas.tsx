@@ -48,6 +48,10 @@ echarts.use([
 
 const isHorizontalBar = (config: ChartConfig) => usesHorizontalAxes(config)
 
+export const positionYAxisTitleGraphic = <T extends object>(graphic: T, x: number, y: number, native: boolean): T & { left?: unknown; right?: unknown; top?: unknown; x?: number; y?: number } => native
+  ? { ...graphic, top: undefined, y }
+  : { ...graphic, left: undefined, right: undefined, top: undefined, x, y }
+
 export interface ChartCanvasHandle {
   exportSvg(options?: ChartExportOptions): Promise<void>
   exportPng(options?: ChartExportOptions): Promise<void>
@@ -1213,7 +1217,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const chartLabels = existing.map((graphic) => {
         if (!graphic || typeof graphic !== 'object') return graphic
         const item = graphic as { id?: string }
-        if (item.id === 'chart-y-axis-title') { const section = isHorizontalBar(config) ? 'x-axis-title' : 'y-axis-title'; return { ...item, left: undefined, right: undefined, top: undefined, x: yTitleX, y: plotMiddleY, cursor: 'pointer', style: { ...(item as { style?: object }).style, ...(selectedSettingsSection === section ? selectionStyle : {}) }, onclick: () => onSettingsFocus?.(section) } }
+        if (item.id === 'chart-y-axis-title') { const section = isHorizontalBar(config) ? 'x-axis-title' : 'y-axis-title'; return { ...positionYAxisTitleGraphic(item, yTitleX, plotMiddleY, plugin.compilerMode === 'native'), cursor: 'pointer', style: { ...(item as { style?: object }).style, ...(selectedSettingsSection === section ? selectionStyle : {}) }, onclick: () => onSettingsFocus?.(section) } }
         if (item.id === 'chart-note') return { ...item, left: undefined, right: undefined, x: textAnchor(config.noteText.align), bottom: visibleSource ? marginBottom + sourceHeight + (config.noteSourceGap ?? RHYTHM.noteSource) : marginBottom, cursor: 'pointer', style: { ...(item as { style?: object }).style, text: noteRich?.text ?? wrappedNote.text, width: availableWidth, align: config.noteText.align, textAlign: config.noteText.align, overflow: undefined, ...(noteRich ?? {}), opacity: config.noteHtml || selectedSettingsSection === 'note' ? 0 : 1, ...(selectedSettingsSection === 'note' ? selectionStyle : {}) }, onclick: () => onSettingsFocus?.('note') }
         if (item.id === 'chart-source') return { ...item, left: undefined, right: undefined, x: textAnchor(config.sourceText.align), bottom: marginBottom, cursor: 'pointer', style: { ...(item as { style?: object }).style, text: sourceRich?.text ?? wrappedSource.text, width: availableWidth, align: config.sourceText.align, textAlign: config.sourceText.align, overflow: undefined, ...(sourceRich ?? {}), opacity: config.sourceHtml || selectedSettingsSection === 'source' ? 0 : 1, ...(selectedSettingsSection === 'source' ? selectionStyle : {}) }, onclick: () => onSettingsFocus?.('source') }
         return graphic
@@ -1229,7 +1233,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const cleanLabels = [...positionHeatmapScaleGraphics(Array.isArray(cleanOption.graphic) ? cleanOption.graphic : [], config, grid ?? {}, config.canvasWidth ?? 1000, canvasHeight, heatmapAxisReserve), makeXAxisTitle(true)].filter(Boolean).map((graphic) => {
         if (!graphic || typeof graphic !== 'object') return graphic
         const item = graphic as { id?: string; style?: object }
-        if (item.id === 'chart-y-axis-title') return { ...item, left: undefined, right: undefined, top: undefined, x: yTitleX, y: plotMiddleY }
+        if (item.id === 'chart-y-axis-title') return positionYAxisTitleGraphic(item, yTitleX, plotMiddleY, plugin.compilerMode === 'native')
         if (item.id === 'chart-note') return { ...item, left: undefined, right: undefined, x: textAnchor(config.noteText.align), bottom: visibleSource ? marginBottom + sourceHeight + (config.noteSourceGap ?? RHYTHM.noteSource) : marginBottom, style: { ...item.style, text: noteRich?.text ?? wrappedNote.text, width: availableWidth, align: config.noteText.align, textAlign: config.noteText.align, overflow: undefined, ...(noteRich ?? {}), opacity: config.noteHtml ? 0 : 1 } }
         if (item.id === 'chart-source') return { ...item, left: undefined, right: undefined, x: textAnchor(config.sourceText.align), bottom: marginBottom, style: { ...item.style, text: sourceRich?.text ?? wrappedSource.text, width: availableWidth, align: config.sourceText.align, textAlign: config.sourceText.align, overflow: undefined, ...(sourceRich ?? {}), opacity: config.sourceHtml ? 0 : 1 } }
         return item
@@ -1291,7 +1295,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           if (!graphic || typeof graphic !== 'object') return graphic
           const item = graphic as { id?: string; style?: Record<string, unknown>; children?: Array<{ type?: string; shape?: { width?: number; height?: number } }> }
           if (item.id === 'chart-x-axis-title') return { ...item, x: (exactBounds.left + exactBounds.right) / 2, y: config.xAxisPosition === 'bottom' ? exactBounds.bottom + physicalXAxisLabelOffset + physicalXAxisTitleGap + xAxisTitleHeight / 2 : exactBounds.top - physicalXAxisLabelOffset - physicalXAxisTitleGap - xAxisTitleHeight / 2 }
-          if (item.id === 'chart-y-axis-title') return { ...item, top: undefined, y: exactMiddleY }
+          if (item.id === 'chart-y-axis-title') return positionYAxisTitleGraphic(item, yTitleX, exactMiddleY, plugin.compilerMode === 'native')
           if (item.id === 'bubble-size-legend') {
             const mask = item.children?.find((child) => child.type === 'rect')?.shape
             const width = Number(mask?.width ?? 160), height = Number(mask?.height ?? 90), pad = 12

@@ -53,9 +53,9 @@ describe('native Butterfly compiler and layout', () => {
     const left = resolved.plot.series[0].marks[0], right = resolved.plot.series[1].marks[0]
     expect(resolved.butterflyGeometry.labels[left.id]).toMatchObject({ align: 'center', inside: true })
     expect(resolved.butterflyGeometry.labels[right.id]).toMatchObject({ align: 'center', inside: true })
-    const option = renderButterflyScene(resolved) as { series: Array<{ renderItem(params: { dataIndex: number }): { children: Array<{ style: { fill: string } }> } }>; nativeSelectionHits: Array<{ info: { selectionTarget?: string; axis?: string; elementKey: string } }>; nativeCategoryLayouts: Array<{ category: string; width: number }> }
-    expect(option.series[0].renderItem({ dataIndex: 0 }).children[1].style.fill).toBe('#202027')
-    expect(option.series[1].renderItem({ dataIndex: 0 }).children[1].style.fill).toBe('#fff')
+    const option = renderButterflyScene(resolved) as { graphic: Array<{ id?: string; style?: { fill?: string } }>; nativeSelectionHits: Array<{ info: { selectionTarget?: string; axis?: string; elementKey: string } }>; nativeCategoryLayouts: Array<{ category: string; width: number }> }
+    expect(option.graphic.find((item) => item.id === `value-label:${left.id}`)?.style?.fill).toBe('#202027')
+    expect(option.graphic.find((item) => item.id === `value-label:${right.id}`)?.style?.fill).toBe('#fff')
     expect(option.nativeSelectionHits.some((hit) => hit.info.selectionTarget === 'category-label' && hit.info.axis === 'y' && hit.info.elementKey.startsWith('category-label:y:'))).toBe(true)
     expect(option.nativeCategoryLayouts.every((layout) => layout.width > 0)).toBe(true)
   })
@@ -79,6 +79,27 @@ describe('native Butterfly compiler and layout', () => {
       expect(right.x).toBeGreaterThanOrEqual(rightRect.x)
       expect(right.x).toBeLessThanOrEqual(rightRect.x + rightRect.width)
     }
+  })
+
+  it('renders bottom labels from both halves outside clipped mark series', () => {
+    const resolved = resolveNativeButterflyScene(compileNativeButterflyScene(table, config({ showValues: true, valueLabelPosition: 'bottom', butterflyLeftFields: ['leftA'], butterflyRightFields: ['rightA'], yFields: ['leftA', 'rightA'] })))
+    const option = renderButterflyScene(resolved) as { series: Array<{ clip?: boolean; renderItem(params: { dataIndex: number }): { type: string } }>; graphic: Array<{ id?: string; style?: { x?: number } }> }
+    const left = resolved.plot.series[0].marks[0], right = resolved.plot.series[1].marks[0]
+    const leftLabel = option.graphic.find((item) => item.id === `value-label:${left.id}`)!, rightLabel = option.graphic.find((item) => item.id === `value-label:${right.id}`)!
+    const category = resolved.butterflyGeometry.categories[0]
+    expect(option.series.every((series) => series.clip === true && series.renderItem({ dataIndex: 0 }).type === 'rect')).toBe(true)
+    expect(leftLabel.style?.x).toBeGreaterThan(resolved.butterflyGeometry.marks[left.id].x + resolved.butterflyGeometry.marks[left.id].width)
+    expect(rightLabel.style?.x).toBeLessThan(resolved.butterflyGeometry.marks[right.id].x)
+    expect(leftLabel.style!.x! + resolved.butterflyGeometry.labels[left.id].width).toBeLessThan(category.x + category.width / 2 - 4)
+    expect(rightLabel.style!.x! - resolved.butterflyGeometry.labels[right.id].width).toBeGreaterThan(category.x + category.width / 2 + 4)
+  })
+
+  it.each(['left', 'right'] as const)('resolves the category-axis title on the semantic %s side', (placement) => {
+    const resolved = resolveNativeButterflyScene(compileNativeButterflyScene(table, config({ butterflyCategoryPosition: placement, showXAxisTitle: true, xAxisTitle: 'Categories', yAxisPosition: placement === 'left' ? 'right' : 'left' })))
+    const option = renderButterflyScene(resolved) as { graphic: Array<{ id?: string; left?: number; right?: number }> }
+    const title = option.graphic.find((item) => item.id === 'chart-y-axis-title')!
+    expect(title[placement]).toBeTypeOf('number')
+    expect(title[placement === 'left' ? 'right' : 'left']).toBeUndefined()
   })
 
   it('wires the throwing legacy guard outside the generic cartesian factory', () => {
