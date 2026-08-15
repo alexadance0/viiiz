@@ -92,3 +92,9 @@ Phase 9B started from `ccd66becf9b7fd293081055675d5295ba1bff026`; implementation
 Boxplot, Violin, Raincloud, and Ridgeline extend `plot.kind = 'distribution'` with discriminated box and density layers. Shared preparation owns stable source groups/observations for all eleven kinds. Pure transforms own peak-normalized shape density, normalized frequency KDE, and Histogram bins; layout owns every subgroup slot, side, polygon, bin rectangle, KDE curve, summary primitive, raincloud offset, ridge overlap, and continuous frequency projection.
 
 The renderer remains `DataTable`/statistics/KDE/binning-free, source observations remain editable independently of visibility, and derived shapes never enter value-label selections. All Distribution kinds are explicitly native, their legacy entry point throws, and the final legacy Distribution runtime branch has been removed.
+
+## Wave 1 checkpoint — deterministic fonts and Distribution frequency
+
+Wave 1 started from `457e501d21403f7a30e81d18894c042b59d6b951`. Font determinism was implemented in `237d7bf465f151e4eaa1ea06a4e64f9d4e52205c`, Histogram/KDE in `4b3f45eae17860ef13836b0ee74eccc9a1edac6b`, and both parallel tracks were integrated in `97a0d14432a65dc88a66b262d5a656d87b1a52d1`.
+
+Critical DM Sans, Manrope, and Onest faces now come from repository-local WOFF2 files and share one readiness boundary across preview, SVG, and PNG. The previous Google-hosted files and the pinned local files have slightly different glyph metrics; therefore the 15 affected Smoothing, Interval, and dense-Lollipop baselines were regenerated once after a three-repeat run reproduced identical pixel diffs every time. No screenshot tolerance changed.

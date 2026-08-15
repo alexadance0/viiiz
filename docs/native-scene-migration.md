@@ -91,6 +91,12 @@ Phase 9B started from `ccd66becf9b7fd293081055675d5295ba1bff026`; implementation
 
 Box summary, density, Histogram, KDE, and frequency-summary layers have stable IDs. Layout resolves grouped boxes, full/half/split violins, line/box summaries, one-sided Raincloud composition, hollow point rows, orientation-specific Ridgeline overlap/domain extension, Histogram rectangles, and KDE curves. The ECharts adapter consumes resolved geometry without table, statistics, KDE, binning, subgroup, or side decisions. Source observations remain editable through semantic visitors even when their marks are hidden; derived shapes remain non-editable.
 
+## Wave 1 deterministic font boundary
+
+Wave 1 started from `457e501d21403f7a30e81d18894c042b59d6b951`. Font determinism completed in `237d7bf465f151e4eaa1ea06a4e64f9d4e52205c`, native Histogram/KDE completed in `4b3f45eae17860ef13836b0ee74eccc9a1edac6b`, and integration completed in `97a0d14432a65dc88a66b262d5a656d87b1a52d1`.
+
+Repository-local DM Sans, Manrope, and Onest faces are loaded before semantic compilation and text measurement. Preview and export await the same catalog and exports embed the same local faces. Fifteen existing snapshots were refreshed because the former Google-hosted files and pinned local assets have reproducibly different metrics; repeat3 produced the same diffs in all nine focused runs, and tolerance remains unchanged.
+
 ## Phase 7.1 render lifecycle
 
 `ChartCanvas` now exposes a monotonic preview lifecycle (`data-render-status`, settled revision, chart kind, and semantic plot kind). A revision settles only after the display option, compatibility graphics, font readiness, logical resize, ZRender flush, and two browser frames. Stale callbacks, render errors, and temporary export options cannot settle a newer or non-preview frame.
