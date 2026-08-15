@@ -16,7 +16,7 @@ export function resolveNativeWaterfallScene(source: NativeWaterfallChartScene): 
     if (requested.startsWith('inside-')) return
     const outward = requested !== 'bottom', increasing = mark.end >= mark.start
     const side = outward === increasing ? 'top' : 'bottom'
-    const height = Math.round(mark.label.style.size * mark.label.style.lineHeight / 100) * Math.max(1, mark.label.text.split('\n').length) + 8
+    const height = Math.round(mark.label.style.size * mark.label.style.lineHeight / 100) * Math.max(1, mark.label.text.split('\n').length) + Math.max(8, (source.compatibilityConfig.waterfallLabelGap ?? 6) + 2)
     labelRails.set(side, Math.max(labelRails.get(side) ?? 0, height))
   })
   const reservations: LayoutReservation[] = [...labelRails].map(([side, size]) => ({ id: `waterfall:value-labels:${side}`, side, size, gap: 0, mode: 'outside', priority: 60 }))

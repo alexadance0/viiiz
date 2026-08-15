@@ -38,6 +38,18 @@ describe('native Waterfall compiler and layout', () => {
     expect(Math.max(...edges.map((edge) => edge.bottom))).toBeLessThanOrEqual(resolved.geometry.content.y + resolved.geometry.content.height)
   })
 
+  it('includes the maximum configured gap in source and total extrema rails', () => {
+    const extreme: DataTable = { name: 'extreme', columns: ['factor', 'change'], rows: [{ factor: 'Only', change: 100 }] }
+    const resolved = resolveNativeWaterfallScene(compileNativeWaterfallScene(extreme, config({ valueLabelPosition: 'bottom', waterfallLabelGap: 40, yAxisMin: 0, yAxisMax: 100, barValueLabelAbsorption: false })))
+    const topRail = resolved.geometry.reservations['waterfall:value-labels:top'], bottomRail = resolved.geometry.reservations['waterfall:value-labels:bottom']
+    expect(topRail.height).toBeGreaterThanOrEqual(40)
+    expect(bottomRail.height).toBeGreaterThanOrEqual(40)
+    const labels = Object.values(resolved.waterfallGeometry.marks).flatMap((mark) => mark.label && !mark.label.inside ? [mark.label] : [])
+    const edges = labels.map((label) => ({ top: label.verticalAlign === 'top' ? label.y : label.y - label.height, bottom: label.verticalAlign === 'bottom' ? label.y : label.y + label.height }))
+    expect(Math.min(...edges.map((edge) => edge.top))).toBeGreaterThanOrEqual(resolved.geometry.content.y)
+    expect(Math.max(...edges.map((edge) => edge.bottom))).toBeLessThanOrEqual(resolved.geometry.content.y + resolved.geometry.content.height)
+  })
+
   it('keeps source-family document semantics and honors element color and label-position overrides', () => {
     const initial = compileNativeWaterfallScene(table, config())
     const sourceKey = initial.plot.marks[1].legacyKey, totalKey = initial.plot.marks.at(-1)!.legacyKey
