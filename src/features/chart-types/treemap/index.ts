@@ -1,1 +1,1 @@
-export { compileNativeTreemapScene, legacyTreemapBuilderGuard, validateNativeTreemapMapping } from './compiler'
+export { compileNativeTreemapScene, validateNativeTreemapMapping } from './compiler'

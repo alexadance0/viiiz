@@ -76,7 +76,7 @@ export function renderNativeSlopeScene(scene: ResolvedSlopeScene): Record<string
       }
     }),
   }))
-  const hits = scene.plot.series.map((item) => ({ name: `__hit__:${item.name}`, type: 'line', triggerEvent: true, silent: false, symbolSize: Math.max(14, item.marker.size), lineStyle: { color: 'rgba(0,0,0,0)', width: 14, opacity: 0 }, itemStyle: { opacity: 0 }, tooltip: { show: false }, z: 100, data: item.points.map((point) => ({ value: point.value, name: scene.plot.positions[point.categoryIndex].coordinate, elementId: point.id, datumId: point.datumId, seriesId: point.seriesId, elementKey: point.legacyKey, sourceSeriesName: item.name, displayValue: point.displayValue, displayCategory: point.displayCategory })) }))
+  const hits = scene.plot.series.map((item) => ({ name: `__hit__:${item.name}`, interactionLayer: 'hit', type: 'line', triggerEvent: true, silent: false, symbolSize: Math.max(14, item.marker.size), lineStyle: { color: 'rgba(0,0,0,0)', width: 14, opacity: 0 }, itemStyle: { opacity: 0 }, tooltip: { show: false }, z: 100, data: item.points.map((point) => ({ value: point.value, name: scene.plot.positions[point.categoryIndex].coordinate, elementId: point.id, datumId: point.datumId, seriesId: point.seriesId, elementKey: point.legacyKey, sourceSeriesName: item.name, displayValue: point.displayValue, displayCategory: point.displayCategory })) }))
   const category = scene.plot.categoryAxis, value = scene.plot.valueAxis
   const categorySide = category.placement.kind === 'side' ? category.placement.side : 'bottom'
   const valueSide = value.placement.kind === 'side' ? value.placement.side : 'left'

@@ -15,7 +15,7 @@ describe('native ECharts smoothing adapter', () => {
     plugin.buildOption = () => { throw new Error('legacy builder reached') }
     try {
       const source = config(kind), scene = plugin.compile(table, source)
-      if (scene.migrationMode !== 'native' || scene.plot.kind !== 'smoothing') throw new Error('Expected native smoothing scene')
+      if (scene.plot.kind !== 'smoothing') throw new Error('Expected native smoothing scene')
       expect(renderScene(scene)).toMatchObject({ grid: expect.any(Object), xAxis: expect.any(Object), yAxis: expect.any(Object) })
       const marks = nativeMarkSelections(scene)
       expect(marks).toHaveLength(4)
@@ -26,7 +26,7 @@ describe('native ECharts smoothing adapter', () => {
 
   it('renders raw points and average lines from semantic render modes with semantic legend markers', () => {
     const scene = getChartPlugin('moving-average-scatter').compile(table, config('moving-average-scatter', { showLegend: true }))
-    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'smoothing') throw new Error('Expected native smoothing scene')
+    if (scene.plot.kind !== 'smoothing') throw new Error('Expected native smoothing scene')
     const plot = scene.plot
     const option = renderScene(scene) as { series: Array<{ id?: string; name: string; type: string; data: Array<{ value: number | null }>; itemStyle?: { opacity?: number } }>; legend: { data: Array<{ name: string; icon: string; itemStyle: { opacity: number } }> }; tooltip: { formatter: (input: unknown) => string } }
     const raw = option.series.find((series) => series.id === plot.layers[0].id)!
@@ -41,8 +41,7 @@ describe('native ECharts smoothing adapter', () => {
   it('supports native Line → smoothing → Area and native Slope → smoothing → Slope transitions', () => {
     const modes = ['line', 'moving-average-line', 'area', 'slope', 'moving-average-scatter', 'slope'] as const
     const scenes = modes.map((kind) => getChartPlugin(kind).compile(table, { ...config('moving-average-line'), kind, slopeXValues: ['number:1', 'number:4'] }))
-    expect(scenes.map((scene) => scene.migrationMode)).toEqual(modes.map(() => 'native'))
-    expect(scenes.map((scene) => scene.migrationMode === 'native' ? scene.plot.kind : '')).toEqual(['line', 'smoothing', 'area', 'slope', 'smoothing', 'slope'])
+    expect(scenes.map((scene) => scene.plot.kind)).toEqual(['line', 'smoothing', 'area', 'slope', 'smoothing', 'slope'])
   })
 
   it('keeps compiler/layout/renderer boundaries free from compatibility kind branches and legacy transform code', () => {
@@ -61,7 +60,7 @@ describe('native ECharts smoothing adapter', () => {
     const multiple: DataTable = { name: 'multiple', columns: ['period', 'a', 'b'], rows: [1, 2, 3, 4].map((period) => ({ period, a: period, b: period * 2 })) }
     const source = config('moving-average-line', { yFields: ['a', 'b'] })
     const scene = getChartPlugin(source.kind).compile(multiple, source)
-    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'smoothing') throw new Error('Expected native smoothing scene')
+    if (scene.plot.kind !== 'smoothing') throw new Error('Expected native smoothing scene')
     const option = renderScene(scene) as { series: Array<{ id?: string }> }
     expect(option.series.map((series) => series.id).filter(Boolean)).toEqual(scene.plot.layers.map((layer) => layer.id))
   })

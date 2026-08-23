@@ -176,7 +176,7 @@ export function compilePreparedPointScene(table: DataTable, config: ChartConfig,
   const plot = area
     ? { kind: 'area', categoryPlacement: 'point', stacking: stack, categories, categoryLabelPlan: planned, categoryAxis, valueAxis, valueDomain, series: series as AreaSeriesScene[] } satisfies CartesianAreaPlotScene
     : { kind: 'line', categoryPlacement: 'point', categories, categoryLabelPlan: planned, categoryAxis, valueAxis, valueDomain, series: series as LineSeriesScene[] } satisfies CartesianLinePlotScene
-  return { migrationMode: 'native', document: chartDocumentFromLegacy(table, config), compatibilityConfig: config, elements, guides, frameElements, plot }
+  return { document: chartDocumentFromLegacy(table, config), compatibilityConfig: config, elements, guides, frameElements, plot }
 }
 
 export function compileNativePointScene(table: DataTable, config: ChartConfig, kind: NativePointKind): NativeChartScene {

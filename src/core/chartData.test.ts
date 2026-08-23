@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { indexSeriesToBase, nearestPixelIndex, prepareChartData, prepareSeasonalChartData, repeatedChartCategories, segmentEndpointIndex } from './chartData'
+import { indexSeriesToBase, prepareChartData, prepareSeasonalChartData, repeatedChartCategories } from './chartData'
 import type { ChartConfig, DataTable } from './types'
 
 const table: DataTable = { name: 'sales', columns: ['month', 'country', 'sales', 'cost'], rows: [
@@ -118,28 +118,5 @@ describe('chart data preparation', () => {
     expect(gap.series[0].data[0]).toBeNull()
     expect(connect.series[0].data[0]).toBeNull()
     expect(zero.series[0].data[0]).toBe(0)
-  })
-})
-
-describe('line segment selection', () => {
-  it('selects the right endpoint from either half of a segment', () => {
-    const pixels = [100, 200, 300]
-    expect(segmentEndpointIndex(pixels, 125)).toBe(1)
-    expect(segmentEndpointIndex(pixels, 175)).toBe(1)
-    expect(segmentEndpointIndex(pixels, 225)).toBe(2)
-    expect(segmentEndpointIndex(pixels, 275)).toBe(2)
-  })
-
-  it('also works for a reversed axis and outside the plot', () => {
-    expect(segmentEndpointIndex([300, 200, 100], 250)).toBe(1)
-    expect(segmentEndpointIndex([100, 200, 300], 50)).toBe(0)
-    expect(segmentEndpointIndex([100, 200, 300], 350)).toBe(2)
-  })
-
-  it('finds the nearest point on normal and reversed axes', () => {
-    expect(nearestPixelIndex([100, 200, 300], 170)).toBe(1)
-    expect(nearestPixelIndex([100, 200, 300], 240)).toBe(1)
-    expect(nearestPixelIndex([300, 200, 100], 170)).toBe(1)
-    expect(nearestPixelIndex([300, 200, 100], 140)).toBe(2)
   })
 })

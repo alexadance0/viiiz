@@ -12,11 +12,6 @@ export interface ChartSceneBase {
   elements: ChartElement[]
 }
 
-export interface LegacyChartScene extends ChartSceneBase {
-  migrationMode: 'legacy'
-  legacyRendererPayload: Record<string, unknown>
-}
-
 export interface BarMarkScene {
   type: 'rect'
   id: ElementId
@@ -668,7 +663,6 @@ export interface TreemapPlotScene {
 export type NativePlotScene = CartesianBarPlotScene | ComparisonStemPlotScene | WaterfallPlotScene | ButterflyPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene | DistributionPlotScene | HeatmapPlotScene | TreemapPlotScene
 
 export interface NativeChartScene extends ChartSceneBase {
-  migrationMode: 'native'
   plot: NativePlotScene
   guides: GuideSpec[]
   frameElements: Array<{ id: ElementId; role: 'title' | 'subtitle' | 'note' | 'source'; text: string; style: ChartTextStyle }>
@@ -690,7 +684,7 @@ export type NativeDistributionChartScene = NativeChartScene & { plot: Distributi
 export type NativeHeatmapChartScene = NativeChartScene & { plot: HeatmapPlotScene }
 export type NativeTreemapChartScene = NativeChartScene & { plot: TreemapPlotScene }
 
-export type ChartScene = LegacyChartScene | NativeChartScene
+export type ChartScene = NativeChartScene
 
 export interface ResolvedSceneGeometry {
   canvas: Rect
@@ -758,7 +752,5 @@ export interface ResolvedSlopeChangeLabelPlacement {
   text: string
 }
 
-export type ResolvedScene =
-  | (LegacyChartScene & { geometry: ResolvedSceneGeometry })
-  | (NativeChartScene & { geometry: ResolvedSceneGeometry; resolvedReservations: ResolvedReservation[] })
+export type ResolvedScene = NativeChartScene & { geometry: ResolvedSceneGeometry; resolvedReservations: ResolvedReservation[] }
 export type ResolvedNativeChartScene = NativeChartScene & { geometry: ResolvedSceneGeometry; resolvedReservations: ResolvedReservation[] }

@@ -5,8 +5,6 @@ import type { ButterflySeriesScene, NativeButterflyChartScene } from '../../../e
 import { chartDocumentFromLegacy } from '../../../entities/chart/model/legacyChartConfigAdapter'
 import { compileNativeBarScene } from '../bar/compiler'
 
-export const legacyButterflyBuilderGuard = () => { throw new Error('Legacy Butterfly builder was removed; use the native Butterfly compiler.') }
-
 export function butterflyFields(config: ChartConfig) {
   const left = config.butterflyLeftFields?.length ? config.butterflyLeftFields : config.yFields.slice(0, 1)
   const right = config.butterflyRightFields?.length ? config.butterflyRightFields : config.yFields.slice(1, 2)

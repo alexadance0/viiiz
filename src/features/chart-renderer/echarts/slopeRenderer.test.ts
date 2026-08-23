@@ -20,7 +20,7 @@ type RenderedSlope = {
 
 const nativeSlope = (overrides: Partial<ChartConfig> = {}) => {
   const scene = getChartPlugin('slope').compile(slopeTable, slopeConfig(overrides))
-  if (scene.migrationMode !== 'native' || scene.plot.kind !== 'slope') throw new Error('Expected native Slope scene')
+  if (scene.plot.kind !== 'slope') throw new Error('Expected native Slope scene')
   return scene as NativeSlopeChartScene
 }
 
@@ -99,7 +99,6 @@ describe('native ECharts Slope adapter', () => {
     try {
       const config = slopeConfig(), scene = plugin.compile(slopeTable, config)
       expect(() => renderScene(scene)).not.toThrow()
-      if (scene.migrationMode !== 'native') throw new Error('Expected native scene')
       const marks = nativeMarkSelections(scene)
       expect(marks).toHaveLength(6)
       expect(chartElementColor(slopeTable, config, marks[0].legacyKey)).toBeTruthy()
@@ -116,20 +115,18 @@ describe('native ECharts Slope adapter', () => {
       { period: new Date(2025, 0, 1), actual: 10 }, { period: new Date(2025, 1, 1), actual: 20 },
     ] }
     const source = slopeConfig({ kind, xField: 'period', yField: 'actual', yFields: ['actual'], showLegend: true, showDirectLabels: true, slopeShowChange: true, slopeColorByChange: true, ...extra } as Partial<ChartConfig>)
-    const before = getChartPlugin(kind).compile(table, source)
     const middle = getChartPlugin('slope').compile(table, { ...source, kind: 'slope' })
     const after = getChartPlugin(kind).compile(table, source)
-    expect([before.migrationMode, middle.migrationMode, after.migrationMode]).toEqual(['native', 'native', 'native'])
-    expect(middle.migrationMode === 'native' && middle.plot.kind).toBe('slope')
-    expect(middle.migrationMode === 'native' && middle.plot.kind === 'slope' && middle.plot.series[0].change).toMatchObject({ showLabel: true, colorByDirection: true })
-    expect(after.migrationMode === 'native' && after.plot.kind).not.toBe('slope')
+    expect(middle.plot.kind).toBe('slope')
+    expect(middle.plot.kind === 'slope' && middle.plot.series[0].change).toMatchObject({ showLabel: true, colorByDirection: true })
+    expect(after.plot.kind).not.toBe('slope')
     expect(source).toMatchObject({ showLegend: true, showDirectLabels: true })
   })
 
   it.each(['scatter'] as const)('supports slope → native %s → slope', (kind) => {
     const legacyConfig = slopeConfig({ kind, rangeLowerField: 'actual', rangeUpperField: 'plan' })
-    const first = nativeSlope(), legacy = getChartPlugin(kind).compile(slopeTable, legacyConfig), last = nativeSlope()
-    expect([first.migrationMode, legacy.migrationMode, last.migrationMode]).toEqual(['native', 'native', 'native'])
+    const first = nativeSlope(), relationship = getChartPlugin(kind).compile(slopeTable, legacyConfig), last = nativeSlope()
+    expect([first.plot.kind, relationship.plot.kind, last.plot.kind]).toEqual(['slope', 'xy', 'slope'])
     expect((renderScene(first) as unknown as RenderedSlope).graphic.some((item) => item.id?.startsWith('slope-'))).toBe(true)
     expect((renderScene(last) as unknown as RenderedSlope).series.some((series) => series.name === '__slope-guides__')).toBe(false)
   })

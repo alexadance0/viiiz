@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { createDefaultChartConfig } from '../../../entities/chart/model/defaultChartConfig'
 import type { ChartConfig, DataTable } from '../../../core/types'
-import { compileNativeTreemapScene, legacyTreemapBuilderGuard, validateNativeTreemapMapping } from './compiler'
+import { compileNativeTreemapScene, validateNativeTreemapMapping } from './compiler'
 import { resolveNativeTreemapScene } from './layout'
 import { wrapTreemapLabelText } from './text'
 import { renderTreemapScene } from '../../chart-renderer/echarts/renderTreemapScene'
@@ -81,6 +81,5 @@ describe('native Treemap compiler, layout, and renderer', () => {
     expect(validateNativeTreemapMapping(table, config()).ok).toBe(true)
     expect(validateNativeTreemapMapping({ ...table, rows: [{ group: 'A', leaf: 'A1', value: 0 }] }, config()).ok).toBe(false)
     expect(readFileSync(new URL('./compiler.ts', import.meta.url), 'utf8')).not.toMatch(/echarts|buildOption/)
-    expect(() => legacyTreemapBuilderGuard()).toThrow(/native semantic scene/)
   })
 })

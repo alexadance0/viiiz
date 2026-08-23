@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultChartConfig } from '../../../entities/chart/model/defaultChartConfig'
-import { nativeMarkSelections, nativePointSeries } from '../../../entities/chart/model/sceneVisitors'
+import { nativeMarkSelections } from '../../../entities/chart/model/sceneVisitors'
 import type { ChartConfig, DataTable } from '../../../core/types'
 import { compileNativeXYScene, validateNativeXYMapping } from './compiler'
 import { inferBubbleSizeField, inferScatterLabelField } from './inference'
 import { resolveNativeXYScene } from './layout'
-import { legacyRelationshipBuilderGuard } from '../../../core/chartRegistry'
 
 const config = (kind: 'scatter' | 'bubble', overrides: Partial<ChartConfig> = {}): ChartConfig => ({ ...createDefaultChartConfig(), kind, xField: 'x', yField: 'y', yFields: ['y'], aggregation: 'none', ...overrides })
 const table: DataTable = { name: 'xy', columns: ['x', 'y', 'size', 'other', 'label', 'group'], rows: [
@@ -23,7 +22,6 @@ describe('native XY compiler', () => {
     expect(points[0].legacyKey).toBe(points[1].legacyKey)
     expect(points.map((point) => point.label.text)).toEqual(['A', 'B', 'C'])
     expect(nativeMarkSelections(scene)).toHaveLength(3)
-    expect(nativePointSeries(scene)).toEqual([])
   })
 
   it('preserves string grouping, color precedence, size encoding and guide coexistence', () => {
@@ -59,6 +57,5 @@ describe('native XY compiler', () => {
     expect(inferBubbleSizeField(table, 'x', ['y'], 'size')).toBe('size')
     expect(inferBubbleSizeField(table, 'x', ['y'], 'y')).toBe('size')
     expect(validateNativeXYMapping(table, config('bubble'))).toMatchObject({ ok: false, errors: [{ field: 'scatterSizeField', message: 'Выберите числовую колонку для размера пузырька.' }] })
-    expect(legacyRelationshipBuilderGuard).toThrow('Legacy Scatter/Bubble builder was removed')
   })
 })

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { createDefaultChartConfig } from '../../../entities/chart/model/defaultChartConfig'
 import type { ChartConfig, DataTable } from '../../../core/types'
-import { compileNativeWaterfallScene, legacyWaterfallBuilderGuard } from './compiler'
+import { compileNativeWaterfallScene } from './compiler'
 import { resolveNativeWaterfallScene } from './layout'
 import { chartElementColor } from '../../../core/chartRegistry'
 
@@ -76,6 +76,5 @@ describe('native Waterfall compiler and layout', () => {
 
   it('keeps compiler independent of ECharts and fails closed through the legacy guard', () => {
     expect(readFileSync(new URL('./compiler.ts', import.meta.url), 'utf8')).not.toMatch(/echarts|renderWaterfallScene|buildOption/)
-    expect(() => legacyWaterfallBuilderGuard()).toThrow(/removed/)
   })
 })

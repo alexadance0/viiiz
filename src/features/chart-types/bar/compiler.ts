@@ -112,5 +112,5 @@ export function compileNativeBarScene(table: DataTable, sourceConfig: ChartConfi
   const frameElements = ([['title', config.title, config.titleText], ['subtitle', config.subtitle, config.subtitleText], ['note', config.note, config.noteText], ['source', config.source, config.sourceText]] as const)
     .filter(([, text], index) => Boolean(text) && (index === 0 ? config.showTitle !== false : index === 1 ? config.showSubtitle !== false : index === 2 ? config.showNote !== false : config.showSource !== false))
     .map(([role, text, style]) => ({ id: `frame:${role}`, role, text, style }))
-  return { migrationMode: 'native', document: chartDocumentFromLegacy(table, config), compatibilityConfig: config, elements, guides, frameElements, plot: { kind: 'bar', categoryPlacement: 'band', orientation, stacking: stack, categories, categoryAxis, valueAxis, valueDomain, barWidth: config.barWidth ?? 68, seriesGap: config.barSeriesGap ?? 30, series } }
+  return { document: chartDocumentFromLegacy(table, config), compatibilityConfig: config, elements, guides, frameElements, plot: { kind: 'bar', categoryPlacement: 'band', orientation, stacking: stack, categories, categoryAxis, valueAxis, valueDomain, barWidth: config.barWidth ?? 68, seriesGap: config.barSeriesGap ?? 30, series } }
 }

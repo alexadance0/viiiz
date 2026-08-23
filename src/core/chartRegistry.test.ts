@@ -6,6 +6,8 @@ import { isoWeekParts } from './timeFrequency'
 import type { ChartConfig, ChartTextStyle, DataTable } from './types'
 import { compileNativeDistributionScene } from '../features/chart-types/distribution/compiler'
 import { resolveNativeDistributionScene } from '../features/chart-types/distribution/layout'
+import { createDefaultChartConfig } from '../entities/chart/model/defaultChartConfig'
+import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 
 const style = (size: number): ChartTextStyle => ({ fontFamily: 'Arial', size, color: '#000000', weight: 400, italic: false, lineHeight: 120, align: 'left' })
 const table: DataTable = { name: 'test', columns: ['month', 'value'], rows: [{ month: 'Янв', value: 10 }, { month: 'Фев', value: 20 }] }
@@ -78,10 +80,7 @@ describe('individual chart element styles', () => {
     const config = { ...base('treemap'), xField: 'category', yField: 'value', yFields: ['value'], treemapSubcategoryField: 'subcategory', aggregation: 'sum' as const }
     const plugin = getChartPlugin('treemap')
     expect(plugin.validate(hierarchy, config).ok).toBe(true)
-    expect(plugin.compilerMode).toBe('native')
     const scene = plugin.compile(hierarchy, config)
-    expect(scene.migrationMode).toBe('native')
-    if (scene.migrationMode !== 'native') throw new Error('Expected native Treemap')
     expect(scene.plot.kind).toBe('treemap')
     expect((plugin.buildOption(hierarchy, config) as { series: Array<{ type: string }> }).series).toMatchObject([{ type: 'custom' }])
   })
@@ -1055,11 +1054,11 @@ describe('individual chart element styles', () => {
     const layeredTable: DataTable = { name: 'layers', columns: ['month', 'first', 'second'], rows: [{ month: 'Янв', first: 10, second: 12 }, { month: 'Фев', first: 20, second: 18 }] }
     const config = base('bar'); config.yFields = ['first', 'second']; config.showDirectLabels = true; config.yAxisPosition = 'right'
     config.seriesStyles = { first: { showDirectLabel: false }, second: { directLabelText: { ...style(23), color: '#6956e8', weight: 700 } } }
-    const option = getChartPlugin('bar').buildOption(layeredTable, config) as { grid: { left: number; right: number }; series: Array<{ name: string; endLabel?: unknown; data: Array<{ directLegendLabel?: boolean; label?: { rich?: { name?: { color?: string; fontSize?: number; fontWeight?: number } } } }> }> }
+    const option = getChartPlugin('bar').buildOption(layeredTable, config) as { grid: { left: number; right: number }; series: Array<{ name: string; endLabel?: unknown; data: Array<{ directLegendLabel?: boolean; label?: { color?: string; fontSize?: number; fontWeight?: number } }> }> }
     const first = option.series.find((series) => series.name === 'first')!, second = option.series.find((series) => series.name === 'second')!
     expect(first.endLabel).toBeUndefined()
     expect(first.data.some((point) => point.directLegendLabel)).toBe(false)
-    expect(second.data[1]).toMatchObject({ directLegendLabel: true, label: { rich: { name: { color: '#6956e8', fontSize: 23, fontWeight: 700 } } } })
+    expect(second.data[1]).toMatchObject({ directLegendLabel: true, label: { color: '#6956e8', fontSize: 23, fontWeight: 700 } })
     expect(option.grid.left).toBeGreaterThan(option.grid.right)
   })
 
@@ -1257,7 +1256,7 @@ describe('chart composition alignment', () => {
     const scatterTable: DataTable = { name: 'scatter', columns: ['x', 'value'], rows: [{ x: 1, value: 2 }, { x: 2, value: 4 }, { x: 3, value: 5 }, { x: 4, value: 8 }] }
     const config = base('scatter'); config.xField = 'x'; config.scatterXReference = 2.5; config.scatterYReference = 4; config.scatterQuadrants = true; config.scatterTrendline = true; config.scatterTrendBand = true
     const scene = getChartPlugin('scatter').compile(scatterTable, config)
-    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'xy') throw new Error('Expected native XY scene')
+    if (scene.plot.kind !== 'xy') throw new Error('Expected native XY scene')
     expect(scene.plot.analyticalLayers.filter((layer) => layer.kind === 'reference')).toHaveLength(2)
     expect(scene.plot.analyticalLayers.find((layer) => layer.kind === 'quadrants' && layer.regions.length === 4)).toBeTruthy()
     const trend = scene.plot.analyticalLayers.find((layer) => layer.kind === 'trend')
@@ -1271,7 +1270,7 @@ describe('chart composition alignment', () => {
     ] }
     const config = base('scatter'); config.xField = 'x'; config.scatterColorField = 'group'; config.seriesStyles = { А: { scatterTrendline: true, scatterTrendBand: true } }
     const scene = getChartPlugin('scatter').compile(scatterTable, config)
-    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'xy') throw new Error('Expected native XY scene')
+    if (scene.plot.kind !== 'xy') throw new Error('Expected native XY scene')
     const first = scene.plot.series.find((series) => series.name === 'А')!, second = scene.plot.series.find((series) => series.name === 'Б')!
     const trends = scene.plot.analyticalLayers.filter((layer) => layer.kind === 'trend')
     expect(trends.find((trend) => trend.sourceSeriesId === first.id)?.stroke.color).toBe('#6956e8')
@@ -1320,7 +1319,7 @@ describe('chart composition alignment', () => {
     const scatterTable: DataTable = { name: 'scatter', columns: ['x', 'value'], rows: [{ x: 1, value: 2 }, { x: 8, value: 7 }] }
     const config = base('scatter'); config.xField = 'x'; config.scatterXReference = 4; config.scatterYReference = 4; config.scatterQuadrants = true; config.scatterDiagonal = true; config.scatterQuadrantLabels = ['A', 'B', 'C', 'D']
     const scene = getChartPlugin('scatter').compile(scatterTable, config)
-    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'xy') throw new Error('Expected native XY scene')
+    if (scene.plot.kind !== 'xy') throw new Error('Expected native XY scene')
     expect(scene.plot.analyticalLayers.some((layer) => layer.kind === 'reference' && layer.axis === 'diagonal')).toBe(true)
     const quadrants = scene.plot.analyticalLayers.find((layer) => layer.kind === 'quadrants')
     expect(quadrants?.kind === 'quadrants' && quadrants.regions.map((region) => region.label)).toEqual(['A', 'B', 'C', 'D'])
@@ -1410,7 +1409,7 @@ describe('chart composition alignment', () => {
     const bar = getChartPlugin('bar').buildOption(table, { ...base('bar'), showVerticalGrid: true }) as { xAxis: { boundaryGap: boolean; splitLine: { show: boolean }; axisTick: { interval: number } } }
     expect(line.xAxis.boundaryGap).toBe(false)
     expect(bar.xAxis.boundaryGap).toBe(true)
-    expect(bar.xAxis.splitLine.show).toBe(false)
+    expect(bar.xAxis.splitLine.show).toBe(true)
     expect(typeof bar.xAxis.axisTick.interval).toBe('number')
   })
 
@@ -1694,6 +1693,26 @@ describe('chart composition alignment', () => {
     }
   })
 
+  it('keeps the complete registry order and compiles every chart kind natively', () => {
+    expect(chartRegistry.map((plugin) => plugin.id)).toEqual([
+      'bar', 'stacked-bar', 'normalized-stacked-bar', 'waterfall', 'horizontal-bar', 'butterfly', 'horizontal-stacked-bar', 'horizontal-normalized-stacked-bar', 'lollipop', 'horizontal-lollipop', 'dumbbell',
+      'line', 'spline', 'step-line', 'indexed-line', 'seasonal-line', 'slope', 'moving-average-line', 'moving-average-scatter', 'range-line', 'step-range-line', 'confidence-line',
+      'area', 'stacked-area', 'normalized-stacked-area', 'scatter', 'bubble', 'boxplot', 'violinplot', 'raincloud', 'histogram', 'kde-plot', 'ridgeline', 'beeswarm', 'strip-plot', 'jitter-plot', 'counts-plot', 'barcode-plot', 'heatmap', 'treemap',
+    ])
+    const first = new Date(2024, 0, 1), second = new Date(2025, 0, 1)
+    const universalTable: DataTable = { name: 'all-native', columns: ['x', 'value', 'other', 'size', 'sub'], rows: [
+      { x: first, value: 10, other: 6, size: 3, sub: 'A' },
+      { x: second, value: 14, other: 9, size: 5, sub: 'B' },
+    ] }
+    for (const plugin of chartRegistry) {
+      const config: ChartConfig = { ...createDefaultChartConfig(), kind: plugin.id, xField: 'x', yField: 'value', yFields: ['value', 'other'], aggregation: 'sum', dumbbellStartField: 'value', dumbbellEndField: 'other', rangeLowerField: 'other', rangeUpperField: 'value', intervalGroups: [{ main: 'value', lower: 'other', upper: 'size' }], scatterSizeField: 'size', butterflyLeftFields: ['value'], butterflyRightFields: ['other'], distributionGroupField: 'sub', treemapSubcategoryField: 'sub', indexBaseXValue: `date:${first.toISOString()}`, slopeXValues: [`date:${first.toISOString()}`, `date:${second.toISOString()}`] }
+      const scene = plugin.compile(universalTable, config)
+      expect(scene.plot.kind).not.toBe('legacy')
+      expect(() => renderScene(scene)).not.toThrow()
+      expect(() => plugin.buildOption(universalTable, config)).not.toThrow()
+    }
+  })
+
   it('builds slope charts for exactly two X positions', () => {
     const slopeTable: DataTable = { name: 'slope', columns: ['period', 'value'], rows: [{ period: 'Было', value: 10 }, { period: 'Стало', value: 18 }] }
     const config = { ...base('slope'), xField: 'period', yField: 'value', yFields: ['value'], showValues: false }
@@ -1788,10 +1807,8 @@ describe('chart composition alignment', () => {
     const config = { ...base('heatmap'), xField: 'month', yField: 'Север', yFields: ['Север', 'Юг'], heatmapScaleMode: 'diverging' as const, heatmapMidpoint: 0, heatmapLowColor: '#225599', heatmapMidColor: '#ffffff', heatmapHighColor: '#bb2233', heatmapCellGap: 3 }
     const plugin = getChartPlugin('heatmap')
     expect(plugin.validate(heatTable, config).ok).toBe(true)
-    expect(plugin.compilerMode).toBe('native')
     const scene = plugin.compile(heatTable, config)
-    expect(scene.migrationMode).toBe('native')
-    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'heatmap') throw new Error('Expected native heatmap')
+    if (scene.plot.kind !== 'heatmap') throw new Error('Expected native heatmap')
     expect(scene.plot.categories.map((category) => category.label)).toEqual(['Янв', 'Фев'])
     expect(scene.plot.rows.map((row) => row.name)).toEqual(['Север', 'Юг'])
     expect(scene.plot.rows.flatMap((row) => row.cells.map((cell) => cell.value))).toEqual([-10, 20, 30, -5])

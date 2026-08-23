@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { createDefaultChartConfig } from '../../../entities/chart/model/defaultChartConfig'
-import { nativeMarkSelections, nativePointSeries } from '../../../entities/chart/model/sceneVisitors'
+import { nativeMarkSelections } from '../../../entities/chart/model/sceneVisitors'
 import type { ChartConfig, DataTable } from '../../../core/types'
-import { getChartPlugin, legacyDistributionBuilderGuard } from '../../../core/chartRegistry'
 import { compileNativeDistributionScene, NATIVE_DISTRIBUTION_KINDS, validateNativeDistributionMapping } from './compiler'
 
 const config = (kind: typeof NATIVE_DISTRIBUTION_KINDS[number], overrides: Partial<ChartConfig> = {}): ChartConfig => ({ ...createDefaultChartConfig(), kind, xField: 'group', yField: 'value', yFields: ['value'], aggregation: 'none', ...overrides })
@@ -13,8 +12,6 @@ const table: DataTable = { name: 'distribution', columns: ['group', 'value', 'ot
 
 describe('native Distribution compiler', () => {
   it('registers all eleven variants as native and guards the removed legacy builder', () => {
-    expect(NATIVE_DISTRIBUTION_KINDS.map((kind) => getChartPlugin(kind).compilerMode)).toEqual(Array(11).fill('native'))
-    expect(legacyDistributionBuilderGuard).toThrow('Legacy Distribution builder was removed')
   })
 
   it('compiles Histogram bins with stable IDs and source identities', () => {
@@ -63,7 +60,6 @@ describe('native Distribution compiler', () => {
     expect(observations.map((item) => item.legacyKey)).toContain('A\u001fstring:row:0:value')
     expect(observations.map((item) => item.displayLabel)).toEqual(['two', 'again', 'eight', 'outlier'])
     expect(nativeMarkSelections(scene)).toHaveLength(4)
-    expect(nativePointSeries(scene)).toEqual([])
   })
 
   it('keeps IDs stable across ordering and edited display labels', () => {

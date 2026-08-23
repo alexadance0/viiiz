@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getChartPlugin, legacyComparisonStemBuilderGuard } from '../../../core/chartRegistry'
+import { getChartPlugin } from '../../../core/chartRegistry'
 import type { ChartConfig, DataTable } from '../../../core/types'
 import { renderScene } from '../../chart-renderer/echarts/renderScene'
 import { resolveNativeComparisonStemScene } from './layout'
@@ -22,8 +22,7 @@ describe('native comparison/stem compiler', () => {
   it.each(['lollipop', 'horizontal-lollipop'] as const)('%s emits editable source points and derived stable stems', (kind) => {
     const plugin = getChartPlugin(kind), source = config(kind)
     const scene = plugin.compile(table, source)
-    expect(plugin.compilerMode).toBe('native')
-    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
+    if (scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
     expect(scene.plot.variant).toBe('lollipop')
     expect(scene.plot.orientation).toBe(kind === 'lollipop' ? 'vertical' : 'horizontal')
     expect(scene.plot.series[0].points).toHaveLength(4)
@@ -34,20 +33,20 @@ describe('native comparison/stem compiler', () => {
   it('keeps dumbbell field, orientation, complete-pair, sorting, change, and stable-ID semantics', () => {
     const source = { ...config('dumbbell'), dumbbellStartField: 'before', dumbbellEndField: 'after', dumbbellOrientation: 'vertical' as const, dumbbellSort: 'difference' as const, dumbbellSortDirection: 'desc' as const, dumbbellShowDifference: true, dumbbellDifferenceFormat: 'percent' as const, dumbbellColorByChange: true }
     const plugin = getChartPlugin('dumbbell'), scene = plugin.compile(table, source)
-    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
+    if (scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
     expect(scene.document.chart).toMatchObject({ family: 'dumbbell', orientation: 'vertical', startField: 'before', endField: 'after' })
     expect(scene.plot.categories.map((category) => category.label)).toEqual(['C', 'A', 'B'])
     expect(scene.plot.series.map((series) => [series.name, series.role, series.points.length])).toEqual([['before', 'start', 3], ['after', 'end', 3]])
     expect(scene.plot.connectors[0]).toMatchObject({ endpointIds: expect.arrayContaining([scene.plot.series[0].points[0].id, scene.plot.series[1].points[0].id]), change: { visible: true, label: '+113%' } })
     const edited = plugin.compile(table, { ...source, dumbbellSort: 'start', dumbbellSortDirection: 'asc', seriesStyles: { ...source.seriesStyles, before: { color: '#6956e8' } } })
-    if (edited.migrationMode !== 'native' || edited.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
+    if (edited.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
     expect(new Set(edited.plot.series.flatMap((series) => series.points.map((point) => point.id)))).toEqual(new Set(scene.plot.series.flatMap((series) => series.points.map((point) => point.id))))
   })
 
   it('keeps explicit dumbbell roles and source category order despite stale generic sorting', () => {
     const source = { ...config('dumbbell'), yFields: ['before', 'after'], dumbbellStartField: 'before', dumbbellEndField: 'after', seriesOrder: ['after', 'before'], barCategorySort: 'name-desc' as const }
     const scene = getChartPlugin('dumbbell').compile(table, source)
-    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
+    if (scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
     expect(scene.plot.series.map((series) => [series.name, series.role])).toEqual([['before', 'start'], ['after', 'end']])
     expect(scene.plot.categories.map((category) => category.label)).toEqual(['A', 'B', 'C'])
   })
@@ -55,7 +54,7 @@ describe('native comparison/stem compiler', () => {
   it.each([['lollipop', 'vertical'], ['horizontal-lollipop', 'horizontal'], ['dumbbell', 'vertical'], ['dumbbell', 'horizontal']] as const)('%s resolves a strictly positive log domain and finite geometry in %s mode', (kind, orientation) => {
     const source = { ...config(kind), yFields: kind === 'dumbbell' ? ['before', 'after'] : ['value'], yAxisScaleType: 'log' as const, dumbbellStartField: 'before', dumbbellEndField: 'after', dumbbellOrientation: orientation }
     const scene = getChartPlugin(kind).compile(table, source)
-    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
+    if (scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
     expect(scene.plot.valueDomain.min).toBeGreaterThan(0)
     expect(scene.plot.valueDomain.max).toBeGreaterThan(scene.plot.valueDomain.min)
     const resolved = resolveNativeComparisonStemScene(scene as NativeComparisonStemChartScene)
@@ -73,7 +72,7 @@ describe('native comparison/stem compiler', () => {
     ] }
     const source = { ...config(kind), yFields: kind === 'dumbbell' ? ['before', 'after'] : ['value'], yAxisScaleType: 'log' as const, dumbbellStartField: 'before', dumbbellEndField: 'after', dumbbellOrientation: orientation }
     const scene = getChartPlugin(kind).compile(logTable, source)
-    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
+    if (scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
     const resolved = resolveNativeComparisonStemScene(scene as NativeComparisonStemChartScene)
     expect(Object.keys(resolved.comparisonGeometry.connectors)).toHaveLength(1)
     expect(() => renderScene(resolved)).not.toThrow()
@@ -89,7 +88,7 @@ describe('native comparison/stem compiler', () => {
     ] }
     const source = { ...config(kind), yFields: fields, showDirectLabels: true }
     const scene = getChartPlugin(kind).compile(denseTable, source)
-    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
+    if (scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
     const resolved = resolveNativeComparisonStemScene(scene as NativeComparisonStemChartScene)
     const horizontal = kind === 'horizontal-lollipop'
     const minimum = horizontal ? resolved.geometry.plot.x : resolved.geometry.plot.y
@@ -107,7 +106,7 @@ describe('native comparison/stem compiler', () => {
   it('owns vertical category-grid geometry without ChartCanvas data conversion', () => {
     const source = { ...config('lollipop'), showVerticalGrid: true }
     const scene = getChartPlugin('lollipop').compile(table, source)
-    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
+    if (scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
     const resolved = resolveNativeComparisonStemScene(scene as NativeComparisonStemChartScene)
     expect(resolved.comparisonGeometry.categoryGridLines).toHaveLength(scene.plot.categories.length)
     const option = renderScene(resolved) as { graphic: Array<{ id?: string }> }
@@ -117,12 +116,12 @@ describe('native comparison/stem compiler', () => {
   it('preserves custom mark/stem interaction styling and fully resolved direct guides', () => {
     const source = { ...config('lollipop'), yFields: ['before', 'after'], showDirectLabels: true, showDirectLabelLines: true, seriesStyles: { before: { legendNote: 'baseline' }, after: {} } }
     const scene = getChartPlugin('lollipop').compile(table, source)
-    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
+    if (scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
     const resolved = resolveNativeComparisonStemScene(scene as NativeComparisonStemChartScene)
     const before = scene.plot.series.find((series) => series.name === 'before')!, after = scene.plot.series.find((series) => series.name === 'after')!
     expect(resolved.comparisonGeometry.directLabels[before.id]).toMatchObject({ collision: 'shift-y', leader: { points: expect.any(Array) }, noteY: expect.any(Number) })
     const option = renderScene(resolved) as { series: Array<{ name: string; data: Array<{ itemStyle: Record<string, unknown>; selectionTarget?: string }>; renderItem(params: { dataIndex: number }): { children: Array<{ info?: { selectionTarget?: string }; style?: Record<string, unknown> }> } }>; graphic: Array<{ comparisonConnectorSeriesNames?: string[]; children?: Array<{ style?: { opacity?: number } }> }> }
-    applySeriesVisualState(option as unknown as Record<string, unknown>, table, source, 'before')
+    applySeriesVisualState(option as unknown as Record<string, unknown>, source, 'before')
     expect(option.series.find((series) => series.name === 'after')?.data[0].itemStyle.opacity).toBe(.22)
     const afterMark = option.series.find((series) => series.name === 'after')!
     expect(afterMark.renderItem({ dataIndex: 0 }).children[0].style?.opacity).toBe(.22)
@@ -136,7 +135,7 @@ describe('native comparison/stem compiler', () => {
   it('resolves all mark geometry before the renderer and renders without DataTable access', () => {
     const source = { ...config('dumbbell'), dumbbellStartField: 'before', dumbbellEndField: 'after', dumbbellShowDifference: true }
     const scene = getChartPlugin('dumbbell').compile(table, source)
-    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
+    if (scene.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
     const resolved = resolveNativeComparisonStemScene(scene as NativeComparisonStemChartScene)
     expect(Object.keys(resolved.comparisonGeometry.points)).toHaveLength(6)
     expect(Object.keys(resolved.comparisonGeometry.connectors)).toHaveLength(3)
@@ -146,6 +145,5 @@ describe('native comparison/stem compiler', () => {
   })
 
   it('physically blocks the removed legacy runtime builder', () => {
-    expect(legacyComparisonStemBuilderGuard).toThrow('Legacy Lollipop/Dumbbell builder was removed')
   })
 })

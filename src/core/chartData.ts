@@ -1,30 +1,6 @@
 import type { ChartConfig, DataTable, DataValue } from './types'
 import { chartUsesAggregation } from './chartKinds'
 
-export function segmentEndpointIndex(pixels: number[], pointerX: number) {
-  if (pixels.length < 2) return 0
-  const direction = pixels.at(-1)! >= pixels[0] ? 1 : -1
-  const target = pointerX * direction
-  if (target < pixels[0] * direction) return 0
-  if (target > pixels.at(-1)! * direction) return pixels.length - 1
-  let low = 1, high = pixels.length - 1
-  while (low < high) {
-    const middle = Math.floor((low + high) / 2)
-    if (pixels[middle] * direction >= target) high = middle
-    else low = middle + 1
-  }
-  return low
-}
-
-export function nearestPixelIndex(pixels: number[], pointerX: number) {
-  if (!pixels.length) return 0
-  if (pixels.length === 1) return 0
-  const right = segmentEndpointIndex(pixels, pointerX)
-  if (right === 0) return 0
-  const left = right - 1
-  return Math.abs(pointerX - pixels[left]) <= Math.abs(pointerX - pixels[right]) ? left : right
-}
-
 export interface PreparedSeries { name: string; data: Array<number | null> }
 export interface PreparedChartData { categories: DataValue[]; series: PreparedSeries[] }
 

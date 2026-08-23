@@ -23,9 +23,12 @@ import { renderHeatmapScene } from './renderHeatmapScene'
 import { resolveNativeTreemapScene } from '../../chart-types/treemap/layout'
 import { renderTreemapScene } from './renderTreemapScene'
 
+export function resolveNativeScene(scene: ChartScene | ResolvedScene): ResolvedScene {
+  return 'geometry' in scene ? scene : scene.plot.kind === 'slope' ? resolveNativeSlopeScene(scene as NativeSlopeChartScene) : scene.plot.kind === 'xy' ? resolveNativeXYScene(scene as NativeXYChartScene) : scene.plot.kind === 'distribution' ? resolveNativeDistributionScene(scene as NativeDistributionChartScene) : scene.plot.kind === 'comparison-stem' ? resolveNativeComparisonStemScene(scene as NativeComparisonStemChartScene) : scene.plot.kind === 'waterfall' ? resolveNativeWaterfallScene(scene as NativeWaterfallChartScene) : scene.plot.kind === 'butterfly' ? resolveNativeButterflyScene(scene as NativeButterflyChartScene) : scene.plot.kind === 'heatmap' ? resolveNativeHeatmapScene(scene as NativeHeatmapChartScene) : scene.plot.kind === 'treemap' ? resolveNativeTreemapScene(scene as NativeTreemapChartScene) : resolveNativeCartesianScene(scene)
+}
+
 export function renderScene(scene: ChartScene | ResolvedScene): Record<string, unknown> {
-  if (scene.migrationMode === 'legacy') return scene.legacyRendererPayload
-  const resolved = 'geometry' in scene ? scene : scene.plot.kind === 'slope' ? resolveNativeSlopeScene(scene as NativeSlopeChartScene) : scene.plot.kind === 'xy' ? resolveNativeXYScene(scene as NativeXYChartScene) : scene.plot.kind === 'distribution' ? resolveNativeDistributionScene(scene as NativeDistributionChartScene) : scene.plot.kind === 'comparison-stem' ? resolveNativeComparisonStemScene(scene as NativeComparisonStemChartScene) : scene.plot.kind === 'waterfall' ? resolveNativeWaterfallScene(scene as NativeWaterfallChartScene) : scene.plot.kind === 'butterfly' ? resolveNativeButterflyScene(scene as NativeButterflyChartScene) : scene.plot.kind === 'heatmap' ? resolveNativeHeatmapScene(scene as NativeHeatmapChartScene) : scene.plot.kind === 'treemap' ? resolveNativeTreemapScene(scene as NativeTreemapChartScene) : resolveNativeCartesianScene(scene)
+  const resolved = resolveNativeScene(scene)
   if (resolved.plot.kind === 'bar') return renderNativeBarScene(resolved as ResolvedNativeBarScene)
   if (resolved.plot.kind === 'line' || resolved.plot.kind === 'area') return renderNativePointScene(resolved as ResolvedPointScene)
   if (resolved.plot.kind === 'smoothing') return renderSmoothingScene(resolved as ResolvedSmoothingScene)

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { ChartConfig, DataTable } from '../../../core/types'
 import { createDefaultChartConfig } from '../../../entities/chart/model/defaultChartConfig'
-import { nativeMarkSelections, nativePointSeries } from '../../../entities/chart/model/sceneVisitors'
+import { nativeMarkSelections } from '../../../entities/chart/model/sceneVisitors'
 import { getChartPlugin } from '../../../core/chartRegistry'
 import { resolveNativeCartesianScene } from '../bar/layout'
 import { compileNativeIntervalScene, NATIVE_INTERVAL_KINDS } from './compiler'
@@ -18,8 +18,6 @@ const config = (kind: ChartConfig['kind'], overrides: Partial<ChartConfig> = {})
 describe('native interval compiler', () => {
   it('classifies exactly the three interval variants as native', () => {
     expect(NATIVE_INTERVAL_KINDS).toEqual(['range-line', 'step-range-line', 'confidence-line'])
-    for (const kind of NATIVE_INTERVAL_KINDS) expect(getChartPlugin(kind).compilerMode).toBe('native')
-    expect(getChartPlugin('scatter').compilerMode).toBe('native')
   })
 
   it('compiles Range with unique real source series, stable group/layer IDs and no seriesField', () => {
@@ -45,7 +43,6 @@ describe('native interval compiler', () => {
     expect(hidden.plot.series.filter((series) => series.visible).map((series) => series.name)).toEqual(['main'])
     expect(hidden.plot.valueDomain.max).toBeGreaterThanOrEqual(8)
     expect(hidden.plot.bands[0].cells).toHaveLength(1)
-    expect(nativePointSeries(hidden).map((series) => series.name)).toEqual(['main'])
     expect(nativeMarkSelections(hidden)).toHaveLength(3)
     const shown = compileNativeIntervalScene(table, config('confidence-line', { intervalGroups: [{ main: 'main', lower: 'low', upper: 'high', showBounds: true }] }))
     expect(shown.plot.series.filter((series) => series.visible).map((series) => series.name)).toEqual(['main', 'low', 'high'])
@@ -98,7 +95,6 @@ describe('native interval compiler', () => {
     const overrides: Partial<ChartConfig> = { xAxisPosition: 'top', yAxisPosition: 'right', xAxisLabelRotate: 45, categoryLabelOverrides: { x: { '0:A': 'First\nlabel' } } }
     const interval = resolveNativeCartesianScene(compileNativeIntervalScene(table, config('range-line', overrides)))
     const line = getChartPlugin('line').compile(table, { ...config('line', overrides), yFields: ['low', 'high'] })
-    if (line.migrationMode !== 'native') throw new Error('Expected native Line')
     const resolvedLine = resolveNativeCartesianScene(line)
     expect(interval.geometry.axes).toEqual(resolvedLine.geometry.axes)
     expect(interval.geometry.plot).toEqual(resolvedLine.geometry.plot)

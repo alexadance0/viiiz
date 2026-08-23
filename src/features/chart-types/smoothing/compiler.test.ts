@@ -35,7 +35,6 @@ describe('native smoothing compiler', () => {
   it.each(['moving-average-line', 'moving-average-scatter'] as const)('%s compiles source groups and explicit stable layers', (kind) => {
     const first = compileNativeSmoothingScene(table, config(kind))
     const changed = compileNativeSmoothingScene(table, config(kind, { movingAverageWindow: 4, movingAverageRawOpacity: .7, canvasWidth: 700 }))
-    expect(getChartPlugin(kind).compilerMode).toBe('native')
     expect(first.plot).toMatchObject({ kind: 'smoothing', variant: kind, window: 3 })
     expect(first.plot.sourceGroups).toHaveLength(2)
     expect(first.plot.layers.map((layer) => [layer.role, layer.renderMode])).toEqual(kind === 'moving-average-line'
@@ -76,7 +75,6 @@ describe('native smoothing compiler', () => {
     const overrides: Partial<ChartConfig> = { xAxisPosition: 'top', yAxisPosition: 'right', xAxisLabelRotate: 45, categoryLabelOverrides: { x: { '0:A': 'First\nlong label', '4:E': 'Last long label' } }, yAxisMin: -5, yAxisMax: 80, showZeroLine: true }
     const smooth = resolveNativeCartesianScene(compileNativeSmoothingScene(table, config('moving-average-line', overrides)))
     const line = getChartPlugin('line').compile(table, { ...config('moving-average-line', overrides), kind: 'line' })
-    if (line.migrationMode !== 'native') throw new Error('Expected native Line')
     const resolvedLine = resolveNativeCartesianScene(line)
     expect(smooth.geometry.axes.value).toEqual(resolvedLine.geometry.axes.value)
     expect(smooth.geometry.plot.x).toBe(resolvedLine.geometry.plot.x)

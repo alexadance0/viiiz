@@ -1,4 +1,4 @@
-import type { CartesianPointScene, NativeChartScene } from './ChartScene'
+import type { NativeChartScene } from './ChartScene'
 
 export interface NativeMarkSelection {
   legacyKey: string
@@ -35,25 +35,6 @@ export function nativeMarkSelections(scene: NativeChartScene): NativeMarkSelecti
   case 'line':
   case 'area':
   case 'slope': return scene.plot.series.flatMap((series) => series.points.map((point) => ({ legacyKey: point.legacyKey, seriesName: series.name, displayCategory: point.displayCategory, displayValue: point.displayValue, value: point.value, color: scene.compatibilityConfig.elementStyles[point.legacyKey]?.color ?? series.color })))
-  default: return scene.plot satisfies never
-  }
-}
-
-export function nativePointSeries(scene: NativeChartScene): Array<{ name: string; points: CartesianPointScene[] }> {
-  switch (scene.plot.kind) {
-  case 'bar':
-  case 'waterfall':
-  case 'butterfly':
-  case 'heatmap':
-  case 'treemap':
-  case 'xy': return []
-  case 'distribution': return []
-  case 'comparison-stem': return scene.plot.series
-  case 'smoothing': return scene.plot.layers
-  case 'interval': return scene.plot.series.filter((series) => series.visible)
-  case 'line':
-  case 'area':
-  case 'slope': return scene.plot.series
   default: return scene.plot satisfies never
   }
 }

@@ -16,8 +16,6 @@ const ordered = <T extends { name: string; value: number }>(nodes: T[], order?: 
 }
 const aggregate = (values: number[], mode: ChartConfig['aggregation']) => mode === 'count' ? values.length : mode === 'average' ? values.reduce((sum, value) => sum + value, 0) / values.length : mode === 'min' ? Math.min(...values) : mode === 'max' ? Math.max(...values) : values.reduce((sum, value) => sum + value, 0)
 
-export const legacyTreemapBuilderGuard = () => { throw new Error('Treemap is compiled through the native semantic scene.') }
-
 export function validateNativeTreemapMapping(table: DataTable, config: ChartConfig) {
   const errors: Array<{ field: string; message: string }> = []
   if (!config.xField || !table.columns.includes(config.xField)) errors.push({ field: 'xField', message: 'Выберите колонку с категориями.' })
@@ -66,5 +64,5 @@ export function compileNativeTreemapScene(table: DataTable, config: ChartConfig)
   const all = nodes.flatMap((node) => [node, ...node.children])
   const elements: ChartElement[] = all.map((node) => ({ id: node.id, role: 'mark', coordinateSpace: 'data', selectable: true, seriesId: node.seriesId, datumId: node.datumId, legacyKey: node.legacyKey, text: node.displayLabel }))
   const frameElements = ([['title', config.title, config.titleText], ['subtitle', config.subtitle, config.subtitleText], ['note', config.note, config.noteText], ['source', config.source, config.sourceText]] as const).filter(([, text], index) => Boolean(text) && (index === 0 ? config.showTitle !== false : index === 1 ? config.showSubtitle !== false : index === 2 ? config.showNote !== false : config.showSource !== false)).map(([role, text, style]) => ({ id: `frame:${role}`, role, text, style }))
-  return { migrationMode: 'native', document: chartDocumentFromLegacy(table, config), compatibilityConfig: config, elements, guides: [], frameElements, plot: { kind: 'treemap', nodes, total, leafGap: config.treemapGap ?? 2, groupGap: config.treemapGroupGap ?? 5 } }
+  return { document: chartDocumentFromLegacy(table, config), compatibilityConfig: config, elements, guides: [], frameElements, plot: { kind: 'treemap', nodes, total, leafGap: config.treemapGap ?? 2, groupGap: config.treemapGroupGap ?? 5 } }
 }

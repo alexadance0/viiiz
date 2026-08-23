@@ -25,15 +25,15 @@ Butterfly internal categories, direct labels, rich SVG export and current annota
 
 Phase 2 baseline: `47f70f1282c778e3b51562ded863e8bdcc753c64`.
 
-`ChartScene` is now an explicit `LegacyChartScene | NativeChartScene` union. Legacy payloads are visibly named and only legacy plugins can produce them. The six ordinary bar kinds compile semantic rect marks with stable series/datum/element IDs, resolve frame/axis/guide rails through the shared layout layer, and render through the native ECharts adapter. Their helper and interaction paths consume semantic mark metadata instead of parsing a legacy option.
+At this checkpoint, `ChartScene` was an explicit `LegacyChartScene | NativeChartScene` union. The six ordinary bar kinds compiled semantic rect marks with stable series/datum/element IDs, resolved frame/axis/guide rails through the shared layout layer, and rendered through the native ECharts adapter. Their helper and interaction paths consumed semantic mark metadata instead of parsing a legacy option.
 
-The persisted `ChartConfig`, legacy element override keys, rich HTML fields, editor callbacks, and export entry points remain compatibility boundaries. Other families still use `compileLegacyScene`; this milestone does not claim a global migration. See `native-scene-migration.md` and `chart-family-parity.md` for the exact boundary.
+At that milestone, other families still used the legacy compiler. Wave 6 removed that path; the persisted `ChartConfig`, legacy element override keys, rich HTML fields, editor callbacks, and export entry points remain compatibility boundaries.
 
 ## Phase 3 checkpoint — native basic line and area
 
 Phase 3 baseline: `ab264f5d7a69a466935b25873d68c8e1379a7113`.
 
-`NativeChartScene.plot` is now a discriminated bar/line/area union. Basic line, spline, step-line, area, stacked-area, and normalized-stacked-area compile semantic points, interpolation, missing-value policy, stroke/marker/fill intent, stable identities, and category-label plans. They share the native Cartesian frame/axis/text layout and render through plot-kind dispatch without reaching the legacy option builder.
+At this checkpoint, `NativeChartScene.plot` gained its bar/line/area discriminants. Basic line, spline, step-line, area, stacked-area, and normalized-stacked-area compile semantic points, interpolation, missing-value policy, stroke/marker/fill intent, stable identities, and category-label plans. They share the native Cartesian frame/axis/text layout and render through plot-kind dispatch.
 
 All chart families, including Heatmap and Treemap, compile native semantic scenes.
 
@@ -65,7 +65,7 @@ Full stabilization completed in: `521224f`.
 
 The old `renderedChartKind === config.kind` readiness flag described only initial layout availability. The authoritative preview contract is now a monotonic render revision with explicit module loading, font loading, compiling, rendering, post-processing, settled, and error states. The central font loader resolves the chart's configured families before compilation; settlement then occurs after all option/graphic mutations, logical resize, ZRender flush, and two animation frames. Stale async work and temporary export swaps cannot publish a settled preview.
 
-Playwright waits for a newer settled revision after interactions, verifies semantic/rendered kinds, reduced-motion animation state, SVG presence, and stable canvas bounds. Native Confidence direct-label rules were removed from the legacy helper. Line/Area, Smoothing, and Interval now call a typed Cartesian point base without disguising specialized plots as `plot.kind = 'line'`. At the Phase 7.1 checkpoint, Scatter/Bubble remained out of scope pending complete deterministic verification.
+Playwright waits for a newer settled revision after interactions, verifies semantic/rendered kinds, reduced-motion animation state, SVG presence, and stable canvas bounds. Native Confidence direct-label rules were removed from the then-active compatibility helper. Line/Area, Smoothing, and Interval call a typed Cartesian point base without disguising specialized plots as `plot.kind = 'line'`. At the Phase 7.1 checkpoint, Scatter/Bubble remained out of scope; Phase 8 completed them.
 
 ## Phase 8 checkpoint — native Scatter/Bubble
 
@@ -91,7 +91,7 @@ Phase 9B started from `ccd66becf9b7fd293081055675d5295ba1bff026`; implementation
 
 Boxplot, Violin, Raincloud, and Ridgeline extend `plot.kind = 'distribution'` with discriminated box and density layers. Shared preparation owns stable source groups/observations for all eleven kinds. Pure transforms own peak-normalized shape density, normalized frequency KDE, and Histogram bins; layout owns every subgroup slot, side, polygon, bin rectangle, KDE curve, summary primitive, raincloud offset, ridge overlap, and continuous frequency projection.
 
-The renderer remains `DataTable`/statistics/KDE/binning-free, source observations remain editable independently of visibility, and derived shapes never enter value-label selections. All Distribution kinds are explicitly native, their legacy entry point throws, and the final legacy Distribution runtime branch has been removed.
+The renderer remains `DataTable`/statistics/KDE/binning-free, source observations remain editable independently of visibility, and derived shapes never enter value-label selections. All Distribution kinds are explicitly native, and their former runtime branch and temporary migration guard have been removed.
 
 ## Wave 1 checkpoint — deterministic fonts and Distribution frequency
 
@@ -105,7 +105,7 @@ Wave 2 started from `57a9357` after integrating the deterministic-font and Distr
 
 Lollipop, Horizontal Lollipop, and Dumbbell now share semantic `plot.kind = 'comparison-stem'`. Endpoints are the only source-editable marks. Stems, pair connectors, change labels, direct-guide leaders, and category grid lines are derived layers or resolved geometry. Explicit Dumbbell start/end fields own their roles regardless of generic series ordering, stale bar sorting is ignored, incomplete pairs are omitted, and sorting never changes endpoint identity.
 
-The comparison layout owns linear/log projection, positive log domains, both orientations, dense value-label visibility, direct-label note/leader/collision placement, and category-grid coordinates. Its renderer consumes no table and exposes endpoint/guide metadata at the callback boundary. `ChartCanvas` does not calculate comparison geometry or convert its grid positions. Both legacy runtime builders were removed and replaced with a throwing guard.
+The comparison layout owns linear/log projection, positive log domains, both orientations, dense value-label visibility, direct-label note/leader/collision placement, and category-grid coordinates. Its renderer consumes no table and exposes endpoint/guide metadata at the callback boundary. `ChartCanvas` does not calculate comparison geometry or convert its grid positions. Both former runtime builders and their temporary migration guards have been removed.
 
 ## Wave 3 checkpoint — native Waterfall and Butterfly
 
@@ -115,11 +115,17 @@ Waterfall now compiles `plot.kind = 'waterfall'`: source steps retain raw/aggreg
 
 Butterfly now compiles `plot.kind = 'butterfly'`: left/right fields are explicit semantic sides, magnitudes are normalized once, each side stacks independently, and the value domain is symmetric. Its dedicated layout owns mirrored rectangles and center/left/right category placement; the renderer consumes resolved geometry and exposes a renderer-neutral hit map to the outer callback adapter.
 
-Both plugins are explicitly native, their legacy entry points throw, and their old `ChartCanvas` split-axis/category/bar-hit and Waterfall pointer-geometry helpers were removed. Wave 4 subsequently migrated Heatmap and Wave 5 migrated Treemap.
+Both plugins are explicitly native, and their old `ChartCanvas` split-axis/category/bar-hit and Waterfall pointer-geometry helpers were removed. Wave 4 subsequently migrated Heatmap and Wave 5 migrated Treemap; Wave 6 then removed the obsolete throwing-guard scaffold itself.
 
 ## Wave 5: Treemap owns hierarchy, tiling and text fitting
 
 The Treemap plugin emits stable group and leaf elements after positive filtering, aggregation, visibility and manual ordering. Native layout resolves every rectangle and label band, including deterministic Russian hyphenation, before rendering. Preview, SVG and PNG share those rectangles; group/leaf selection and drag reorder consume the resolved hit map instead of renderer models, display lists or SVG path scanning.
+
+## Wave 6: one native runtime
+
+The registry is now a direct ordered list of plugin descriptors with explicit metadata, validation, capabilities and compiler dispatch. `buildOption` remains only as a public compatibility facade over `compile → resolve → render`; the legacy registry, common option builder, option-shape inference and family throwing guards are gone.
+
+`ChartScene` has one native union and one resolved geometry contract. `ChartCanvas` resolves the scene before rendering and consumes plot bounds and typed hit metadata from that result. Native Bar owns its category grid and direct labels; Canvas no longer reconstructs product marks, value-label hit boxes, direct guides, nearest values or bar grids from `DataTable`/pixels. Persisted `ChartConfig`, `legacyChartConfigAdapter`, `ChartElement.legacyKey`, and the outer selection adapter remain deliberate persistence boundaries.
 
 ## Wave 4: Heatmap owns its matrix and continuous guide
 

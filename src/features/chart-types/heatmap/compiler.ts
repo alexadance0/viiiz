@@ -9,8 +9,6 @@ import type { GuideSpec } from '../../chart-layout/guides/types'
 import { compileNativeBarScene } from '../bar/compiler'
 import { categoryLabelPlan } from '../line/compiler'
 
-export const legacyHeatmapBuilderGuard = () => { throw new Error('Heatmap is compiled through the native semantic scene.') }
-
 function normalizedDomain(values: number[], config: ChartConfig) {
   const dataMin = values.length ? Math.min(...values) : 0, dataMax = values.length ? Math.max(...values) : 1
   const diverging = (config.heatmapScaleMode ?? 'diverging') === 'diverging', midpoint = config.heatmapMidpoint ?? 0
@@ -69,5 +67,5 @@ export function compileNativeHeatmapScene(table: DataTable, sourceConfig: ChartC
     ...rows.flatMap((row) => row.cells.map((cell): ChartElement => ({ id: cell.id, role: 'mark', coordinateSpace: 'data', selectable: true, seriesId: cell.seriesId, datumId: cell.datumId, legacyKey: cell.legacyKey }))),
     ...categories.map((category): ChartElement => ({ id: `category-label:${category.id}`, role: 'category-label', coordinateSpace: 'canvas', selectable: true, axisId: 'category', datumId: category.id, text: category.label })),
   ]
-  return { migrationMode: 'native', document: chartDocumentFromLegacy(table, sourceConfig), compatibilityConfig: sourceConfig, frameElements: base.frameElements, elements, guides, plot: { kind: 'heatmap', categories, rows, categoryAxis: base.plot.categoryAxis, rowAxis, colorDomain: domain, cellGap: sourceConfig.heatmapCellGap ?? 1 } }
+  return { document: chartDocumentFromLegacy(table, sourceConfig), compatibilityConfig: sourceConfig, frameElements: base.frameElements, elements, guides, plot: { kind: 'heatmap', categories, rows, categoryAxis: base.plot.categoryAxis, rowAxis, colorDomain: domain, cellGap: sourceConfig.heatmapCellGap ?? 1 } }
 }

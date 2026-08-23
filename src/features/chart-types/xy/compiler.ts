@@ -168,7 +168,7 @@ export function compileNativeXYScene(table: DataTable, config: ChartConfig): Nat
   const frameElements = ([['title', config.title, config.titleText], ['subtitle', config.subtitle, config.subtitleText], ['note', config.note, config.noteText], ['source', config.source, config.sourceText]] as const)
     .filter(([, text], index) => Boolean(text) && (index === 0 ? config.showTitle !== false : index === 1 ? config.showSubtitle !== false : index === 2 ? config.showNote !== false : config.showSource !== false))
     .map(([role, text, style]) => ({ id: `frame:${role}`, role, text, style }))
-  return { migrationMode: 'native', document: chartDocumentFromLegacy(table, config), compatibilityConfig: config, elements, guides, frameElements, plot: { kind: 'xy', variant, xAxis, yAxis, xScale, yScale, series, sizeEncoding, analyticalLayers } }
+  return { document: chartDocumentFromLegacy(table, config), compatibilityConfig: config, elements, guides, frameElements, plot: { kind: 'xy', variant, xAxis, yAxis, xScale, yScale, series, sizeEncoding, analyticalLayers } }
 }
 
 export const formatNativeXYDateTick = continuousDateLabel

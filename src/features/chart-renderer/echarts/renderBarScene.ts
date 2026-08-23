@@ -133,7 +133,7 @@ export function renderNativeCartesianAxis(scene: ResolvedCartesianAxisScene, cha
       name: axis.orientation === 'vertical' ? '' : axis.title?.visible ? axis.title.text : '', nameLocation: 'middle', nameGap, nameRotate: axis.orientation === 'vertical' ? 90 : 0, nameTextStyle: axis.title ? textStyle(axis.title.style) : undefined,
       axisLine: { show: axis.line.visible, onZero: false, lineStyle }, axisTick: { show: axis.ticks.visible, inside: false, alignWithLabel: true, interval, length: axis.ticks.length, lineStyle },
       axisLabel: { show: axis.labels.visible, inside: false, margin: axis.labels.gap, rotate: axis.labels.rotation ?? 0, interval, hideOverlap: false, width: config.xAxisLabelOverflow === 'wrap' ? Math.max(20, slot - 8) : undefined, overflow: config.xAxisLabelOverflow === 'wrap' ? 'break' : config.xAxisLabelOverflow === 'truncate' ? 'truncate' : undefined, formatter: (value: string, index: number) => scene.plot.categories[index]?.label ?? labels.get(value) ?? value, ...textStyle(axis.labels.style), align: axis.orientation === 'vertical' ? side === 'right' ? 'left' : 'right' : undefined },
-      splitLine: { show: false, lineStyle: { color: config.gridColor, width: config.gridWidth, type: config.gridType } },
+      splitLine: { show: scene.plot.orientation === 'vertical' ? config.showVerticalGrid : config.showHorizontalGrid, lineStyle: { color: config.gridColor, width: config.gridWidth, type: config.gridType } },
       inverse: scene.plot.orientation === 'horizontal' ? config.categoryAxisInverse ?? true : false,
       triggerEvent: true,
     }
@@ -150,10 +150,46 @@ export function renderNativeCartesianAxis(scene: ResolvedCartesianAxisScene, cha
   }
 }
 
+function directLeaderGraphics(scene: ResolvedNativeBarScene) {
+  const config = scene.compatibilityConfig
+  if (!config.showDirectLabels) return []
+  const plot = scene.geometry.plot
+  const horizontal = scene.plot.orientation === 'horizontal'
+  const guide = scene.guides.find((item) => item.kind === 'direct-series')
+  const rail = scene.geometry.reservations['guide:direct-series']
+  const project = (value: number) => config.yAxisScaleType === 'log'
+    ? (Math.log(value) - Math.log(scene.plot.valueDomain.min)) / Math.max(1e-9, Math.log(scene.plot.valueDomain.max) - Math.log(scene.plot.valueDomain.min))
+    : (value - scene.plot.valueDomain.min) / Math.max(1e-9, scene.plot.valueDomain.max - scene.plot.valueDomain.min)
+  const valuePixel = (value: number) => horizontal ? plot.x + plot.width * project(value) : plot.y + plot.height * (1 - project(value))
+  return scene.plot.series.flatMap((series, seriesIndex) => {
+    const style = config.seriesStyles[series.name]
+    const guideItem = guide?.kind === 'direct-series' ? guide.items.find((item) => item.seriesId === series.id) : undefined
+    if (!guideItem?.visible || !(style?.showLegendLine ?? config.showDirectLabelLines)) return []
+    const index = series.marks.findLastIndex((mark) => mark.value != null)
+    const value = series.marks[index]?.value
+    if (index < 0 || value == null) return []
+    const previous = scene.plot.stacking === 'none' ? config.yAxisScaleType === 'log' ? scene.plot.valueDomain.min : 0 : scene.plot.series.slice(0, seriesIndex).reduce((sum, candidate) => {
+      const part = candidate.marks[index]?.value ?? 0
+      return Math.sign(part) === Math.sign(value) ? sum + part : sum
+    }, 0)
+    const endpoint = scene.plot.stacking === 'none' ? value : previous + value
+    const middle = (valuePixel(previous) + valuePixel(endpoint)) / 2
+    if (!Number.isFinite(middle)) return []
+    const dash = config.directLabelLineType === 'dashed' ? [6, 4] : config.directLabelLineType === 'dotted' ? [2, 3] : undefined
+    const points: Array<[number, number]> = horizontal
+      ? [[middle, plot.y + (index + 0.5) * plot.height / Math.max(1, scene.plot.categories.length)], [middle, plot.y - Math.max(3, config.directLabelGap ?? 14)]]
+      : guide?.kind === 'direct-series' && guide.side === 'left'
+        ? [[plot.x, middle], [(rail?.x ?? plot.x) + (rail?.width ?? 0), middle]]
+        : [[plot.x + plot.width, middle], [rail?.x ?? plot.x + plot.width, middle]]
+    return [{ id: `direct-guide-line:${series.id}`, type: 'polyline', silent: true, z: 75, shape: { points }, style: { stroke: series.color, fill: 'none', lineWidth: config.directLabelLineWidth ?? 1, lineDash: dash } }]
+  })
+}
+
 export function renderNativeBarScene(scene: ResolvedNativeBarScene): Record<string, unknown> {
   const config = scene.compatibilityConfig
   const horizontal = scene.plot.orientation === 'horizontal'
   const legendGuide = scene.guides.find((guide) => guide.kind === 'categorical-legend')
+  const directGuide = scene.guides.find((guide) => guide.kind === 'direct-series')
   const seriesNames = new Map(scene.plot.series.map((item) => [item.id, item.name]))
   const legendItems = legendGuide?.items.flatMap((item) => item.visible && item.target.kind === 'series' ? [{ ...item, rendererName: seriesNames.get(item.target.seriesId) ?? item.target.seriesId }] : []) ?? []
   const legendLabels = new Map(legendItems.map((item) => [item.rendererName, item.label]))
@@ -162,6 +198,7 @@ export function renderNativeBarScene(scene: ResolvedNativeBarScene): Record<stri
     const lastIndex = item.marks.reduce((result, mark, index) => mark.value == null ? result : index, -1)
     const seriesStyle = config.seriesStyles[item.name]
     const directStyle = seriesStyle?.directLabelText ?? config.directLabelText ?? config.legendText
+    const directGuideItem = directGuide?.kind === 'direct-series' ? directGuide.items.find((guideItem) => guideItem.seriesId === item.id) : undefined
     return {
       id: item.id, name: item.name, type: 'bar', stack: scene.plot.stacking === 'none' ? undefined : 'total', triggerEvent: true, clip: true,
       barCategoryGap: `${100 - Math.max(10, Math.min(100, scene.plot.barWidth))}%`, barGap: `${scene.plot.seriesGap}%`,
@@ -176,7 +213,7 @@ export function renderNativeBarScene(scene: ResolvedNativeBarScene): Record<stri
         return {
           value: mark.value, name: scene.plot.categories[index]?.coordinate, elementId: mark.id, datumId: mark.datumId, seriesId: mark.seriesId, elementKey: mark.legacyKey, sourceSeriesName: item.name, displayValue: mark.displayValue, displayCategory: mark.displayCategory, displayColor: mark.style.color,
           ...(custom ? { itemStyle: { color: 'rgba(0,0,0,0)', opacity: 1 } } : mark.style.color !== item.color || mark.style.opacity !== (seriesStyle?.fillOpacity ?? config.barFillOpacity ?? 1) ? { itemStyle: { color: mark.style.color, opacity: mark.style.opacity } } : {}),
-          label: direct ? { show: true, position: horizontal ? 'top' : config.yAxisPosition === 'right' ? 'left' : 'right', distance: config.directLabelGap, formatter: seriesStyle?.legendLabel?.trim() || item.name, rich: { name: { color: directStyle.color, fontFamily: directStyle.fontFamily, fontSize: directStyle.size, fontWeight: directStyle.weight } }, ...textStyle(directStyle) } : config.barValueLabelAbsorption ? { show: false } : pointLabel,
+          label: direct ? { show: true, position: horizontal ? 'top' : config.yAxisPosition === 'right' ? 'left' : 'right', distance: config.directLabelGap, formatter: `${directGuideItem?.label ?? (seriesStyle?.legendLabel?.trim() || item.name)}${directGuideItem?.note ? `\n${directGuideItem.note}` : ''}`, ...textStyle(directStyle), color: directGuideItem?.style.color ?? seriesStyle?.directLabelText?.color ?? item.color } : config.barValueLabelAbsorption ? { show: false } : pointLabel,
           emphasis: { label: pointLabel },
           valueLabel: pointLabel, directLegendLabel: direct, barWidthIntent: mark.style.width,
         }
@@ -199,6 +236,6 @@ export function renderNativeBarScene(scene: ResolvedNativeBarScene): Record<stri
     xAxis: horizontal ? renderNativeCartesianAxis(scene, 'value') : renderNativeCartesianAxis(scene, 'category'),
     yAxis: horizontal ? renderNativeCartesianAxis(scene, 'category') : renderNativeCartesianAxis(scene, 'value'),
     series: [...series, ...customBarSeries(scene), ...absorbedLabelSeries(scene), ...valueEdgeAffixSeries(scene)],
-    graphic: [...verticalTitle, ...footerGraphics],
+    graphic: [...verticalTitle, ...footerGraphics, ...directLeaderGraphics(scene)],
   }
 }

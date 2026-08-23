@@ -463,7 +463,6 @@ export interface ChartPlugin {
   defaultConfig: Partial<ChartConfig>
   inferMapping(table: DataTable): Pick<ChartConfig, 'xField' | 'yField' | 'yFields'>
   validate(table: DataTable, config: ChartConfig): ChartValidationResult
-  compilerMode: 'legacy' | 'native'
   compile(table: DataTable, config: ChartConfig): import('../entities/chart/model/ChartScene').ChartScene
   /** @deprecated Compatibility boundary for consumers not migrated to ChartScene yet. */
   buildOption(table: DataTable, config: ChartConfig): Record<string, unknown>

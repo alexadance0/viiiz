@@ -7,8 +7,6 @@ import type { NativeWaterfallChartScene, WaterfallMarkScene } from '../../../ent
 import { compileNativeBarScene, legacyBarElementKey } from '../bar/compiler'
 import { formatWaterfallChange, waterfallSteps, waterfallValueLabel } from './transform'
 
-export const legacyWaterfallBuilderGuard = () => { throw new Error('Legacy Waterfall builder was removed; use the native Waterfall compiler.') }
-
 export function compileNativeWaterfallScene(table: DataTable, sourceConfig: ChartConfig): NativeWaterfallChartScene {
   if (sourceConfig.kind !== 'waterfall') throw new Error(`Native Waterfall compiler cannot compile ${sourceConfig.kind}.`)
   const field = sourceConfig.yFields[0] ?? sourceConfig.yField

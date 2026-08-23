@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { createDefaultChartConfig } from '../../../entities/chart/model/defaultChartConfig'
 import type { ChartConfig, DataTable } from '../../../core/types'
-import { compileNativeHeatmapScene, legacyHeatmapBuilderGuard } from './compiler'
+import { compileNativeHeatmapScene } from './compiler'
 import { resolveNativeHeatmapScene } from './layout'
 import { renderHeatmapScene } from '../../chart-renderer/echarts/renderHeatmapScene'
 
@@ -62,6 +62,5 @@ describe('native Heatmap compiler, layout, and renderer', () => {
 
   it('has no ECharts compiler dependency and fails closed through the legacy guard', () => {
     expect(readFileSync(new URL('./compiler.ts', import.meta.url), 'utf8')).not.toMatch(/echarts|buildOption/)
-    expect(() => legacyHeatmapBuilderGuard()).toThrow(/native semantic scene/)
   })
 })

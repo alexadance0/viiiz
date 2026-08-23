@@ -7,12 +7,6 @@ export type ChartSelection =
   | { kind: 'hierarchy-group'; id: ElementId; group: string; legacy?: ChartElementSelection }
   | { kind: 'series'; id: ElementId; series: string; color?: string; legacy?: ChartSeriesSelection }
 
-export function selectionFromLegacy(selection: ChartElementSelection): ChartSelection {
-  if (selection.key.startsWith('treemap-group:')) return { kind: 'hierarchy-group', id: `hierarchy-group-label:${encodeURIComponent(selection.key.slice(14))}`, group: selection.seriesName, legacy: selection }
-  if (selection.target === 'category-label') return { kind: 'category-label', id: `category-label:${selection.axis}:${encodeURIComponent(selection.category)}`, axis: selection.axis ?? 'x', category: selection.category, legacy: selection }
-  return { kind: 'element', id: `mark:${encodeURIComponent(selection.key)}`, role: selection.target === 'value-label' ? 'value-label' : 'mark', legacy: selection }
-}
-
 export function legacySelection(selection: ChartSelection): ChartElementSelection | ChartSeriesSelection {
   if (selection.legacy) return selection.legacy
   if (selection.kind === 'series') return { name: selection.series, color: selection.color ?? '' }

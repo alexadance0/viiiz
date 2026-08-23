@@ -10,8 +10,6 @@ describe('native ECharts bar adapter', () => {
   it('uses resolved Viiiz geometry as an authoritative containLabel-free grid', () => {
     const source = barFixtures.find((fixture) => fixture.name === 'both non-default sides')!
     const scene = getChartPlugin('bar').compile(source.table, source.config)
-    expect(scene.migrationMode).toBe('native')
-    if (scene.migrationMode !== 'native') return
     const resolved = resolveNativeBarScene(scene)
     const option = renderScene(resolved) as { grid: { left: number; top: number; right: number; bottom: number; containLabel: boolean } }
     expect(option.grid).toEqual({ left: resolved.geometry.plot.x, top: resolved.geometry.plot.y, right: resolved.geometry.canvas.width - resolved.geometry.plot.x - resolved.geometry.plot.width, bottom: resolved.geometry.canvas.height - resolved.geometry.plot.y - resolved.geometry.plot.height, containLabel: false })
@@ -37,13 +35,14 @@ describe('native ECharts bar adapter', () => {
     expect(source).not.toMatch(/echarts|renderBarScene|buildOption/)
   })
 
-  it('leaves non-migrated families on the explicit legacy path', () => {
-    expect(getChartPlugin('line').compilerMode).toBe('native')
-    expect(getChartPlugin('area').compilerMode).toBe('native')
-    expect(getChartPlugin('indexed-line').compilerMode).toBe('native')
-    expect(getChartPlugin('seasonal-line').compilerMode).toBe('native')
-    expect(getChartPlugin('scatter').compilerMode).toBe('native')
-    expect(getChartPlugin('waterfall').compilerMode).toBe('native')
-    expect(getChartPlugin('butterfly').compilerMode).toBe('native')
+  it('renders the complete direct-series guide from semantic label intent', () => {
+    const source = barFixtures.find((fixture) => fixture.name === 'direct labels')!
+    const config = { ...source.config, showDirectLabelLines: true, seriesStyles: { ...source.config.seriesStyles, first: { legendLabel: 'Primary', legendNote: 'Latest value' } } }
+    const option = renderScene(getChartPlugin('bar').compile(source.table, config)) as {
+      series: Array<{ data: Array<{ label?: { formatter?: string } }> }>
+      graphic: Array<{ id?: string }>
+    }
+    expect(option.series[0].data.at(-1)?.label?.formatter).toBe('Primary\nLatest value')
+    expect(option.graphic.some((item) => item.id?.startsWith('direct-guide-line:'))).toBe(true)
   })
 })

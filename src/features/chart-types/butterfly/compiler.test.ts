@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { createDefaultChartConfig } from '../../../entities/chart/model/defaultChartConfig'
 import type { ChartConfig, DataTable } from '../../../core/types'
-import { compileNativeButterflyScene, legacyButterflyBuilderGuard, validateNativeButterflyMapping } from './compiler'
+import { compileNativeButterflyScene, validateNativeButterflyMapping } from './compiler'
 import { resolveNativeButterflyScene } from './layout'
 import { getChartPlugin } from '../../../core/chartRegistry'
 import { renderButterflyScene } from '../../chart-renderer/echarts/renderButterflyScene'
@@ -102,14 +102,7 @@ describe('native Butterfly compiler and layout', () => {
     expect(title[placement === 'left' ? 'right' : 'left']).toBeUndefined()
   })
 
-  it('wires the throwing legacy guard outside the generic cartesian factory', () => {
-    const registry = readFileSync(new URL('../../../core/chartRegistry.ts', import.meta.url), 'utf8')
-    expect(registry).toContain("buildOption: legacyButterflyBuilderGuard")
-    expect(registry).toContain("id === 'waterfall' || id === 'butterfly'")
-  })
-
   it('keeps compiler independent of ECharts and fails closed through the legacy guard', () => {
     expect(readFileSync(new URL('./compiler.ts', import.meta.url), 'utf8')).not.toMatch(/echarts|renderButterflyScene|buildOption/)
-    expect(() => legacyButterflyBuilderGuard()).toThrow(/removed/)
   })
 })

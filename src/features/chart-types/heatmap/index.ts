@@ -1,1 +1,1 @@
-export { compileNativeHeatmapScene, legacyHeatmapBuilderGuard } from './compiler'
+export { compileNativeHeatmapScene } from './compiler'

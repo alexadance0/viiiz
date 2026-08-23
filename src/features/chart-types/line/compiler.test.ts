@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { getChartPlugin } from '../../../core/chartRegistry'
 import { lineAreaFixtures } from '../../../test-fixtures/charts/lineArea'
 import { indexedTrendConfig, indexedTrendTable, seasonalTrendConfig, seasonalTrendTable } from '../../../test-fixtures/charts/specializedTrends'
 import { SEASONAL_OTHERS_LEGEND_ITEM_ID } from '../../../core/legend'
@@ -19,14 +18,12 @@ describe('native line and area compilers', () => {
   it.each(NATIVE_LINE_KINDS)('%s produces a semantic line plot', (kind) => {
     const source = kind === 'indexed-line' || kind === 'seasonal-line' ? specialized(kind) : { table: lineAreaFixtures[0].table, config: { ...lineAreaFixtures[0].config, kind } }
     const scene = compileNativeLineScene(source.table, source.config)
-    expect(getChartPlugin(kind).compilerMode).toBe('native')
     expect(scene.plot).toMatchObject({ kind: 'line', categoryPlacement: 'point' })
     expect(scene.plot.series[0].points[0]).toMatchObject({ type: 'point', legacyKey: expect.any(String), datumId: expect.any(String) })
   })
 
   it.each(NATIVE_AREA_KINDS)('%s produces a semantic area plot', (kind) => {
     const source = lineAreaFixtures[13], scene = compileNativeAreaScene(source.table, { ...source.config, kind })
-    expect(getChartPlugin(kind).compilerMode).toBe('native')
     expect(scene.plot).toMatchObject({ kind: 'area', categoryPlacement: 'point', stacking: kind === 'area' ? 'none' : kind === 'stacked-area' ? 'stacked' : 'normalized' })
     expect(scene.plot.series[0].fill).toEqual(expect.objectContaining({ color: expect.any(String), opacity: expect.any(Number) }))
   })

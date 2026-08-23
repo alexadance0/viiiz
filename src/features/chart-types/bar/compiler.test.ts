@@ -8,9 +8,7 @@ describe('native bar compiler', () => {
     const source = barFixtures[2]
     const plugin = getChartPlugin(kind)
     const scene = plugin.compile(source.table, { ...source.config, kind })
-    expect(plugin.compilerMode).toBe('native')
-    expect(scene.migrationMode).toBe('native')
-    if (scene.migrationMode === 'native') {
+    {
       expect(scene.plot.kind).toBe('bar')
       if (scene.plot.kind !== 'bar') throw new Error(`Expected bar plot, received ${scene.plot.kind}.`)
       expect(scene.plot.series[0].marks[0]).toMatchObject({ type: 'rect', value: expect.any(Number), legacyKey: expect.any(String) })

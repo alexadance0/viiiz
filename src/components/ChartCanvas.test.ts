@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as echarts from 'echarts'
-import { applySeriesVisualState, barVerticalGridGraphics, directLegendGraphics, positionYAxisTitleGraphic, suppressBuiltInDirectLabels } from './ChartCanvas'
+import { applySeriesVisualState, positionYAxisTitleGraphic } from './ChartCanvas'
 import { customFontCss } from '../features/chart-export/chartExport'
 import { decorationGraphics } from './chartDecorations'
 import { getChartPlugin } from '../core/chartRegistry'
@@ -26,179 +26,21 @@ describe('native title layout', () => {
   })
 })
 
-describe('direct legend rendering', () => {
+describe('native canvas adapters', () => {
   it('embeds uploaded fonts for SVG and PNG export', () => {
     expect(customFontCss([{ name: 'DM Sans', dataUrl: 'data:font/woff2;base64,abc', weight: 700, style: 'italic' }])).toBe('@font-face{font-family:"DM Sans";src:url("data:font/woff2;base64,abc");font-weight:700;font-style:italic;}')
   })
 
-  it('renders and reapplies a line option without throwing', () => {
-    const chart = echarts.init(null, undefined, { renderer: 'svg', ssr: true, width: 800, height: 500 })
-    const richConfig: ChartConfig = { ...config, seriesStyles: {
-      a: { legendNote: 'Длинное примечание к первому ряду, которое переносится на несколько строк' },
-      b: { legendNote: 'Длинное примечание ко второму ряду, которое тоже переносится' },
-      c: { legendNote: 'Первая строка\nВторая строка' },
-    } }
-    const option = getChartPlugin('line').buildOption(table, richConfig)
-    expect(() => chart.setOption(option, true)).not.toThrow()
-    const graphics = directLegendGraphics(chart, table, richConfig) as Array<{ id?: string; type?: string; left?: number; top?: number; style?: { text?: string; lineHeight?: number; width?: number } }>
-    expect(graphics.filter((item) => item.id?.startsWith('direct-legend-name-'))).toHaveLength(3)
-    expect(graphics.filter((item) => item.id?.startsWith('direct-legend-note-'))).toHaveLength(3)
-    for (const name of ['a', 'b', 'c']) {
-      const title = graphics.find((item) => item.id === `direct-legend-name-${name}`)!
-      const note = graphics.find((item) => item.id === `direct-legend-note-${name}`)!
-      expect(note.top).toBeGreaterThan(title.top!)
-    }
-    const blocks = ['a', 'b', 'c'].map((name) => {
-      const title = graphics.find((item) => item.id === `direct-legend-name-${name}`)!
-      const note = graphics.find((item) => item.id === `direct-legend-note-${name}`)!
-      const noteBottom = note.top! + (note.style?.text?.split('\n').length ?? 1) * (note.style?.lineHeight ?? 0)
-      return { top: title.top!, bottom: noteBottom }
-    }).sort((left, right) => left.top - right.top)
-    blocks.slice(1).forEach((block, index) => expect(block.top).toBeGreaterThanOrEqual(blocks[index].bottom))
-    const firstNote = graphics.find((item) => item.id === 'direct-legend-note-a')!
-    expect(firstNote.style?.text).toBe(richConfig.seriesStyles.a.legendNote)
-    expect(firstNote.style?.text).not.toContain('\n')
-    expect(firstNote.left! + Number(firstNote.style?.width)).toBeLessThanOrEqual(800 - 24)
-    expect(graphics.find((item) => item.id === 'direct-legend-note-c')?.style?.text).toBe('Первая строка\nВторая строка')
-    expect(() => chart.setOption({ graphic: graphics }, { replaceMerge: ['graphic'] })).not.toThrow()
-    chart.dispose()
-  })
-
-  it('hides selected series labels and applies an individual text style', () => {
-    const styled: ChartConfig = { ...config, seriesStyles: { a: { showDirectLabel: false }, b: { directLabelText: { ...text(22), color: '#e56b45', weight: 700 } }, c: {} } }
-    const chart = echarts.init(null, undefined, { renderer: 'svg', ssr: true, width: 800, height: 500 })
-    chart.setOption(getChartPlugin('line').buildOption(table, styled), true)
-    const graphics = directLegendGraphics(chart, table, styled) as Array<{ id?: string; style?: { fill?: string; fontSize?: number; fontWeight?: number } }>
-    expect(graphics.some((item) => item.id === 'direct-legend-name-a')).toBe(false)
-    expect(graphics.find((item) => item.id === 'direct-legend-name-b')?.style).toMatchObject({ fill: '#e56b45', fontSize: 22, fontWeight: 700 })
-    expect(graphics.some((item) => item.id === 'direct-legend-name-c')).toBe(true)
-    chart.dispose()
-  })
-
-  it('keeps remaining direct-label colors and anchors tied to their original series', () => {
-    const palette = ['#6956e8', '#168a72', '#e56b45']
-    const visibleConfig: ChartConfig = { ...config, palette, showDirectLabelLines: true, seriesStyles: { a: {}, b: {}, c: {} } }
-    const hiddenConfig: ChartConfig = { ...visibleConfig, seriesStyles: { a: { showDirectLabel: false }, b: {}, c: {} } }
-    const chart = {
-      getWidth: () => 800,
-      getOption: () => ({ yAxis: [{ min: 0, max: 12 }] }),
-      convertToPixel: (finder: { xAxisIndex?: number }, value: number) => finder.xAxisIndex === 0 ? 100 + value * 200 : 440 - value * 30,
-    } as unknown as echarts.ECharts
-    const visible = directLegendGraphics(chart, table, visibleConfig) as Array<{ id?: string; left?: number; top?: number; shape?: { points?: number[][] }; style?: { fill?: string; stroke?: string } }>
-    const hidden = directLegendGraphics(chart, table, hiddenConfig) as typeof visible
-
-    for (const [name, color] of [['b', palette[1]], ['c', palette[2]]] as const) {
-      const visibleLabel = visible.find((item) => item.id === `direct-legend-name-${name}`)
-      expect(hidden.find((item) => item.id === `direct-legend-name-${name}`)).toMatchObject({ left: visibleLabel?.left, top: visibleLabel?.top, style: { fill: color } })
-      expect(hidden.find((item) => item.id === `direct-legend-line-${name}`)?.style?.stroke).toBe(color)
-      expect(hidden.find((item) => item.id === `direct-legend-line-${name}`)?.shape?.points?.[0]).toEqual(
-        visible.find((item) => item.id === `direct-legend-line-${name}`)?.shape?.points?.[0],
-      )
-    }
-  })
-
-  it('does not overflow the call stack on long line series', () => {
-    const points = 10_000
-    const longTable: DataTable = {
-      name: 'long line',
-      columns: ['year', 'a'],
-      rows: Array.from({ length: points }, (_, index) => ({ year: index, a: index % 100 })),
-    }
-    const longConfig: ChartConfig = { ...config, yFields: ['a'], seriesStyles: { a: {} } }
-    const chart = {
-      getOption: () => ({ yAxis: [{ min: 0, max: 100 }] }),
-      convertToPixel: (finder: { xAxisIndex?: number }, value: number) => finder.xAxisIndex == null ? 450 - value * 4 : 100 + value / 200,
-      getWidth: () => 800,
-    } as unknown as echarts.ECharts
-    expect(() => directLegendGraphics(chart, longTable, longConfig)).not.toThrow()
-  })
-
-  it('anchors direct area labels at the vertical middle of the filled area', () => {
-    const areaConfig: ChartConfig = { ...config, kind: 'area', yFields: ['a'], showDirectLabelLines: true, seriesStyles: { a: {} } }
-    const chart = echarts.init(null, undefined, { renderer: 'svg', ssr: true, width: 800, height: 500 })
-    chart.setOption(getChartPlugin('area').buildOption(table, areaConfig), true)
-    const option = chart.getOption() as unknown as { yAxis: Array<{ min: number }> }
-    const minimum = Number(option.yAxis[0].min)
-    const value = Number(table.rows.at(-1)?.a)
-    const expected = (Number(chart.convertToPixel({ yAxisIndex: 0 }, minimum)) + Number(chart.convertToPixel({ yAxisIndex: 0 }, value))) / 2
-    const graphics = directLegendGraphics(chart, table, areaConfig) as Array<{ id?: string; shape?: { points?: number[][] } }>
-    const leader = graphics.find((item) => item.id === 'direct-legend-line-a')
-    expect(leader?.shape?.points?.[0][1]).toBeCloseTo(expected)
-    chart.dispose()
-  })
-
-  it('places horizontal bar direct labels over the top row and centered on the bar', () => {
-    const barConfig: ChartConfig = { ...config, kind: 'bar', barOrientation: 'horizontal', categoryAxisInverse: true, xAxisPosition: 'top', yAxisPosition: 'right', yFields: ['a'], seriesStyles: { a: {} } }
-    const chart = {
-      convertToPixel: (finder: { xAxisIndex?: number; yAxisIndex?: number }, value: number) => finder.xAxisIndex === 0 ? 100 + value * 20 : 100 + value * 100,
-      getWidth: () => 800,
-    } as unknown as echarts.ECharts
-    const graphics = directLegendGraphics(chart, table, barConfig) as Array<{ id?: string; left?: number; top?: number; style?: { width?: number; align?: string; textAlign?: string } }>
-    const label = graphics.find((item) => item.id === 'direct-legend-name-a')!
-    expect(label.top).toBeLessThan(100)
-    expect(label.left! + Number(label.style?.width) / 2).toBeCloseTo(200)
-    expect(label.style).toMatchObject({ align: 'center', textAlign: 'center' })
-  })
-
-  it('does not move or recolor grouped horizontal-bar labels when another label is hidden', () => {
-    const palette = ['#6956e8', '#168a72', '#e56b45']
-    const visibleConfig: ChartConfig = { ...config, kind: 'bar', barOrientation: 'horizontal', categoryAxisInverse: true, yFields: ['a', 'b', 'c'], palette, showDirectLabelLines: true, seriesStyles: { a: {}, b: {}, c: {} } }
-    const hiddenConfig: ChartConfig = { ...visibleConfig, seriesStyles: { a: { showDirectLabel: false }, b: {}, c: {} } }
-    const chart = {
-      convertToPixel: (finder: { xAxisIndex?: number }, value: number) => finder.xAxisIndex === 0 ? 100 + value * 20 : 100 + value * 100,
-      getWidth: () => 800,
-    } as unknown as echarts.ECharts
-    const visible = directLegendGraphics(chart, table, visibleConfig) as Array<{ id?: string; left?: number; top?: number; shape?: { points?: number[][] }; style?: { fill?: string; stroke?: string } }>
-    const hidden = directLegendGraphics(chart, table, hiddenConfig) as typeof visible
-
-    for (const [name, color] of [['b', palette[1]], ['c', palette[2]]] as const) {
-      const visibleLabel = visible.find((item) => item.id === `direct-legend-name-${name}`)
-      const hiddenLabel = hidden.find((item) => item.id === `direct-legend-name-${name}`)
-      expect(hiddenLabel).toMatchObject({ left: visibleLabel?.left, top: visibleLabel?.top, style: { fill: color } })
-      expect(hidden.find((item) => item.id === `direct-legend-line-${name}`)?.shape?.points?.[0]).toEqual(
-        visible.find((item) => item.id === `direct-legend-line-${name}`)?.shape?.points?.[0],
-      )
-    }
-  })
-
-  it('handles null separators in styled line segments with direct labels', () => {
-    const styledConfig: ChartConfig = {
-      ...config,
-      elementStyles: { 'a\u001fnumber:2023': { color: '#ff0000', lineType: 'dashed' } },
-    }
-    const option = getChartPlugin('line').buildOption(table, styledConfig) as Record<string, unknown> & { series: Array<{ data?: unknown[] }> }
-    expect(option.series.some((series) => series.data?.includes(null))).toBe(true)
-    expect(() => suppressBuiltInDirectLabels(option, styledConfig)).not.toThrow()
-  })
-
-  it('does not duplicate absorbed values on the last stacked column beside direct labels', () => {
-    const barConfig: ChartConfig = { ...config, kind: 'normalized-stacked-bar', showValues: true, barValueLabelAbsorption: true }
-    const option = getChartPlugin('normalized-stacked-bar').buildOption(table, barConfig) as Record<string, unknown> & { series: Array<{ data?: Array<{ directLegendLabel?: boolean; label?: { show?: boolean } }> }> }
-    const directPoints = option.series.flatMap((series) => series.data?.filter((point) => point.directLegendLabel) ?? [])
-    expect(directPoints.length).toBeGreaterThan(0)
-    suppressBuiltInDirectLabels(option, barConfig)
-    expect(directPoints.every((point) => point.label?.show === false)).toBe(true)
-  })
-
-  it('keeps the configured value-label position on the last column beside direct labels', () => {
-    const barConfig: ChartConfig = { ...config, kind: 'bar', showValues: true, valueLabelPosition: 'inside-bottom' }
-    const option = getChartPlugin('bar').buildOption(table, barConfig) as Record<string, unknown> & { series: Array<{ data?: Array<{ directLegendLabel?: boolean; label?: { show?: boolean; position?: string } }> }> }
-    const directPoints = option.series.flatMap((series) => series.data?.filter((point) => point.directLegendLabel) ?? [])
-    suppressBuiltInDirectLabels(option, barConfig)
-    expect(directPoints).toHaveLength(3)
-    expect(directPoints.every((point) => point.label?.show === true && point.label.position === 'insideBottom')).toBe(true)
-  })
-
   it('does not turn a regular line chart into an area chart while highlighting', () => {
     const option = getChartPlugin('line').buildOption(table, config) as Record<string, unknown> & { series: Array<{ name?: string; areaStyle?: object }> }
-    applySeriesVisualState(option, table, config, 'a')
+    applySeriesVisualState(option, config, 'a')
     expect(option.series.find((series) => series.name === 'a')?.areaStyle).toBeUndefined()
   })
 
   it('highlights a selected line point with the series color', () => {
     const lineConfig: ChartConfig = { ...config, palette: ['#168a72'] }
     const option = getChartPlugin('line').buildOption(table, lineConfig) as Record<string, unknown> & { series: Array<{ name?: string; data?: Array<{ elementKey?: string; symbolSize?: number; itemStyle?: { color?: string; borderColor?: string } }> }> }
-    applySeriesVisualState(option, table, lineConfig, null, 'a\u001fnumber:2023')
+    applySeriesVisualState(option, lineConfig, null, 'a\u001fnumber:2023')
     const point = option.series.find((series) => series.name === 'a')?.data?.[1]
     expect(point?.symbolSize).toBeGreaterThanOrEqual(11)
     expect(point?.itemStyle).toMatchObject({ color: '#168a72', borderColor: '#168a72' })
@@ -210,14 +52,14 @@ describe('direct legend rendering', () => {
     const option = getChartPlugin('jitter-plot').buildOption(distributionTable, distributionConfig) as Record<string, unknown> & { series: Array<{ name?: string; silent?: boolean; symbolSize?: number; itemStyle?: { opacity?: number; shadowBlur?: number }; data?: Array<{ symbolSize?: number; itemStyle?: { opacity?: number; shadowBlur?: number } }> }> }
     const pointSeries = () => option.series.filter((series) => !series.silent)
     const before = structuredClone(pointSeries())
-    applySeriesVisualState(option, distributionTable, distributionConfig, 'value', 'value\u001fnumber:10')
+    applySeriesVisualState(option, distributionConfig, 'value', 'value\u001fnumber:10')
     expect(pointSeries()).toEqual(before)
   })
 
   it('dims bar peers while keeping the selected bar fully visible', () => {
     const barConfig: ChartConfig = { ...config, kind: 'bar', palette: ['#168a72', '#e56b45'], yFields: ['a', 'b'], seriesStyles: { a: {}, b: {} } }
     const option = getChartPlugin('bar').buildOption(table, barConfig) as Record<string, unknown> & { series: Array<{ name?: string; type?: string; itemStyle?: { opacity?: number }; data?: Array<{ itemStyle?: { color?: string; opacity?: number } }> }> }
-    applySeriesVisualState(option, table, barConfig, null, 'a\u001fnumber:2023')
+    applySeriesVisualState(option, barConfig, null, 'a\u001fnumber:2023')
     const selectedSeries = option.series.find((series) => series.name === 'a' && series.type === 'bar')!
     const otherSeries = option.series.find((series) => series.name === 'b' && series.type === 'bar')!
     expect(selectedSeries.data?.[1].itemStyle).toMatchObject({ color: '#168a72', opacity: 1 })
@@ -258,16 +100,6 @@ describe('direct legend rendering', () => {
     expect(graphics[1].children?.map((child) => child.type)).toEqual(['line', 'polyline', 'polyline'])
     expect(graphics[2].children?.map((child) => child.type)).toEqual(['line', 'circle'])
     expect(graphics[3].children?.map((child) => child.type)).toEqual(['line'])
-  })
-
-  it('draws bar-chart vertical grid lines exactly at category tick coordinates', () => {
-    const barConfig: ChartConfig = { ...config, kind: 'bar', showVerticalGrid: true, yFields: ['a'], seriesStyles: { a: {} } }
-    const chart = echarts.init(null, undefined, { renderer: 'svg', ssr: true, width: 800, height: 500 })
-    chart.setOption(getChartPlugin('bar').buildOption(table, barConfig), true)
-    const graphics = barVerticalGridGraphics(chart, table, barConfig, { top: 80, bottom: 440, left: 60, right: 760 }) as Array<{ shape: { x1: number; x2: number } }>
-    expect(graphics).toHaveLength(2)
-    graphics.forEach((graphic, index) => expect(graphic.shape).toMatchObject({ x1: chart.convertToPixel({ xAxisIndex: 0 }, index), x2: chart.convertToPixel({ xAxisIndex: 0 }, index) }))
-    chart.dispose()
   })
 
   it('renders every chart kind with dense styling without invalid SVG geometry', () => {

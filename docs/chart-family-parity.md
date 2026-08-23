@@ -60,7 +60,7 @@ Parity is enforced at three layers:
 
 Reusable fixtures in `src/test-fixtures/charts/lineArea.ts` cover gap/zero/connect missing values, linear/spline/step interpolation, markers, point and segment overrides, direct labels on both sides, date axes, log/manual domains, plain/stacked/normalized areas, fill opacity, axis-side/grid combinations, and multiline frame text.
 
-The semantic compiler records point placement, interpolation, missing-value policy, stroke/marker/fill intent, stable point IDs, and the precomputed category-label plan. The renderer dispatches on `plot.kind`; throwing-builder tests prove that migrated kinds cannot fall back to the legacy cartesian builder.
+The semantic compiler records point placement, interpolation, missing-value policy, stroke/marker/fill intent, stable point IDs, and the precomputed category-label plan. The renderer dispatches on `plot.kind`; exhaustive registry coverage proves that every kind stays on the native path.
 
 ## Specialized trend characterization coverage
 
@@ -79,7 +79,7 @@ Scatter and Bubble compile `plot.kind = 'xy'`: X is linear/time, Y is linear/log
 
 Bubble uses semantic `sqrt-absolute` size encoding. Zero maps to the minimum diameter, maximum absolute magnitude maps to the maximum, negative values use magnitude, reversed configured bounds are ordered without mutation, and invalid per-row sizes use the ordinary point diameter. Its size-scale guide is an inside-plot overlay with resolved pixel geometry and coexists with the outside categorical legend.
 
-Regression, 95% confidence envelopes, references, the clipped X=Y diagonal, and quadrants are derived semantic layers. They are silent, absent from legends/tooltips/selections/value-label listings, and never become fake source series. The old Scatter/Bubble builder is permanently throwing and its ECharts option construction has been removed.
+Regression, 95% confidence envelopes, references, the clipped X=Y diagonal, and quadrants are derived semantic layers. They are silent, absent from legends/tooltips/selections/value-label listings, and never become fake source series. The old Scatter/Bubble builder, its ECharts option construction, and the temporary migration guard have been removed.
 
 ## Phase 9A Distribution observation parity
 
@@ -153,4 +153,8 @@ Waterfall preserves cumulative steps, mixed signs and missing deltas, optional t
 
 Butterfly preserves absolute magnitudes, distinct left/right field mapping, independent multi-measure side stacks, symmetric axes, center/left/right category placement, date/category overrides, series and element styles, labels, tooltips, two-stage series/element selection, and export. Compiler and layout tests prove side/domain/geometry ownership; renderer tests prove resolved custom geometry and selection identity; three visual cases per family pin the main layout variants.
 
-Post-review parity also covers null Waterfall steps at the beginning/middle/end, element-specific Waterfall colors and label positions, contiguous Butterfly stack segments, duplicate-category validation, source-family document specs, mirrored label placement/contrast, and selectable center categories whose editor rectangles come directly from native layout. The legacy Butterfly entry uses the same throwing-guard boundary as Waterfall and is excluded from the generic cartesian factory.
+Post-review parity also covers null Waterfall steps at the beginning/middle/end, element-specific Waterfall colors and label positions, contiguous Butterfly stack segments, duplicate-category validation, source-family document specs, mirrored label placement/contrast, and selectable center categories whose editor rectangles come directly from native layout. Both families now have only direct native registry descriptors.
+
+## Wave 6 final native cleanup
+
+Every registry entry compiles a semantic scene and renders through the same resolved-scene boundary. Registry order/defaults/settings/inference/validation remain explicit and tested, while the public option API is a compatibility facade. Recursive renderer-option visitors, legacy scene payloads, dual compiler modes, family throwing guards, Canvas direct-guide/value-hit/bar-grid reconstruction and nearest-pixel event recovery have been deleted. Persistence compatibility remains intentionally isolated to `ChartConfig`, the legacy config adapter, stable `legacyKey` aliases and the outer UI selection adapter.

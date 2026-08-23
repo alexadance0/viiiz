@@ -114,5 +114,5 @@ export function compileNativeSlopeScene(table: DataTable, config: ChartConfig): 
     ...series.flatMap((item) => item.points.map((point): ChartElement => ({ id: point.id, role: 'mark', coordinateSpace: 'data', selectable: true, seriesId: point.seriesId, datumId: point.datumId, legacyKey: point.legacyKey }))),
     ...positions.map((position): ChartElement => ({ id: `category-label:${position.id}`, role: 'category-label', coordinateSpace: 'canvas', selectable: true, axisId: 'category', datumId: position.id, text: position.label })),
   ]
-  return { migrationMode: 'native', document: chartDocumentFromLegacy(table, config), compatibilityConfig: config, elements, guides: [], frameElements: frameElements(config), plot }
+  return { document: chartDocumentFromLegacy(table, config), compatibilityConfig: config, elements, guides: [], frameElements: frameElements(config), plot }
 }

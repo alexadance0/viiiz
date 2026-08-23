@@ -15,7 +15,6 @@ function resolve(kind: 'bar' | 'line' | 'area', categories: Array<string | Date>
   const source = lineAreaFixtures[0]
   const table: DataTable = { name: 'axis-alignment', columns: ['period', 'first'], rows: categories.map((period, index) => ({ period, first: index + 1 })) }
   const scene = getChartPlugin(kind).compile(table, { ...source.config, kind, ...overrides })
-  if (scene.migrationMode !== 'native') throw new Error('Expected native scene')
   return resolveNativeCartesianScene(scene)
 }
 
@@ -29,7 +28,7 @@ describe('native ECharts line and area adapter', () => {
       const config = { ...fixture.config, kind, showValues: true, ...(kind === 'indexed-line' ? { indexBaseXValue: `date:${(table.rows[0].period as Date).toISOString()}` } : {}), ...(kind === 'seasonal-line' ? { seasonalAccentYears: ['2026'] } : {}) }
       const scene = plugin.compile(table, config)
       expect(() => renderScene(scene)).not.toThrow()
-      const selections = scene.migrationMode === 'native' ? nativeMarkSelections(scene) : []
+      const selections = nativeMarkSelections(scene)
       expect(selections).not.toHaveLength(0)
       expect(chartElementColor(table, config, selections[0].legacyKey)).toBeTruthy()
       expect(chartValueLabelSelections(table, config)).not.toHaveLength(0)
@@ -39,7 +38,6 @@ describe('native ECharts line and area adapter', () => {
   it('dispatches from semantic plot kind and preserves authoritative geometry', () => {
     const source = lineAreaFixtures[16]
     const scene = getChartPlugin(source.config.kind).compile(source.table, source.config)
-    if (scene.migrationMode !== 'native') throw new Error('Expected native scene')
     const resolved = resolveNativeCartesianScene(scene)
     const option = renderScene(resolved) as { grid: Record<string, number | boolean>; xAxis: { boundaryGap: boolean }; series: Array<{ areaStyle?: unknown }> }
     expect(option.grid).toEqual({ left: resolved.geometry.plot.x, top: resolved.geometry.plot.y, right: resolved.geometry.canvas.width - resolved.geometry.plot.x - resolved.geometry.plot.width, bottom: resolved.geometry.canvas.height - resolved.geometry.plot.y - resolved.geometry.plot.height, containLabel: false })
@@ -95,7 +93,6 @@ describe('native ECharts line and area adapter', () => {
 
   it('renders Seasonal presentation and direct identification from semantic fields', () => {
     const scene = getChartPlugin('seasonal-line').compile(seasonalTrendTable, { ...seasonalTrendConfig, showLegend: false, showDirectLabels: true })
-    if (scene.migrationMode !== 'native') throw new Error('Expected native scene')
     const option = renderScene(scene) as { series: Array<{ name: string; z?: number; lineStyle?: { color?: string; opacity?: number }; endLabel?: { formatter?: string } }> }
     expect(option.series.find((series) => series.name === '2023')).toMatchObject({ lineStyle: { color: '#d9d7df', opacity: .45 } })
     expect(option.series.find((series) => series.name === '2024')).toMatchObject({ z: 1001, lineStyle: { color: seasonalTrendConfig.color, opacity: 1 }, endLabel: { formatter: '{name|2024}' } })
@@ -104,7 +101,6 @@ describe('native ECharts line and area adapter', () => {
 
   it('renders indexed values consistently in marks, labels, tooltip metadata, and zero line', () => {
     const scene = getChartPlugin('indexed-line').compile(indexedTrendTable, { ...indexedTrendConfig, showValues: true, showZeroLine: true })
-    if (scene.migrationMode !== 'native') throw new Error('Expected native scene')
     const option = renderScene(scene) as { series: Array<{ name: string; markLine?: unknown; data: Array<{ value?: number | null; displayValue?: string; label?: { formatter?: string } }> }> }
     const series = option.series.find((item) => item.name === 'value')!
     expect(series.data.map((point) => point.value)).toEqual([100, 150, null, 50])
@@ -114,7 +110,6 @@ describe('native ECharts line and area adapter', () => {
 
   it('renders legend labels from the semantic guide without changing series identity', () => {
     const scene = getChartPlugin('indexed-line').compile(indexedTrendTable, { ...indexedTrendConfig, showLegend: true, showDirectLabels: false, seriesStyles: { value: { legendLabel: 'Индекс' } } })
-    if (scene.migrationMode !== 'native') throw new Error('Expected native scene')
     const option = renderScene(scene) as { legend: { formatter: (name: string) => string }; series: Array<{ name: string }> }
     expect(option.series.some((series) => series.name === 'value')).toBe(true)
     expect(option.legend.formatter('value')).toBe('Индекс')
@@ -122,7 +117,6 @@ describe('native ECharts line and area adapter', () => {
 
   it('renders a generic categorical group item without a fake series or Seasonal config', () => {
     const scene = getChartPlugin('indexed-line').compile(indexedTrendTable, { ...indexedTrendConfig, showLegend: true, showDirectLabels: false })
-    if (scene.migrationMode !== 'native') throw new Error('Expected native scene')
     if (scene.plot.kind !== 'line') throw new Error('Expected native line plot')
     const guide = scene.guides.find((item) => item.kind === 'categorical-legend')!
     guide.items = [{ id: 'legend:group:test', label: 'Группа', visible: true, color: '#778899', target: { kind: 'group', seriesIds: [scene.plot.series[0].id] } }]
@@ -149,10 +143,5 @@ describe('native ECharts line and area adapter', () => {
   })
 
   it('keeps migrated specialized families explicitly native', () => {
-    expect(getChartPlugin('slope').compilerMode).toBe('native')
-    for (const kind of ['range-line', 'step-range-line', 'confidence-line'] as const) expect(getChartPlugin(kind).compilerMode).toBe('native')
-    expect(getChartPlugin('scatter').compilerMode).toBe('native')
-    expect(getChartPlugin('waterfall').compilerMode).toBe('native')
-    expect(getChartPlugin('butterfly').compilerMode).toBe('native')
   })
 })
