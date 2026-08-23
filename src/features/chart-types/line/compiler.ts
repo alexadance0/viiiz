@@ -50,7 +50,7 @@ interface PreparedLinePolicy {
   legendItems?: (series: Array<LineSeriesScene | AreaSeriesScene>) => CategoricalLegendItem[]
 }
 
-function categoryLabelPlan(values: DataValue[], labels: string[], config: ChartConfig) {
+export function categoryLabelPlan(values: DataValue[], labels: string[], config: ChartConfig) {
   const dateCategories = values.some((value) => value instanceof Date)
   const calendarStep = dateCategories && effectiveDateStepUnit(config)
   const categoricalText = values.length > 0 && values.every((value) => typeof value === 'string' || typeof value === 'boolean' || value == null)

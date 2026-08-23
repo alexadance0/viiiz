@@ -43,7 +43,8 @@ Wave 3 started from `57a9357`; native Waterfall/Butterfly implementation complet
 | boxplot | distribution summary shape | native | dedicated lane/value box geometry | raw observations editable; derived box excluded | shared SVG/PNG boundary | no |
 | violinplot / raincloud / ridgeline | statistical density shapes | native | dedicated lane/value density geometry | raw observations editable; derived density excluded | shared SVG/PNG boundary | no |
 | histogram / kde-plot | distribution frequency/density | native semantic frequency layers | native continuous value × frequency/density axes | stable bins and source observations | shared SVG/PNG boundary | no |
-| heatmap / treemap | matrix / hierarchy | legacy | specialized hybrid | legacy/specialized | existing legacy path | yes |
+| heatmap | matrix | native | resolved cells and four-sided color guide | native custom renderer | semantic compiler/layout/renderer | yes |
+| treemap | hierarchy | legacy | specialized hybrid | legacy/specialized | existing legacy path | yes |
 
 ## Bar characterization coverage
 
@@ -136,7 +137,11 @@ The value domain is linear or strictly positive logarithmic in either orientatio
 
 ## Phase 7.1 integration checkpoint
 
-The interval semantic migration and its integration quality are tracked separately. Integration now uses an explicit revision-aware final-frame contract for preview, transitions, resize/font completion, and export restoration. Full-suite and repeated visual verification capture only `settled` revisions. Phase 8 moved Scatter/Bubble to native XY, Wave 1 completed Distribution, Wave 2 completed Lollipop/Dumbbell, and Wave 3 completed Waterfall/Butterfly. Current unmigrated legacy families are Heatmap and Treemap.
+The interval semantic migration and its integration quality are tracked separately. Integration now uses an explicit revision-aware final-frame contract for preview, transitions, resize/font completion, and export restoration. Full-suite and repeated visual verification capture only `settled` revisions. Phase 8 moved Scatter/Bubble to native XY, Wave 1 completed Distribution, Wave 2 completed Lollipop/Dumbbell, Wave 3 completed Waterfall/Butterfly, and Wave 4 completed Heatmap. The only remaining unmigrated family is Treemap.
+
+## Wave 4 checkpoint: native Heatmap
+
+Heatmap now compiles explicit matrix cells, including missing cells, stable datum identities, row order, value labels, colors, and an asymmetric continuous color guide. Layout owns all cell rectangles and guide reservations on every side; the custom renderer consumes those resolved bounds without `HeatmapChart`, `VisualMapComponent`, renderer-model feedback, or `ChartCanvas` scale positioning.
 
 ## Wave 3 Waterfall and Butterfly parity
 

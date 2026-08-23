@@ -16,6 +16,7 @@ export function nativeMarkSelections(scene: NativeChartScene): NativeMarkSelecti
   case 'comparison-stem': return scene.plot.series.flatMap((series) => series.points.map((point) => ({ legacyKey: point.legacyKey, seriesName: series.name, displayCategory: point.displayCategory, displayValue: point.displayValue, value: point.value, color: point.marker.fill })))
   case 'waterfall': return scene.plot.marks.map((mark) => ({ legacyKey: mark.legacyKey, seriesName: scene.compatibilityConfig.yFields[0] ?? scene.compatibilityConfig.yField, displayCategory: mark.displayCategory, displayValue: mark.displayValue, value: mark.value, color: mark.style.color }))
   case 'butterfly': return scene.plot.series.flatMap((series) => series.marks.map((mark) => ({ legacyKey: mark.legacyKey, seriesName: series.name, displayCategory: mark.displayCategory, displayValue: mark.displayValue, value: mark.value, color: mark.style.color })))
+  case 'heatmap': return scene.plot.rows.flatMap((row) => row.cells.map((cell) => ({ legacyKey: cell.legacyKey, seriesName: row.name, displayCategory: cell.displayCategory, displayValue: cell.displayValue, value: cell.value, color: cell.color })))
   case 'smoothing': {
     const plot = scene.plot
     return plot.layers.filter((layer) => layer.role === 'raw').flatMap((layer) => {
@@ -42,6 +43,7 @@ export function nativePointSeries(scene: NativeChartScene): Array<{ name: string
   case 'bar':
   case 'waterfall':
   case 'butterfly':
+  case 'heatmap':
   case 'xy': return []
   case 'distribution': return []
   case 'comparison-stem': return scene.plot.series

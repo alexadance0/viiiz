@@ -53,7 +53,7 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 - `buildOption` remains on the plugin interface for unmigrated callers. For ordinary bars its implementation is a native compile/layout/render compatibility facade, not the legacy cartesian builder.
 - Slope keeps persisted `slopeXValues`, family flags, change-label/direction-color settings, legend/direct settings, series styles, callback keys, annotations, and decorations. Old documents omit the new optional fields and retain the previous appearance because change labels and direction colors default off. It does not expose ordinary legend/direct guides, and its local guide/label graphics never create fake semantic or renderer series.
 - Interval groups retain persisted field triples, fill settings, `showBounds`, source styles, element override keys, and auto-grouping. Hidden Confidence bounds remain in domains and band validation but are absent from guides, value-label targets, tooltips, and selection visitors. Bands are silent derived layers and are never editable data rows.
-- Heatmap and Treemap retain their legacy compilers.
+- Treemap retains its legacy compiler. Heatmap is native.
 
 ## Tests added
 
@@ -70,7 +70,7 @@ There is no silent native-to-legacy fallback. `compilerMode` is asserted by test
 
 The shared legacy `cartesian()` source still contains unreachable migrated-family generic code because remaining specialized comparison/relationship charts share the function. The moving-average branches and the complete interval builder—including fake Confidence stacks and custom Range bands—have been deleted. The next safe removal is to split the remaining specialized builders, then delete unreachable generic conditions and compatibility option-shape tests.
 
-Heatmap and Treemap remain separate migrations.
+Treemap remains a separate migration. Heatmap completed its semantic compiler, authoritative matrix/guide layout, and custom renderer in Wave 4.
 
 ## Wave 3 native Waterfall and Butterfly
 

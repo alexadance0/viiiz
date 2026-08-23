@@ -60,30 +60,6 @@ export interface ChartCanvasHandle {
 export type ChartSettingsSection = 'title' | 'subtitle' | 'x-axis-title' | 'y-axis-title' | 'x-axis-labels' | 'y-axis-labels' | 'grid' | 'legend' | 'values' | 'note' | 'source' | 'series' | 'element'
 
 const RHYTHM = { edge: DEFAULT_COMPOSITION_SPACING.canvasInsets.top, titleSubtitle: DEFAULT_COMPOSITION_SPACING.titleSubtitle, headerLegend: DEFAULT_COMPOSITION_SPACING.headerLegend, headerPlot: DEFAULT_COMPOSITION_SPACING.headerPlot, legendPlot: DEFAULT_COMPOSITION_SPACING.legendPlot, plotFooter: DEFAULT_COMPOSITION_SPACING.plotFooter, noteSource: DEFAULT_COMPOSITION_SPACING.noteSource } as const
-export const heatmapScaleSideOffset = (config: ChartConfig) => config.kind === 'heatmap' && (config.heatmapShowScale ?? true) && (config.heatmapScalePosition ?? 'right') === config.yAxisPosition ? 80 : 0
-interface HeatmapScaleAxisReserve { x: number; y: number }
-export function positionHeatmapScaleGraphics(graphics: unknown[], config: ChartConfig, grid: { top?: number; right?: number; bottom?: number; left?: number }, canvasWidth: number, canvasHeight: number, axisReserve: HeatmapScaleAxisReserve = { x: 0, y: 0 }) {
-  if (config.kind !== 'heatmap' || !(config.heatmapShowScale ?? true)) return graphics
-  const position = config.heatmapScalePosition ?? 'right', vertical = position === 'left' || position === 'right'
-  const plotLeft = Number(grid.left ?? 0), plotRight = canvasWidth - Number(grid.right ?? 0), plotTop = Number(grid.top ?? 0), plotBottom = canvasHeight - Number(grid.bottom ?? 0)
-  const xReserve = position === config.xAxisPosition ? axisReserve.x : 0
-  const yReserve = position === config.yAxisPosition ? axisReserve.y : 0
-  const horizontalY = position === 'top' ? plotTop - xReserve - 48 : plotBottom + xReserve + 8
-  const scaleLength = Math.min(180, Math.max(90, (plotBottom - plotTop) * .55)), verticalY = (plotTop + plotBottom - scaleLength) / 2
-  const barX = position === 'left' ? config.canvasMarginLeft ?? 32 : position === 'right' ? plotRight + yReserve + 68 : plotLeft
-  const barWidth = vertical ? 12 : scaleLength, barHeight = vertical ? scaleLength : 12
-  return graphics.map((graphic) => {
-    if (!graphic || typeof graphic !== 'object') return graphic
-    const item = graphic as { id?: string; info?: { ratio?: number }; shape?: Record<string, number>; style?: Record<string, unknown> }
-    if (item.id === 'heatmap-scale-bar') return { ...item, shape: { ...item.shape, x: barX, y: vertical ? verticalY : horizontalY + 24, width: barWidth, height: barHeight } }
-    const match = item.id?.match(/^heatmap-scale-(tick|label)-(\d)$/)
-    if (!match) return graphic
-    const ratio = Number.isFinite(item.info?.ratio) ? item.info!.ratio! : Number(match[2]) / 2
-    if (match[1] === 'tick') return { ...item, shape: vertical ? { x1: barX - 3, y1: verticalY + scaleLength * ratio, x2: barX + 15, y2: verticalY + scaleLength * ratio } : { x1: plotLeft + barWidth * ratio, y1: horizontalY + 14, x2: plotLeft + barWidth * ratio, y2: horizontalY + 22 } }
-    return { ...item, style: vertical ? { ...item.style, x: position === 'left' ? barX + 20 : barX - 8, y: verticalY + scaleLength * ratio, align: position === 'left' ? 'left' : 'right' } : { ...item.style, x: plotLeft + barWidth * ratio, y: horizontalY + 5, align: 'center' } }
-  })
-}
-
 interface Props {
   table: DataTable
   config: ChartConfig
@@ -386,20 +362,7 @@ export function suppressBuiltInDirectLabels(option: Record<string, unknown>, con
   })
 }
 
-interface HeatmapModelSource { getModel(): { getComponent(type: string, index: number): unknown } }
-export function heatmapPlotBounds(instance: HeatmapModelSource, config: ChartConfig): PlotBounds | null {
-  if (config.kind !== 'heatmap') return null
-  try {
-    const component = instance.getModel().getComponent('grid', 0) as unknown as { coordinateSystem?: { getRect(): { x: number; y: number; width: number; height: number } } }
-    const rect = component.coordinateSystem?.getRect()
-    if (!rect || ![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) || rect.width <= 0 || rect.height <= 0) return null
-    return { left: rect.x, right: rect.x + rect.width, top: rect.y, bottom: rect.y + rect.height }
-  } catch { return null }
-}
-
 function chartPlotBounds(instance: echarts.ECharts, table: DataTable, config: ChartConfig): PlotBounds | null {
-  const heatmapBounds = heatmapPlotBounds(instance as unknown as HeatmapModelSource, config)
-  if (heatmapBounds) return heatmapBounds
   const option = instance.getOption() as unknown as { xAxis?: Array<{ min?: number; max?: number }>; yAxis?: Array<{ min?: number; max?: number }>; grid?: Array<{ left?: number; right?: number; top?: number; bottom?: number }> }
   if (isHorizontalBar(config)) {
     const firstGrid = option.grid?.[0], lastGrid = option.grid?.at(-1) ?? firstGrid
@@ -963,16 +926,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         ? Math.round(yTitleStyle.size * yTitleStyle.lineHeight / 100) * Math.max(1, config.yAxisTitle.split('\n').length) + config.yAxisTitleGap
         : 0
       let grid = option.grid as { top?: number; bottom?: number; left?: number; right?: number; containLabel?: boolean } | undefined
-      const heatmapScalePosition = config.heatmapScalePosition ?? 'right'
-      const heatmapScaleVisible = config.kind === 'heatmap' && (config.heatmapShowScale ?? true)
-      const heatmapYLabelStyle = config.yAxisLabelText ?? config.axisLabelText
-      const heatmapXAxisReserve = ((config.showXAxisLabels ?? true) ? Math.round((config.xAxisLabelText ?? config.axisLabelText).size * (config.xAxisLabelText ?? config.axisLabelText).lineHeight / 100) + (config.xAxisLabelGap ?? 8) : 0) + (config.showXTicks ? config.tickLength : 0) + (config.showXAxisTitle && config.xAxisTitle ? Math.round((config.xAxisTitleText ?? config.axisTitleText).size * (config.xAxisTitleText ?? config.axisTitleText).lineHeight / 100) * Math.max(1, config.xAxisTitle.split('\n').length) + config.xAxisTitleGap : 0)
-      const heatmapYAxisReserve = ((config.showYAxisLabels ?? true) ? legendNames.reduce((width, name) => Math.max(width, measureTextWidth(name, heatmapYLabelStyle.size, heatmapYLabelStyle.fontFamily, heatmapYLabelStyle.weight)), 0) + (config.yAxisLabelGap ?? 8) : 0) + (config.showYTicks ? config.tickLength : 0) + (config.showYAxisTitle && config.yAxisTitle ? yTitleThickness : 0)
-      const heatmapAxisReserve = { x: heatmapXAxisReserve, y: heatmapYAxisReserve }
-      if (grid && heatmapScaleVisible) {
-        const registryReserve = heatmapScalePosition === 'left' || heatmapScalePosition === 'right' ? 80 : 60
-        grid[heatmapScalePosition] = Math.max(0, Number(grid[heatmapScalePosition] ?? 0) - registryReserve)
-      }
       const oldHeaderBase = visibleSubtitle || (standardLegend && legendPosition === 'top') ? 104 : 78
       const topAxisExtra = config.xAxisPosition === 'top' ? Math.max(0, Number(grid?.top ?? oldHeaderBase) - oldHeaderBase) : 0
       const hasHeader = Boolean(visibleTitle || visibleSubtitle)
@@ -1084,14 +1037,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         grid.top = Math.max(0, Math.round(top - verticalOverflow * top / Math.max(1, top + bottom)))
         grid.bottom = Math.max(0, Math.round(bottom - verticalOverflow * bottom / Math.max(1, top + bottom)))
       }
-      if (grid && heatmapScaleVisible) {
-        const verticalScale = heatmapScalePosition === 'left' || heatmapScalePosition === 'right'
-        const axisReserve = verticalScale
-          ? heatmapScalePosition === 'right' && heatmapScalePosition === config.yAxisPosition ? heatmapYAxisReserve : 0
-          : heatmapScalePosition === 'top' && heatmapScalePosition === config.xAxisPosition ? heatmapXAxisReserve : 0
-        const finalReserve = (verticalScale ? 80 : 60) + axisReserve
-        grid[heatmapScalePosition] = Number(grid[heatmapScalePosition] ?? 0) + finalReserve
-      }
       if (grid && config.kind === 'treemap') {
         const treemapGrid = grid
         ;(option.series as Array<Record<string, unknown>> | undefined)?.forEach((series) => Object.assign(series, { left: treemapGrid.left, top: treemapGrid.top, right: treemapGrid.right, bottom: treemapGrid.bottom }))
@@ -1171,10 +1116,10 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         : canvasHeight - Number(grid?.bottom ?? marginBottom) + physicalXAxisOuterReserve + physicalXAxisTitleGap + xAxisTitleHeight / 2
       const xAxisTitleSection = isHorizontalBar(config) ? 'y-axis-title' : 'x-axis-title'
       const makeXAxisTitle = (clean = false) => standardXAxisTitle && { id: 'chart-x-axis-title', type: 'text', x: xAxisTitleX, y: xAxisTitleY, z: 20, silent: clean, cursor: clean ? undefined : 'pointer', style: { text: physicalXAxisTitle, fill: xAxisTitleStyle.color, fontFamily: xAxisTitleStyle.fontFamily, fontSize: xAxisTitleStyle.size, fontWeight: xAxisTitleStyle.weight, fontStyle: xAxisTitleStyle.italic ? 'italic' : 'normal', lineHeight: Math.round(xAxisTitleStyle.size * xAxisTitleStyle.lineHeight / 100), align: 'center', textAlign: 'center', verticalAlign: 'middle', ...(!clean && selectedSettingsSection === xAxisTitleSection ? selectionStyle : {}) }, onclick: clean ? undefined : () => onSettingsFocus?.(xAxisTitleSection) }
-      const existing = [...positionHeatmapScaleGraphics(Array.isArray(option.graphic) ? option.graphic : [], config, grid ?? {}, config.canvasWidth ?? 1000, canvasHeight, heatmapAxisReserve), makeXAxisTitle()].filter(Boolean)
+      const existing = [...(Array.isArray(option.graphic) ? option.graphic : []), makeXAxisTitle()].filter(Boolean)
       const plotMiddleY = grid ? (Number(grid.top ?? 0) + canvasHeight - Number(grid.bottom ?? 0)) / 2 : canvasHeight / 2
       const yTitlePosition = config.yAxisPosition
-      const yTitleSideOffset = standardLegend && legendPosition === yTitlePosition ? sideLegendWidth + (yTitlePosition === 'left' ? marginLeft : marginRight) + 8 : (yTitlePosition === 'left' ? marginLeft : marginRight) + heatmapScaleSideOffset(config)
+      const yTitleSideOffset = standardLegend && legendPosition === yTitlePosition ? sideLegendWidth + (yTitlePosition === 'left' ? marginLeft : marginRight) + 8 : yTitlePosition === 'left' ? marginLeft : marginRight
       const yTitleLabelStyle = isHorizontalBar(config) ? config.xAxisTitleText ?? config.axisTitleText : config.yAxisTitleText ?? config.axisTitleText
       const yTitleEdgeThickness = Math.round(yTitleLabelStyle.size * yTitleLabelStyle.lineHeight / 100)
       const yTitleX = yTitlePosition === 'left' ? yTitleSideOffset + yTitleEdgeThickness / 2 : (config.canvasWidth ?? 1000) - yTitleSideOffset - yTitleEdgeThickness / 2
@@ -1235,7 +1180,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         const style: Record<string, unknown> = { ...item.style, opacity: item.id === 'chart-title-hit' && config.titleHtml || item.id === 'chart-subtitle-hit' && config.subtitleHtml ? 0 : 1 }
         return { ...item, style }
       })
-      const cleanLabels = [...positionHeatmapScaleGraphics(Array.isArray(cleanOption.graphic) ? cleanOption.graphic : [], config, grid ?? {}, config.canvasWidth ?? 1000, canvasHeight, heatmapAxisReserve), makeXAxisTitle(true)].filter(Boolean).map((graphic) => {
+      const cleanLabels = [...(Array.isArray(cleanOption.graphic) ? cleanOption.graphic : []), makeXAxisTitle(true)].filter(Boolean).map((graphic) => {
         if (!graphic || typeof graphic !== 'object') return graphic
         const item = graphic as { id?: string; style?: object }
         if (item.id === 'chart-y-axis-title') return positionYAxisTitleGraphic(item, yTitleX, plotMiddleY, plugin.compilerMode === 'native')
@@ -1295,8 +1240,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const barGrid = plotKind === 'comparison-stem' ? [] : barVerticalGridGraphics(instance, table, config, exactBounds)
       if (exactBounds) {
         const exactMiddleY = (exactBounds.top + exactBounds.bottom) / 2
-        const exactGrid = { left: exactBounds.left, right: (config.canvasWidth ?? 1000) - exactBounds.right, top: exactBounds.top, bottom: canvasHeight - exactBounds.bottom }
-        const positionPlotGraphics = (graphics: unknown[]) => positionHeatmapScaleGraphics(graphics, config, exactGrid, config.canvasWidth ?? 1000, canvasHeight, heatmapAxisReserve).map((graphic) => {
+        const positionPlotGraphics = (graphics: unknown[]) => graphics.map((graphic) => {
           if (!graphic || typeof graphic !== 'object') return graphic
           const item = graphic as { id?: string; style?: Record<string, unknown>; children?: Array<{ type?: string; shape?: { width?: number; height?: number } }> }
           if (item.id === 'chart-x-axis-title') return { ...item, x: (exactBounds.left + exactBounds.right) / 2, y: config.xAxisPosition === 'bottom' ? exactBounds.bottom + physicalXAxisLabelOffset + physicalXAxisTitleGap + xAxisTitleHeight / 2 : exactBounds.top - physicalXAxisLabelOffset - physicalXAxisTitleGap - xAxisTitleHeight / 2 }

@@ -73,6 +73,23 @@ const openSettings = async (page: Page, name: string) => {
   if (!(await summary.evaluate((element) => (element.parentElement as HTMLDetailsElement).open))) await summary.click()
 }
 
+test('native heatmap resolves its continuous scale on every side', async ({ page }) => {
+  test.setTimeout(120_000)
+  await openDemoChart(page, 'Временной ряд', 'Тепловая карта')
+  const canvas = page.locator('.chart-canvas-shell')
+  await expect(canvas).toHaveAttribute('data-plot-kind', 'heatmap')
+  await openDesign(page)
+  await openSettings(page, 'Ряды и пропуски')
+  await updateChart(page, canvas, () => page.getByLabel('Сортировка рядов').selectOption('last'))
+  await openSettings(page, 'Цветовая шкала')
+  const position = page.getByLabel('Положение шкалы')
+  for (const side of ['right', 'left', 'top', 'bottom'] as const) {
+    await updateChart(page, canvas, () => position.selectOption(side))
+    await expect(canvas.locator('svg')).toBeVisible()
+    await expect(canvas).toHaveScreenshot(`native-heatmap-scale-${side}.png`)
+  }
+})
+
 test('native comparison and stem charts preserve both orientations and dense change labels', async ({ page }) => {
   test.setTimeout(120_000)
   await openDemoChart(page, 'Временной ряд', 'Леденцовая')

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as echarts from 'echarts'
-import { applySeriesVisualState, barVerticalGridGraphics, directLegendGraphics, fitTreemapLabelBoxes, heatmapPlotBounds, heatmapScaleSideOffset, materializeTreemapHyphens, outlineSelectedTreemapGroup, positionHeatmapScaleGraphics, positionYAxisTitleGraphic, suppressBuiltInDirectLabels, wrapTreemapLabelText } from './ChartCanvas'
+import { applySeriesVisualState, barVerticalGridGraphics, directLegendGraphics, fitTreemapLabelBoxes, materializeTreemapHyphens, outlineSelectedTreemapGroup, positionYAxisTitleGraphic, suppressBuiltInDirectLabels, wrapTreemapLabelText } from './ChartCanvas'
 import { customFontCss } from '../features/chart-export/chartExport'
 import { decorationGraphics } from './chartDecorations'
 import { getChartPlugin } from '../core/chartRegistry'
@@ -15,7 +15,7 @@ const config: ChartConfig = {
 }
 const table: DataTable = { name: 'line', columns: ['year', 'a', 'b', 'c'], rows: [{ year: 2022, a: 10, b: 9.8, c: 9.6 }, { year: 2023, a: 10, b: 9.9, c: 9.8 }] }
 
-describe('heatmap title layout', () => {
+describe('native title layout', () => {
   it.each([
     [{ left: 24 }, 'left'],
     [{ right: 24 }, 'right'],
@@ -23,29 +23,6 @@ describe('heatmap title layout', () => {
     const positioned = positionYAxisTitleGraphic({ id: 'chart-y-axis-title', ...side, top: 'middle' }, 700, 250, true)
     expect(positioned).toMatchObject({ [key]: 24, y: 250 })
     expect(positioned.x).toBeUndefined()
-  })
-
-  it('reserves the scale width on the same side as the Y title', () => {
-    expect(heatmapScaleSideOffset({ ...config, kind: 'heatmap', yAxisPosition: 'left', heatmapScalePosition: 'left', heatmapShowScale: true })).toBe(80)
-    expect(heatmapScaleSideOffset({ ...config, kind: 'heatmap', yAxisPosition: 'right', heatmapScalePosition: 'right', heatmapShowScale: true })).toBe(80)
-    expect(heatmapScaleSideOffset({ ...config, kind: 'heatmap', yAxisPosition: 'left', heatmapScalePosition: 'right', heatmapShowScale: true })).toBe(0)
-    expect(heatmapScaleSideOffset({ ...config, kind: 'heatmap', yAxisPosition: 'left', heatmapScalePosition: 'left', heatmapShowScale: false })).toBe(0)
-  })
-
-  it('aligns horizontal scales to the final plot and keeps vertical scales shorter', () => {
-    const graphics = [{ id: 'heatmap-scale-bar', shape: {} }, { id: 'heatmap-scale-label-1', info: { ratio: .25 }, style: {} }]
-    const grid = { left: 140, right: 80, top: 130, bottom: 100 }
-    const top = positionHeatmapScaleGraphics(graphics, { ...config, kind: 'heatmap', heatmapScalePosition: 'top', xAxisPosition: 'top' }, grid, 800, 500, { x: 30, y: 20 }) as typeof graphics
-    expect(top[0].shape).toMatchObject({ x: 140, y: 76, width: 148.5, height: 12 })
-    expect(top[1].style).toMatchObject({ x: 177.125, align: 'center' })
-    const left = positionHeatmapScaleGraphics(graphics, { ...config, kind: 'heatmap', heatmapScalePosition: 'left', yAxisPosition: 'left' }, grid, 800, 500, { x: 30, y: 20 }) as typeof graphics
-    expect(Number((left[0]!.shape as { height?: number }).height)).toBe(Number((top[0]!.shape as { width?: number }).width))
-    expect(left[0].shape).toMatchObject({ x: 32, width: 12 })
-  })
-
-  it('reads heatmap bounds from the rendered coordinate rectangle, excluding labels', () => {
-    const instance = { getModel: () => ({ getComponent: () => ({ coordinateSystem: { getRect: () => ({ x: 173, y: 91, width: 427, height: 286 }) } }) }) }
-    expect(heatmapPlotBounds(instance, { ...config, kind: 'heatmap' })).toEqual({ left: 173, right: 600, top: 91, bottom: 377 })
   })
 })
 

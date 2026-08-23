@@ -35,7 +35,7 @@ Phase 3 baseline: `ab264f5d7a69a466935b25873d68c8e1379a7113`.
 
 `NativeChartScene.plot` is now a discriminated bar/line/area union. Basic line, spline, step-line, area, stacked-area, and normalized-stacked-area compile semantic points, interpolation, missing-value policy, stroke/marker/fill intent, stable identities, and category-label plans. They share the native Cartesian frame/axis/text layout and render through plot-kind dispatch without reaching the legacy option builder.
 
-Specialized interval and Distribution charts, Scatter/Bubble, Lollipop/Horizontal Lollipop, and Dumbbell are native. Waterfall, Butterfly, Heatmap, and Treemap remain explicitly legacy.
+Specialized interval and Distribution charts, Scatter/Bubble, Lollipop/Horizontal Lollipop, Dumbbell, Waterfall, Butterfly, and Heatmap are native. Treemap remains explicitly legacy.
 
 ## Phase 6 checkpoint — native smoothing
 
@@ -55,7 +55,7 @@ Implementation completed in: `d939955`.
 
 Interval charts reuse prepared point data and the shared native Cartesian frame, axes, guides, category-edge behavior, selection visitors, and export lifecycle. The dedicated ECharts adapter translates semantic cells into clipped polygons below visible source lines. The compiler resolves fill colors, opacity, source visibility, boundary presentation, legend/direct/value-label membership, and domain participation; neither the renderer nor `ChartCanvas` branches on the persisted interval product kind.
 
-The legacy `intervalLine()` builder, fake stacked Confidence base/fill series, custom Range band construction, and interval legend filtering were removed from `chartRegistry.ts`. Later phases also removed the Distribution and Lollipop/Dumbbell runtime builders. Waterfall, Butterfly, Heatmap, and Treemap remain explicitly legacy.
+The legacy `intervalLine()` builder, fake stacked Confidence base/fill series, custom Range band construction, and interval legend filtering were removed from `chartRegistry.ts`. Later phases also removed the Distribution, Lollipop/Dumbbell, Waterfall/Butterfly, and Heatmap runtime builders. Treemap remains explicitly legacy.
 
 ## Phase 7.1 checkpoint — deterministic native rendering
 
@@ -73,7 +73,7 @@ Phase 8 started from `b089ab3b5a0eeda0d242ae10482f91496340b82b` and completed in
 
 Scatter and Bubble now dispatch through `plot.kind = 'xy'`, with truthful `x`/`y` channels and a dedicated continuous-axis layout. Only actual data groups live in `plot.series`; trend/band/reference/diagonal/quadrant layers and the size-scale guide have separate semantic types and stable IDs. The renderer consumes no table rows and `ChartCanvas` gained no Scatter geometry branches.
 
-The legacy relationship builder, local bubble callback, fake stacked confidence band, `markLine`, `markArea`, fake size-guide series, legacy tooltip, and legend mutation were removed from `chartRegistry.ts`. At the Phase 8 checkpoint Lollipop and Dumbbell were still legacy; Wave 2 later migrated them. Current legacy families are Waterfall, Butterfly, Heatmap, and Treemap.
+The legacy relationship builder, local bubble callback, fake stacked confidence band, `markLine`, `markArea`, fake size-guide series, legacy tooltip, and legend mutation were removed from `chartRegistry.ts`. At the Phase 8 checkpoint Lollipop and Dumbbell were still legacy; later waves migrated them together with Waterfall, Butterfly, and Heatmap. The current legacy family is Treemap.
 
 The final gate passed three consecutive full E2E runs (44/44 each), the full suite at `--repeat-each=3` (132/132), and the visual file at `--repeat-each=5` (35/35), with no expected snapshot changes. Playwright uses two parallel workers in the supported macOS snapshot environment to avoid host saturation from concurrent SVG/video/trace contexts; this remains a multi-worker verification path.
 
@@ -115,6 +115,10 @@ Waterfall now compiles `plot.kind = 'waterfall'`: source steps retain raw/aggreg
 
 Butterfly now compiles `plot.kind = 'butterfly'`: left/right fields are explicit semantic sides, magnitudes are normalized once, each side stacks independently, and the value domain is symmetric. Its dedicated layout owns mirrored rectangles and center/left/right category placement; the renderer consumes resolved geometry and exposes a renderer-neutral hit map to the outer callback adapter.
 
-Both plugins are explicitly native, their legacy entry points throw, and their old `ChartCanvas` split-axis/category/bar-hit and Waterfall pointer-geometry helpers were removed. Representative visual baselines cover three states per family plus Butterfly bottom-label placement. Remaining legacy families are Heatmap and Treemap.
+Both plugins are explicitly native, their legacy entry points throw, and their old `ChartCanvas` split-axis/category/bar-hit and Waterfall pointer-geometry helpers were removed. Representative visual baselines cover three states per family plus Butterfly bottom-label placement. Wave 4 subsequently migrated Heatmap; Treemap is the remaining legacy family.
+
+## Wave 4: Heatmap owns its matrix and continuous guide
+
+The Heatmap plugin emits typed cells for the complete category-by-measure matrix, including missing values and stable selection identities. Its layout resolves cell rectangles, row/category rails, and color-scale bounds/ticks on all four sides. The renderer uses only those resolved structures, and the legacy Heatmap ECharts builder, `HeatmapChart`/`VisualMapComponent` loader, and `ChartCanvas` model/scale feedback were removed.
 
 The blocking-review stabilization makes this boundary strict: Butterfly side segments share one category row and touch at cumulative stack edges; category placement is semantic before frame reservation, and resolved category rectangles drive both central editing and selection. Waterfall null steps keep finite cumulative connectors across their slots, while element colors and label placements—including the synthetic total—remain authoritative. Both compilers restore the source-family `ChartDocument`, Butterfly validation composes generic duplicate-category checks with side mapping, and the outer canvas contains no Waterfall/Butterfly family event or category-geometry branch.

@@ -27,6 +27,7 @@ import { compileNativeWaterfallScene, legacyWaterfallBuilderGuard } from '../fea
 import { waterfallSteps } from '../features/chart-types/waterfall/transform'
 export { formatWaterfallChange, waterfallLabelPlacement, waterfallSteps, waterfallValueLabel } from '../features/chart-types/waterfall/transform'
 import { compileNativeButterflyScene, legacyButterflyBuilderGuard, validateNativeButterflyMapping } from '../features/chart-types/butterfly/compiler'
+import { compileNativeHeatmapScene, legacyHeatmapBuilderGuard } from '../features/chart-types/heatmap/compiler'
 export { fitSwarmClouds, fitSwarmOffsets, packSwarmOffsets } from '../features/chart-types/distribution/swarm'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 import { nativeMarkSelections } from '../entities/chart/model/sceneVisitors'
@@ -34,6 +35,7 @@ import { repeatedChartCategories } from './chartData'
 import { absorbedBarLabelPlacement, barSeriesGeometry, denseValueLabelStride, isInsideValueLabel, showDenseValueLabel, valueLabelPosition } from './chartLabels'
 import { hyphenateSync as hyphenateRussian } from 'hyphen/ru'
 import { getSeriesColor } from './seriesColor'
+import { contrastText, mixHexColors } from './color'
 
 export { getSeriesColor } from './seriesColor'
 
@@ -115,24 +117,6 @@ const orderedTreemapNodes = <T extends { name: string; value: number }>(nodes: T
   if (!order?.length) return fallback
   const rank = new Map(order.map((name, index) => [name, index]))
   return fallback.sort((left, right) => (rank.get(left.name) ?? Number.MAX_SAFE_INTEGER) - (rank.get(right.name) ?? Number.MAX_SAFE_INTEGER))
-}
-const contrastText = (color: string) => {
-  const hex = color.match(/^#([\da-f]{6})$/i)?.[1]
-  if (!hex) return '#ffffff'
-  const luminance = (value: string) => {
-    const channels = [0, 2, 4].map((index) => Number.parseInt(value.slice(index, index + 2), 16) / 255).map((channel) => channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4)
-    return channels[0] * .2126 + channels[1] * .7152 + channels[2] * .0722
-  }
-  const background = luminance(hex)
-  return 1.05 / (background + .05) >= 3 ? '#ffffff' : '#202027'
-}
-const mixHexColors = (from: string, to: string, amount: number) => {
-  const parse = (color: string) => color.match(/^#([\da-f]{6})$/i)?.[1]
-  const first = parse(from), second = parse(to)
-  if (!first || !second) return amount < .5 ? from : to
-  const ratio = Math.min(1, Math.max(0, amount))
-  const channel = (index: number) => Math.round(Number.parseInt(first.slice(index, index + 2), 16) * (1 - ratio) + Number.parseInt(second.slice(index, index + 2), 16) * ratio).toString(16).padStart(2, '0')
-  return `#${channel(0)}${channel(2)}${channel(4)}`
 }
 const directLabelWidth = (config: ChartConfig, series: Array<{ name: string }>) => {
   const canvasWidth = Math.min(1000, config.canvasWidth ?? 1000)
@@ -851,123 +835,8 @@ const heatmap: LegacyChartPlugin = {
     series: ['color'],
     features: { directLabels: false, barLayout: false, dataPreparation: false, normalizedStack: false, areaLayout: false, scatterLayout: false, distributionLayout: false, lineVariant: false },
   },
-  validate(table, config) {
-    return validateMapping(table, config)
-  },
-  buildOption(table, config) {
-    const prepared = prepareVisibleChartData(table, { ...config, seriesField: '' })
-    const base = commonOption(table, config, prepared) as Record<string, unknown> & { grid: { top: number; right: number; bottom: number; left: number }; legend: Record<string, unknown>; xAxis: Record<string, unknown> & { axisLabel?: { formatter?: (value: string, index: number) => string } } }
-    const xLabels = prepared.categories.map((value) => value instanceof Date ? formatTimeValue(value, table.timeProfiles?.[config.xField], config.dateLabelFormat) : String(value ?? ''))
-    const rowMetric = (data: Array<number | null>) => {
-      const values = data.filter((value): value is number => value != null && Number.isFinite(value))
-      if (!values.length) return Number.NEGATIVE_INFINITY
-      if (config.heatmapRowSort === 'min') return Math.min(...values)
-      if (config.heatmapRowSort === 'max') return Math.max(...values)
-      if (config.heatmapRowSort === 'last') return values.at(-1)!
-      return values.reduce((sum, value) => sum + value, 0) / values.length
-    }
-    const sortedSeries = prepared.series.map((series, index) => ({ series, index }))
-    if ((config.heatmapRowSort ?? 'none') !== 'none') sortedSeries.sort((left, right) => ((rowMetric(left.series.data) - rowMetric(right.series.data)) * (config.heatmapRowSortDirection === 'ascending' ? 1 : -1)) || left.index - right.index)
-    const rows = sortedSeries.map(({ series }) => series)
-    const yLabels = rows.map((series) => series.name)
-    const missingColor = config.heatmapMissingColor ?? '#e8e7eb', missingLabel = config.heatmapMissingLabel ?? '—'
-    const values = rows.flatMap((series) => series.data.filter((value): value is number => value != null && Number.isFinite(value)))
-    const minimum = values.length ? Math.min(...values) : 0, maximum = values.length ? Math.max(...values) : 1
-    const axisLineStyle = { color: config.axisLineColor, width: config.axisLineWidth, type: config.axisLineType }
-    const low = config.heatmapLowColor ?? '#2c6aa8', middle = config.heatmapMidColor ?? '#f5f5f2', high = config.heatmapHighColor ?? '#c83e4d'
-    const diverging = (config.heatmapScaleMode ?? 'diverging') === 'diverging', midpoint = config.heatmapMidpoint ?? 0
-    const distance = Math.max(Math.abs(minimum - midpoint), Math.abs(maximum - midpoint), 1)
-    const automaticMinimum = diverging ? midpoint - distance : minimum, automaticMaximum = diverging ? midpoint + distance : maximum === minimum ? minimum + 1 : maximum
-    const requestedMinimum = config.heatmapScaleMin != null && Number.isFinite(config.heatmapScaleMin) ? config.heatmapScaleMin : undefined
-    const requestedMaximum = config.heatmapScaleMax != null && Number.isFinite(config.heatmapScaleMax) ? config.heatmapScaleMax : undefined
-    let scaleMinimum = requestedMinimum ?? automaticMinimum, scaleMaximum = requestedMaximum ?? automaticMaximum
-    if (scaleMaximum <= scaleMinimum) {
-      if (requestedMinimum != null && requestedMaximum == null) scaleMaximum = scaleMinimum + 1
-      else if (requestedMaximum != null && requestedMinimum == null) scaleMinimum = scaleMaximum - 1
-      else if (requestedMinimum != null && requestedMaximum != null && requestedMinimum !== requestedMaximum) [scaleMinimum, scaleMaximum] = [requestedMaximum, requestedMinimum]
-      else { scaleMinimum = automaticMinimum; scaleMaximum = automaticMaximum }
-    }
-    const colorMidpoint = Math.min(scaleMaximum, Math.max(scaleMinimum, midpoint))
-    const midpointRatio = (colorMidpoint - scaleMinimum) / (scaleMaximum - scaleMinimum)
-    const cellColor = (value: number) => diverging
-      ? value <= colorMidpoint
-        ? mixHexColors(low, middle, (value - scaleMinimum) / Math.max(Number.EPSILON, colorMidpoint - scaleMinimum))
-        : mixHexColors(middle, high, (value - colorMidpoint) / Math.max(Number.EPSILON, scaleMaximum - colorMidpoint))
-      : mixHexColors(low, high, (value - scaleMinimum) / (scaleMaximum - scaleMinimum))
-    const points = rows.flatMap((series, y) => series.data.map((value, x) => {
-      const color = value == null ? missingColor : cellColor(value)
-      return {
-        value: [x, y, value],
-        elementKey: elementKey(series.name, prepared.categories[x]),
-        sourceSeriesName: series.name,
-        displayValue: value == null ? missingLabel : formatChartNumber(value, config),
-        displayCategory: `${xLabels[x]} · ${series.name}`,
-        itemStyle: { color },
-        label: { color: config.valueLabelAutoContrast ?? true ? contrastText(color) : config.valueText.color },
-      }
-    }))
-    const showScale = config.heatmapShowScale ?? true
-    const scalePosition = config.heatmapScalePosition ?? 'right', verticalScale = scalePosition === 'right' || scalePosition === 'left'
-    const scaleReserve = showScale ? verticalScale ? 80 : 60 : 0
-    const grid = {
-      ...base.grid,
-      right: base.grid.right + (scalePosition === 'right' ? scaleReserve : 0),
-      left: base.grid.left + (scalePosition === 'left' ? scaleReserve : 0),
-      top: base.grid.top + (scalePosition === 'top' ? scaleReserve : 0),
-      bottom: base.grid.bottom + (scalePosition === 'bottom' ? scaleReserve : 0),
-    }
-    const graphic = Array.isArray(base.graphic) ? base.graphic.map((item) => {
-      if (scalePosition !== 'left' || !showScale || config.yAxisPosition !== 'left' || typeof item !== 'object' || item == null || (item as { id?: string }).id !== 'chart-y-axis-title') return item
-      return { ...item, left: (config.canvasMarginLeft ?? 32) + scaleReserve }
-    }) : base.graphic
-    const canvasWidth = config.canvasWidth ?? 1000, canvasHeight = config.canvasHeight ?? 750
-    const middleValue = diverging ? colorMidpoint : (scaleMinimum + scaleMaximum) / 2
-    const scaleStops = diverging
-      ? [{ offset: 0, color: low }, { offset: midpointRatio, color: middle }, { offset: 1, color: high }]
-      : [{ offset: 0, color: low }, { offset: 1, color: high }]
-    const scaleText = (value: number) => formatYAxisNumber(value, config)
-    const scaleTextStyle = { ...graphicText(config.legendText), verticalAlign: 'middle' }
-    const scaleGraphics: Array<Record<string, unknown>> = []
-    if (showScale && !verticalScale) {
-      const width = Math.min(520, Math.max(220, canvasWidth * .52)), height = 12, x = (canvasWidth - width) / 2
-      const y = scalePosition === 'top' ? base.grid.top + 8 : canvasHeight - base.grid.bottom - 40
-      scaleGraphics.push(
-        { id: 'heatmap-scale-bar', type: 'rect', z: 90, silent: true, shape: { x, y: y + 24, width, height }, style: { fill: { type: 'linear', x: 0, y: 0, x2: 1, y2: 0, colorStops: scaleStops } } },
-        ...[[0, scaleMinimum], [diverging ? midpointRatio : .5, middleValue], [1, scaleMaximum]].flatMap(([ratio, value], index) => {
-          const tickX = x + width * ratio
-          return [
-            { id: `heatmap-scale-tick-${index}`, type: 'line', z: 91, silent: true, info: { ratio }, shape: { x1: tickX, y1: y + 14, x2: tickX, y2: y + 22 }, style: { stroke: config.legendText.color, lineWidth: 1 } },
-            { id: `heatmap-scale-label-${index}`, type: 'text', z: 91, silent: true, info: { ratio }, style: { ...scaleTextStyle, x: tickX, y: y + 5, text: scaleText(value), align: 'center' } },
-          ]
-        }),
-      )
-    } else if (showScale) {
-      const width = 12, height = Math.min(180, Math.max(90, canvasHeight * .24)), y = base.grid.top + 8
-      const x = scalePosition === 'left' ? config.canvasMarginLeft ?? 32 : canvasWidth - (config.canvasMarginRight ?? 24) - width
-      const labelX = scalePosition === 'left' ? x + width + 8 : x - 8, align = scalePosition === 'left' ? 'left' : 'right'
-      scaleGraphics.push(
-        { id: 'heatmap-scale-bar', type: 'rect', z: 90, silent: true, shape: { x, y, width, height }, style: { fill: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: scaleStops.map((stop) => ({ offset: 1 - stop.offset, color: stop.color })).reverse() } } },
-        ...[[0, scaleMaximum], [diverging ? 1 - midpointRatio : .5, middleValue], [1, scaleMinimum]].flatMap(([ratio, value], index) => {
-          const tickY = y + height * ratio
-          return [
-            { id: `heatmap-scale-tick-${index}`, type: 'line', z: 91, silent: true, info: { ratio }, shape: { x1: x - 3, y1: tickY, x2: x + width + 3, y2: tickY }, style: { stroke: config.legendText.color, lineWidth: 1 } },
-            { id: `heatmap-scale-label-${index}`, type: 'text', z: 91, silent: true, info: { ratio }, style: { ...scaleTextStyle, x: labelX, y: tickY, text: scaleText(value), align } },
-          ]
-        }),
-      )
-    }
-    return {
-      ...base,
-      grid,
-      graphic: [...(Array.isArray(graphic) ? graphic : []), ...scaleGraphics],
-      legend: { ...base.legend, show: false },
-      tooltip: { trigger: 'item', formatter: (params: { data?: { value?: Array<number | null> } }) => { const [x = 0, y = 0, value] = params.data?.value ?? []; return `<b>${escapeHtml(yLabels[Number(y)])}</b><br/>${escapeHtml(xLabels[Number(x)])}: <b>${escapeHtml(value == null ? missingLabel : formatChartNumber(value, config))}</b>` } },
-      visualMap: { show: false, min: scaleMinimum, max: scaleMaximum, seriesIndex: 0, calculable: false, inRange: { color: diverging ? [low, middle, high] : [low, high] } },
-      xAxis: { ...base.xAxis, data: xLabels, boundaryGap: true, splitArea: { show: false }, splitLine: { show: config.showVerticalGrid, interval: (base.xAxis.axisLabel as { interval?: unknown } | undefined)?.interval, lineStyle: { color: config.gridColor, width: config.gridWidth, type: config.gridType } } },
-      yAxis: { type: 'category', data: yLabels, inverse: true, position: config.yAxisPosition, name: '', axisLabel: { ...text(config.yAxisLabelText ?? config.axisLabelText), show: config.showYAxisLabels ?? true, margin: config.yAxisLabelGap ?? 8 }, axisLine: { show: config.showYAxisLine, lineStyle: axisLineStyle }, axisTick: { show: config.showYTicks, length: config.tickLength, lineStyle: axisLineStyle }, splitArea: { show: false }, splitLine: { show: config.showHorizontalGrid, lineStyle: { color: config.gridColor, width: config.gridWidth, type: config.gridType } } },
-      series: [{ name: 'Тепловая карта', type: 'heatmap', data: points, progressive: 1000, animationDuration: 240, itemStyle: { borderColor: config.canvasBackground ?? '#ffffff', borderWidth: config.heatmapCellGap ?? 1, borderRadius: 0 }, emphasis: { itemStyle: { borderColor: config.axisLineColor, borderWidth: 1 } }, label: { show: config.showValues, formatter: (params: { value?: Array<number | null> }) => params.value?.[2] == null ? missingLabel : formatChartNumber(params.value[2], config), ...text(config.valueText) } }],
-    }
-  },
+  validate: validateMapping,
+  buildOption: legacyHeatmapBuilderGuard,
 }
 
 type TreemapNode = {
@@ -1299,10 +1168,10 @@ const nativeComparisonStemCapabilities: ChartPlugin['capabilities'] = {
 }
 
 export const chartRegistry: ChartPlugin[] = legacyChartRegistry.map((plugin) => {
-  const compiler = plugin.id === 'waterfall' ? compileNativeWaterfallScene : plugin.id === 'butterfly' ? compileNativeButterflyScene : isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeComparisonStemKind(plugin.id) ? compileNativeComparisonStemScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : isNativeSmoothingKind(plugin.id) ? compileNativeSmoothingScene : isNativeIntervalKind(plugin.id) ? compileNativeIntervalScene : isNativeXYKind(plugin.id) ? compileNativeXYScene : isNativeDistributionKind(plugin.id) ? compileNativeDistributionScene : undefined
+  const compiler = plugin.id === 'heatmap' ? compileNativeHeatmapScene : plugin.id === 'waterfall' ? compileNativeWaterfallScene : plugin.id === 'butterfly' ? compileNativeButterflyScene : isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeComparisonStemKind(plugin.id) ? compileNativeComparisonStemScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : isNativeSmoothingKind(plugin.id) ? compileNativeSmoothingScene : isNativeIntervalKind(plugin.id) ? compileNativeIntervalScene : isNativeXYKind(plugin.id) ? compileNativeXYScene : isNativeDistributionKind(plugin.id) ? compileNativeDistributionScene : undefined
   if (compiler) return {
     ...plugin, compilerMode: 'native' as const,
-    capabilities: plugin.id === 'waterfall' ? { ...nativeBarCapabilities, orientation: ['vertical'] } : plugin.id === 'butterfly' ? { ...nativeBarCapabilities, axes: { category: { placements: ['side', 'internal'] }, value: { scaleTypes: ['linear'] } }, orientation: ['horizontal'], stacking: ['stacked'] } : isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeComparisonStemKind(plugin.id) ? nativeComparisonStemCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : isNativeSmoothingKind(plugin.id) ? nativeSmoothingCapabilities : isNativeIntervalKind(plugin.id) ? nativeIntervalCapabilities : isNativeXYKind(plugin.id) ? nativeXYCapabilities(plugin.id) : nativeDistributionCapabilities,
+    capabilities: plugin.id === 'heatmap' ? { coordinateSystem: 'matrix', axes: { category: { placements: ['side'] }, lane: { placements: ['side'] } }, guides: ['color-scale'], valueLabels: true, markers: false } : plugin.id === 'waterfall' ? { ...nativeBarCapabilities, orientation: ['vertical'] } : plugin.id === 'butterfly' ? { ...nativeBarCapabilities, axes: { category: { placements: ['side', 'internal'] }, value: { scaleTypes: ['linear'] } }, orientation: ['horizontal'], stacking: ['stacked'] } : isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeComparisonStemKind(plugin.id) ? nativeComparisonStemCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : isNativeSmoothingKind(plugin.id) ? nativeSmoothingCapabilities : isNativeIntervalKind(plugin.id) ? nativeIntervalCapabilities : isNativeXYKind(plugin.id) ? nativeXYCapabilities(plugin.id) : nativeDistributionCapabilities,
     validate: plugin.id === 'butterfly' ? (table: DataTable, config: ChartConfig) => { const generic = plugin.validate(table, config), native = validateNativeButterflyMapping(table, config); return { ok: generic.ok && native.ok, errors: [...generic.errors, ...native.errors] } } : isNativeXYKind(plugin.id) ? validateNativeXYMapping : isNativeDistributionKind(plugin.id) ? validateNativeDistributionMapping : plugin.validate,
     compile: compiler,
     buildOption: (table: DataTable, config: ChartConfig) => renderScene(compiler(table, config)),

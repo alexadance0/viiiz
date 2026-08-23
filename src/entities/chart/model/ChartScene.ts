@@ -616,7 +616,31 @@ export interface DistributionPlotScene {
   grid: { valueVisible: boolean; laneVisible: boolean; color: string; width: number; type: 'solid' | 'dashed' | 'dotted' }
 }
 
-export type NativePlotScene = CartesianBarPlotScene | ComparisonStemPlotScene | WaterfallPlotScene | ButterflyPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene | DistributionPlotScene
+export interface HeatmapCellScene {
+  id: ElementId
+  datumId: DatumId
+  seriesId: SeriesId
+  legacyKey: string
+  rowIndex: number
+  columnIndex: number
+  value: number | null
+  displayCategory: string
+  displayValue: string
+  color: string
+  label: { visible: boolean; text: string; style: ChartTextStyle; color: string }
+}
+
+export interface HeatmapPlotScene {
+  kind: 'heatmap'
+  categories: Array<{ id: DatumId; value: DataValue; label: string; coordinate: string }>
+  rows: Array<{ id: SeriesId; name: string; cells: HeatmapCellScene[] }>
+  categoryAxis: AxisSpec
+  rowAxis: AxisSpec
+  colorDomain: { min: number; max: number; midpoint: number; midpointRatio: number; diverging: boolean }
+  cellGap: number
+}
+
+export type NativePlotScene = CartesianBarPlotScene | ComparisonStemPlotScene | WaterfallPlotScene | ButterflyPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene | DistributionPlotScene | HeatmapPlotScene
 
 export interface NativeChartScene extends ChartSceneBase {
   migrationMode: 'native'
@@ -638,6 +662,7 @@ export type NativeSmoothingChartScene = NativeChartScene & { plot: CartesianSmoo
 export type NativeIntervalChartScene = NativeChartScene & { plot: CartesianIntervalPlotScene }
 export type NativeXYChartScene = NativeChartScene & { plot: CartesianXYPlotScene }
 export type NativeDistributionChartScene = NativeChartScene & { plot: DistributionPlotScene }
+export type NativeHeatmapChartScene = NativeChartScene & { plot: HeatmapPlotScene }
 
 export type ChartScene = LegacyChartScene | NativeChartScene
 
@@ -669,6 +694,11 @@ export interface ResolvedComparisonStemGeometry {
   connectors: Record<LayerId, { x1: number; y1: number; x2: number; y2: number; changeLabel?: { x: number; y: number; align: 'left' | 'center' | 'right'; verticalAlign: 'top' | 'middle' | 'bottom' } }>
   directLabels: Record<SeriesId, { pointId: ElementId; anchorX: number; anchorY: number; x: number; y: number; width: number; height: number; noteY?: number; align: 'left' | 'center' | 'right'; verticalAlign: 'top' | 'middle' | 'bottom'; collision: 'shift-x' | 'shift-y'; displacement: number; leader?: { points: Array<[number, number]> } }>
   categoryGridLines: Array<{ x1: number; y1: number; x2: number; y2: number }>
+}
+
+export interface ResolvedHeatmapGeometry {
+  cells: Record<ElementId, Rect>
+  scale?: { bar: Rect; ticks: Array<{ x: number; y: number; value: number; label: string; align: 'left' | 'center' | 'right' }> }
 }
 
 export interface ResolvedSlopeEndpointLabelPlacement {

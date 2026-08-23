@@ -1938,44 +1938,23 @@ describe('chart composition alignment', () => {
     }
   })
 
-  it('builds a wide heatmap from multiple selected series', () => {
+  it('compiles a wide heatmap through the native scene', () => {
     const heatTable: DataTable = { name: 'heat', columns: ['month', 'Север', 'Юг'], rows: [{ month: 'Янв', Север: -10, Юг: 30 }, { month: 'Фев', Север: 20, Юг: -5 }] }
-    const config = { ...base('heatmap'), xField: 'month', yField: 'Север', yFields: ['Север', 'Юг'], xAxisLabelGap: 17, xAxisTitleGap: 23, heatmapScaleMode: 'diverging' as const, heatmapMidpoint: 0, heatmapLowColor: '#225599', heatmapMidColor: '#ffffff', heatmapHighColor: '#bb2233', heatmapCellGap: 3 }
-    expect(getChartPlugin('heatmap').validate(heatTable, config).ok).toBe(true)
-    const option = getChartPlugin('heatmap').buildOption(heatTable, config) as { graphic: Array<{ id?: string; left?: number; info?: { ratio?: number }; shape?: { width?: number; height?: number }; style?: { text?: string } }>; grid: Record<'top' | 'right' | 'bottom' | 'left', number>; xAxis: { data: string[]; nameGap: number; axisLabel: { margin: number } }; yAxis: { data: string[]; name: string }; visualMap: { show: boolean; min: number; max: number; inRange: { color: string[] } }; series: Array<{ type: string; itemStyle: { borderWidth: number }; data: Array<{ value: number[]; itemStyle: { color: string }; label: { color: string } }> }> }
-    expect(option.xAxis.data).toEqual(['Янв', 'Фев'])
-    expect(option.yAxis.data).toEqual(['Север', 'Юг'])
-    expect(option.yAxis.name).toBe('')
-    expect(option.xAxis.axisLabel.margin).toBe(17)
-    expect(option.xAxis.nameGap).toBe(58)
-    expect(option.graphic.filter((item) => item.id === 'chart-y-axis-title')).toHaveLength(1)
-    expect(option.visualMap).toMatchObject({ min: -30, max: 30, inRange: { color: ['#225599', '#ffffff', '#bb2233'] } })
-    expect(option.series[0]).toMatchObject({ type: 'heatmap', itemStyle: { borderWidth: 3 } })
-    expect(option.series[0].data.map((point) => point.value)).toEqual([[0, 0, -10], [1, 0, 20], [0, 1, 30], [1, 1, -5]])
-    const baseGrid = option.grid
-    for (const position of ['left', 'top', 'bottom'] as const) {
-      const positioned = getChartPlugin('heatmap').buildOption(heatTable, { ...config, heatmapScalePosition: position }) as typeof option
-      expect(positioned.grid[position]).toBeGreaterThan(baseGrid[position])
-      const bar = positioned.graphic.find((item) => item.id === 'heatmap-scale-bar')!
-      expect(position === 'left' ? Number(bar.shape?.height) : Number(bar.shape?.width)).toBeGreaterThan(position === 'left' ? Number(bar.shape?.width) : Number(bar.shape?.height))
-      expect(positioned.graphic.find((item) => item.id === 'heatmap-scale-label-1')?.style?.text).toBe('0')
-      if (position === 'left') expect(positioned.graphic.find((item) => item.id === 'chart-y-axis-title')?.left).toBe(112)
-    }
-    const bounded = getChartPlugin('heatmap').buildOption(heatTable, { ...config, heatmapScaleMin: -50, heatmapScaleMax: 80 }) as typeof option
-    expect(bounded.visualMap).toMatchObject({ min: -50, max: 80 })
-    expect(bounded.graphic.find((item) => item.id === 'heatmap-scale-label-1')?.info?.ratio).toBeCloseTo(80 / 130)
-    expect(bounded.series[0].data.find((point) => point.value[2] === -10)?.itemStyle.color).not.toBe(
-      bounded.series[0].data.find((point) => point.value[2] === 20)?.itemStyle.color,
-    )
-    expect(bounded.series[0].data.every((point) => ['#202027', '#ffffff'].includes(point.label.color))).toBe(true)
-    const reversed = getChartPlugin('heatmap').buildOption(heatTable, { ...config, heatmapScaleMin: 80, heatmapScaleMax: -50 }) as typeof option
-    expect(reversed.visualMap).toMatchObject({ min: -50, max: 80 })
-
-    const incompleteTable: DataTable = { name: 'heat gaps', columns: ['month', 'Север', 'Юг', 'Запад'], rows: [{ month: 'Янв', Север: 5, Юг: 30, Запад: null }, { month: 'Фев', Север: 10, Юг: 20, Запад: 1 }] }
-    const polished = getChartPlugin('heatmap').buildOption(incompleteTable, { ...config, yFields: ['Север', 'Юг', 'Запад'], heatmapRowSort: 'average', heatmapRowSortDirection: 'descending', heatmapMissingColor: '#abcdef', heatmapMissingLabel: 'н/д', showValues: true }) as unknown as { yAxis: { data: string[] }; series: Array<{ label: { formatter(params: { value?: Array<number | null> }): string }; data: Array<{ value: Array<number | null>; itemStyle?: { color: string } }> }> }
-    expect(polished.yAxis.data).toEqual(['Юг', 'Север', 'Запад'])
-    expect(polished.series[0].data.find((point) => point.value[2] == null)?.itemStyle).toEqual({ color: '#abcdef' })
-    expect(polished.series[0].label.formatter({ value: [0, 2, null] })).toBe('н/д')
+    const config = { ...base('heatmap'), xField: 'month', yField: 'Север', yFields: ['Север', 'Юг'], heatmapScaleMode: 'diverging' as const, heatmapMidpoint: 0, heatmapLowColor: '#225599', heatmapMidColor: '#ffffff', heatmapHighColor: '#bb2233', heatmapCellGap: 3 }
+    const plugin = getChartPlugin('heatmap')
+    expect(plugin.validate(heatTable, config).ok).toBe(true)
+    expect(plugin.compilerMode).toBe('native')
+    const scene = plugin.compile(heatTable, config)
+    expect(scene.migrationMode).toBe('native')
+    if (scene.migrationMode !== 'native' || scene.plot.kind !== 'heatmap') throw new Error('Expected native heatmap')
+    expect(scene.plot.categories.map((category) => category.label)).toEqual(['Янв', 'Фев'])
+    expect(scene.plot.rows.map((row) => row.name)).toEqual(['Север', 'Юг'])
+    expect(scene.plot.rows.flatMap((row) => row.cells.map((cell) => cell.value))).toEqual([-10, 20, 30, -5])
+    expect(scene.plot.colorDomain).toMatchObject({ min: -30, max: 30, midpoint: 0, midpointRatio: .5 })
+    expect(scene.plot.cellGap).toBe(3)
+    const option = plugin.buildOption(heatTable, config) as { series: Array<{ type: string }>; visualMap?: unknown }
+    expect(option.series).toMatchObject([{ type: 'custom' }])
+    expect('visualMap' in option).toBe(false)
   })
 
   it('reports missing numeric mappings before rendering', () => {
