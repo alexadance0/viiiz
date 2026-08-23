@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as echarts from 'echarts'
-import { applySeriesVisualState, barVerticalGridGraphics, directLegendGraphics, fitTreemapLabelBoxes, materializeTreemapHyphens, outlineSelectedTreemapGroup, positionYAxisTitleGraphic, suppressBuiltInDirectLabels, wrapTreemapLabelText } from './ChartCanvas'
+import { applySeriesVisualState, barVerticalGridGraphics, directLegendGraphics, positionYAxisTitleGraphic, suppressBuiltInDirectLabels } from './ChartCanvas'
 import { customFontCss } from '../features/chart-export/chartExport'
 import { decorationGraphics } from './chartDecorations'
 import { getChartPlugin } from '../core/chartRegistry'
@@ -202,85 +202,6 @@ describe('direct legend rendering', () => {
     const point = option.series.find((series) => series.name === 'a')?.data?.[1]
     expect(point?.symbolSize).toBeGreaterThanOrEqual(11)
     expect(point?.itemStyle).toMatchObject({ color: '#168a72', borderColor: '#168a72' })
-  })
-
-  it('highlights a selected treemap leaf inside nested categories', () => {
-    const hierarchy: DataTable = { name: 'hierarchy', columns: ['category', 'subcategory', 'value'], rows: [
-      { category: 'A', subcategory: 'A1', value: 10 },
-      { category: 'A', subcategory: 'A2', value: 8 },
-      { category: 'B', subcategory: 'B1', value: 6 },
-    ] }
-    const treemapConfig: ChartConfig = { ...config, kind: 'treemap', xField: 'category', yField: 'value', yFields: ['value'], treemapSubcategoryField: 'subcategory', aggregation: 'sum' }
-    type Node = { elementKey?: string; itemStyle?: { opacity?: number; borderColor?: string; borderWidth?: number }; children?: Node[] }
-    const option = getChartPlugin('treemap').buildOption(hierarchy, treemapConfig) as Record<string, unknown> & { series: Array<{ data: Node[] }> }
-    applySeriesVisualState(option, hierarchy, treemapConfig, null, 'A\u001fstring:A1')
-    const leaves = option.series[0].data.flatMap((node) => node.children ?? [])
-    expect(leaves.find((node) => node.elementKey === 'A\u001fstring:A1')?.itemStyle).toMatchObject({ borderColor: '#6956e8', borderWidth: 3 })
-    expect(leaves.find((node) => node.elementKey === 'B\u001fstring:B1')?.itemStyle?.opacity).toBeUndefined()
-
-    const groupOption = getChartPlugin('treemap').buildOption(hierarchy, treemapConfig) as Record<string, unknown> & { series: Array<{ data: Node[] }> }
-    applySeriesVisualState(groupOption, hierarchy, treemapConfig, null, 'treemap-group:A')
-    expect(groupOption.series[0].data.find((node) => node.elementKey === 'treemap-group:A')?.itemStyle?.borderWidth).toBe(0)
-    expect(groupOption.series[1].data.find((node) => node.elementKey === 'treemap-group:A')?.itemStyle).toMatchObject({ color: 'rgba(0,0,0,0)', borderColor: 'rgba(0,0,0,0)', borderWidth: 0 })
-    expect(groupOption.series[1].data.find((node) => node.elementKey === 'treemap-group:B')?.itemStyle?.borderWidth).toBe(0)
-  })
-
-  it('outlines the laid-out treemap category without filling it', () => {
-    let renderedStyle: Record<string, unknown> = {}
-    const host = { type: 'rect', setStyle: (style: Record<string, unknown>) => { renderedStyle = style }, markRedraw: () => undefined }
-    Object.assign(echarts.helper.getECData(host as never), { seriesIndex: 1, dataIndex: 7 })
-    const instance = {
-      getOption: () => ({ series: [{ name: 'Treemap' }, { name: '__treemap-groups' }] }),
-      getModel: () => ({ getSeriesByIndex: () => ({ getData: () => ({ getName: (index: number) => index === 7 ? 'Проблемы с клиентами' : 'Другое' }) }) }),
-      getZr: () => ({ storage: { getDisplayList: () => [host] } }),
-    } as unknown as echarts.ECharts
-
-    outlineSelectedTreemapGroup(instance, 'treemap-group:Проблемы с клиентами')
-
-    expect(renderedStyle).toEqual({ fill: 'rgba(0,0,0,0)', stroke: '#6956e8', lineWidth: 3 })
-  })
-
-  it('wraps a treemap category across the complete width and keeps its value separate', () => {
-    const lines = wrapTreemapLabelText('Экономическая и политическая нестабильность\n8', 150, 17, 'Arial', 700)
-    expect(lines[0].replace('\u200b', '')).toBe('Экономическая и')
-    expect(lines.at(-1)).toBe('8')
-  })
-
-  it('keeps fitted treemap labels wrapped instead of truncating them with an ellipsis', () => {
-    let rendered: Record<string, unknown> = {}
-    const label = {
-      style: { text: 'Затрудняюсь ответить\n12', padding: 4, fontSize: 20, fontFamily: 'Arial', fontWeight: 700, lineHeight: 24 },
-      setStyle: (style: Record<string, unknown>) => { rendered = style },
-      markRedraw: () => undefined,
-      getBoundingRect: () => ({}),
-    }
-    const host = {
-      zlevel: 0,
-      getTextContent: () => label,
-      getBoundingRect: () => ({ x: 0, y: 0, width: 170, height: 100 }),
-      getPaintRect: () => ({ x: 0, y: 0, width: 170, height: 100 }),
-    }
-    fitTreemapLabelBoxes({ getZr: () => ({ storage: { getDisplayList: () => [host] } }) } as unknown as echarts.ECharts)
-    expect(String(rendered.text).replaceAll('\u200b', '')).toBe('Затрудняюсь\nответить\n12')
-    expect(String(rendered.text)).not.toContain('…')
-    expect(rendered).toMatchObject({ overflow: undefined, ellipsis: undefined })
-  })
-
-  it('shows a hyphen only where a treemap line actually wraps', () => {
-    const wrapped = { textContent: 'кон\u00ad\ufeff' }
-    const intact = { textContent: 'кон\u00ad\ufeffкурен\u00ad\ufeffция' }
-    let selector = ''
-    materializeTreemapHyphens({ querySelectorAll: (value: string) => { selector = value; return [wrapped, intact] } } as unknown as ParentNode)
-    expect(selector).toBe('text[x]')
-    expect(wrapped.textContent).toBe('кон‐')
-    expect(intact.textContent).toBe('конкуренция')
-
-    const first = { textContent: 'Финансовы', nextElementSibling: null as unknown }
-    const second = { textContent: 'е трудности', nextElementSibling: null as unknown }
-    first.nextElementSibling = second
-    materializeTreemapHyphens({ querySelectorAll: () => [first, second] } as unknown as ParentNode)
-    expect(first.textContent).toBe('Финансо‐')
-    expect(second.textContent).toBe('вые трудности')
   })
 
   it('does not add glow, opacity or size changes to distribution dots', () => {

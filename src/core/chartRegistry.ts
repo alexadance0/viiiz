@@ -28,14 +28,15 @@ import { waterfallSteps } from '../features/chart-types/waterfall/transform'
 export { formatWaterfallChange, waterfallLabelPlacement, waterfallSteps, waterfallValueLabel } from '../features/chart-types/waterfall/transform'
 import { compileNativeButterflyScene, legacyButterflyBuilderGuard, validateNativeButterflyMapping } from '../features/chart-types/butterfly/compiler'
 import { compileNativeHeatmapScene, legacyHeatmapBuilderGuard } from '../features/chart-types/heatmap/compiler'
+import { compileNativeTreemapScene, legacyTreemapBuilderGuard, validateNativeTreemapMapping } from '../features/chart-types/treemap/compiler'
 export { fitSwarmClouds, fitSwarmOffsets, packSwarmOffsets } from '../features/chart-types/distribution/swarm'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
 import { nativeMarkSelections } from '../entities/chart/model/sceneVisitors'
 import { repeatedChartCategories } from './chartData'
 import { absorbedBarLabelPlacement, barSeriesGeometry, denseValueLabelStride, isInsideValueLabel, showDenseValueLabel, valueLabelPosition } from './chartLabels'
-import { hyphenateSync as hyphenateRussian } from 'hyphen/ru'
 import { getSeriesColor } from './seriesColor'
-import { contrastText, mixHexColors } from './color'
+import { contrastText } from './color'
+export { hyphenateTreemapText, treemapAdaptiveFontSize } from '../features/chart-types/treemap/text'
 
 export { getSeriesColor } from './seriesColor'
 
@@ -101,23 +102,6 @@ const axisTickPosition = (value: number, minimum: number, maximum: number): Axis
 }
 const alignedLeft = (align: ChartConfig['titleText']['align'], left = CONTENT_LEFT) => align === 'left' ? left : align === 'center' ? 'center' : undefined
 const elementKey = (series: string, category: unknown) => `${series}\u001f${category instanceof Date ? category.toISOString() : `${typeof category}:${String(category)}`}`
-const treemapLabelPosition = (position: NonNullable<ChartConfig['treemapLabelPosition']>) => ({
-  'top-left': 'insideTopLeft', 'top-center': 'insideTop', 'top-right': 'insideTopRight',
-  'center-left': 'insideLeft', center: 'inside', 'center-right': 'insideRight',
-  'bottom-left': 'insideBottomLeft', 'bottom-center': 'insideBottom', 'bottom-right': 'insideBottomRight',
-} as const)[position]
-// ZRender treats U+FEFF as a zero-width word boundary. Together with a soft
-// hyphen it wraps only at valid Russian hyphenation points and shows the dash
-// only when the line actually breaks.
-export const hyphenateTreemapText = (value: string, hyphenChar = '\u00ad\ufeff') => hyphenateRussian(value, { hyphenChar, minWordLength: 6 })
-export const treemapAdaptiveFontSize = (baseSize: number, share: number, minimum: number) =>
-  Math.max(minimum, Math.round(baseSize * Math.min(1.35, .55 + .8 * Math.sqrt(Math.min(1, share / .25)))))
-const orderedTreemapNodes = <T extends { name: string; value: number }>(nodes: T[], order?: string[]) => {
-  const fallback = [...nodes].sort((left, right) => right.value - left.value)
-  if (!order?.length) return fallback
-  const rank = new Map(order.map((name, index) => [name, index]))
-  return fallback.sort((left, right) => (rank.get(left.name) ?? Number.MAX_SAFE_INTEGER) - (rank.get(right.name) ?? Number.MAX_SAFE_INTEGER))
-}
 const directLabelWidth = (config: ChartConfig, series: Array<{ name: string }>) => {
   const canvasWidth = Math.min(1000, config.canvasWidth ?? 1000)
   const content = series.reduce((result, item) => {
@@ -839,20 +823,6 @@ const heatmap: LegacyChartPlugin = {
   buildOption: legacyHeatmapBuilderGuard,
 }
 
-type TreemapNode = {
-  name: string
-  value: number
-  children?: TreemapNode[]
-  itemStyle?: Record<string, unknown>
-  label?: Record<string, unknown>
-  upperLabel?: Record<string, unknown>
-  elementKey?: string
-  sourceSeriesName?: string
-  displayCategory?: string
-  displayValue?: string
-  displayLabel?: string
-}
-
 const treemap: LegacyChartPlugin = {
   ...pluginModel('treemap'),
   id: 'treemap',
@@ -865,212 +835,8 @@ const treemap: LegacyChartPlugin = {
     features: { directLabels: false, barLayout: false, dataPreparation: false, normalizedStack: false, areaLayout: false, scatterLayout: false, distributionLayout: false, lineVariant: false },
   },
   inferMapping,
-  validate(table, config) {
-    const errors: Array<{ field: string; message: string }> = []
-    if (!config.xField || !table.columns.includes(config.xField)) errors.push({ field: 'xField', message: 'Выберите колонку с категориями.' })
-    if (config.treemapSubcategoryField && !table.columns.includes(config.treemapSubcategoryField)) errors.push({ field: 'treemapSubcategoryField', message: 'Выберите существующую колонку с подкатегориями.' })
-    if (config.treemapSubcategoryField === config.xField) errors.push({ field: 'treemapSubcategoryField', message: 'Категория и подкатегория должны быть разными колонками.' })
-    if (!config.yField || !table.columns.includes(config.yField) || !table.rows.some((row) => {
-      const value = row[config.yField]
-      return typeof value === 'number' && Number.isFinite(value) && value > 0
-    })) errors.push({ field: 'yField', message: 'Выберите числовую колонку, содержащую положительные значения.' })
-    return { ok: errors.length === 0, errors }
-  },
-  buildOption(table, config) {
-    const prepared = prepareVisibleChartData(table, { ...config, seriesField: '', aggregation: 'sum' })
-    const base = commonOption(table, { ...config, showXAxisLabels: false, showYAxisLabels: false, showXAxisTitle: false, showYAxisTitle: false, showXAxisLine: false, showYAxisLine: false, showXTicks: false, showYTicks: false, showHorizontalGrid: false, showVerticalGrid: false, showLegend: false }, prepared) as Record<string, unknown> & { grid: { top: number; right: number; bottom: number; left: number }; legend: Record<string, unknown> }
-    const groups = new Map<string, Map<string, number[]>>()
-    for (const row of table.rows) {
-      const raw = row[config.yField]
-      if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) continue
-      const category = String(row[config.xField] ?? 'Без категории')
-      const subcategory = config.treemapSubcategoryField ? String(row[config.treemapSubcategoryField] ?? 'Без подкатегории') : category
-      const leaves = groups.get(category) ?? new Map<string, number[]>()
-      leaves.set(subcategory, [...(leaves.get(subcategory) ?? []), raw])
-      groups.set(category, leaves)
-    }
-    const aggregate = (values: number[]) => {
-      if (config.aggregation === 'count') return values.length
-      if (config.aggregation === 'average') return values.reduce((sum, value) => sum + value, 0) / values.length
-      if (config.aggregation === 'min') return Math.min(...values)
-      if (config.aggregation === 'max') return Math.max(...values)
-      return values.reduce((sum, value) => sum + value, 0)
-    }
-    const hiddenCategories = new Set(config.treemapHiddenCategories ?? [])
-    const visibleGroups = [...groups.entries()].map(([category, leaves], index) => ({ category, leaves, index })).filter(({ category }) => !hiddenCategories.has(category))
-    const total = visibleGroups.reduce((sum, { leaves }) => sum + [...leaves.values()].reduce((leafSum, values) => leafSum + aggregate(values), 0), 0)
-    const formatTreemapValue = (value: number) => config.treemapValueFormat === 'percent'
-      ? formatChartNumber(total ? value / total * 100 : 0, { ...config, valueMode: 'percent', numberOperation: 'none', numberFactor: 1, numberPrefix: '', numberSuffix: '', valueLabelAffixesLinked: true })
-      : formatChartNumber(value, config)
-    const palette = config.palette?.length ? config.palette : [config.color, ...PALETTE.slice(1)]
-    const leaf = (category: string, name: string, values: number[], color: string, categoryLabelColor: string, suppressDefaultValue = false): TreemapNode => {
-      const value = aggregate(values)
-      const key = elementKey(category, name)
-      const override = config.elementStyles[key]
-      const labelStyle = override?.valueText ?? config.treemapLeafText ?? config.valueText
-      const fill = override?.color ?? color
-      const labelColor = (override?.labelAutoContrast ?? config.valueLabelAutoContrast ?? true) ? (override?.color ? contrastText(fill) : categoryLabelColor) : labelStyle.color
-      const duplicateGroupName = Boolean(config.treemapSubcategoryField && name === category)
-      const labelsVisible = config.treemapShowLeafLabels ?? true
-      const showName = override?.showLabel === false ? false : override?.showName ?? (labelsVisible && !duplicateGroupName)
-      const showValue = override?.showLabel === false ? false : override?.showValue ?? ((config.treemapShowLeafValues ?? (labelsVisible && config.showValues)) && !suppressDefaultValue)
-      const position = override?.treemapLabelPosition ?? config.treemapLabelPosition ?? 'bottom-right'
-      const share = value / total
-      const adaptiveSize = treemapAdaptiveFontSize(labelStyle.size, share, 6)
-      const lines = [
-        showName ? override?.label || name : '',
-        showValue ? formatTreemapValue(value) : '',
-      ].filter(Boolean).join('\n')
-      return {
-        name,
-        value,
-        elementKey: key,
-        sourceSeriesName: category,
-        displayCategory: config.treemapSubcategoryField ? `${category} · ${name}` : category,
-        displayValue: formatTreemapValue(value),
-        displayLabel: override?.label || name,
-        itemStyle: { color: fill, borderColor: config.canvasBackground ?? '#ffffff', borderWidth: 0 },
-        label: {
-          show: Boolean(lines),
-          formatter: lines,
-          position: treemapLabelPosition(position),
-          overflow: 'break',
-          padding: adaptiveSize <= 8 ? 2 : 4,
-          ...text(labelStyle),
-          fontSize: adaptiveSize,
-          color: labelColor,
-          fontWeight: labelStyle.weight,
-          lineHeight: Math.round(adaptiveSize * 1.18),
-        },
-      }
-    }
-    const data: TreemapNode[] = orderedTreemapNodes(visibleGroups.map(({ category, leaves, index }) => {
-      const groupKey = `treemap-group:${category}`
-      const groupOverride = config.elementStyles[groupKey]
-      const color = groupOverride?.color ?? config.seriesStyles[category]?.color ?? palette[index % palette.length]
-      const categoryLabelColor = contrastText(color)
-      const groupLabelsVisible = config.treemapShowGroupLabels ?? true
-      const groupShowValue = groupOverride?.showLabel === false ? false : groupOverride?.showValue ?? (config.treemapShowGroupValues ?? (groupLabelsVisible && config.showValues))
-      const children = orderedTreemapNodes([...leaves.entries()].map(([name, values], leafIndex) => leaf(
-        category,
-        name,
-        values,
-        config.treemapSubcategoryField ? mixHexColors(color, '#ffffff', Math.min(.3, leafIndex * .08)) : color,
-        categoryLabelColor,
-        Boolean(config.treemapSubcategoryField && leaves.size === 1 && groupShowValue),
-      )), config.treemapLeafOrder?.[category])
-      if (!config.treemapSubcategoryField) return { ...children[0], itemStyle: { ...children[0].itemStyle, color } }
-      const value = children.reduce((sum, child) => sum + child.value, 0)
-      const key = groupKey
-      const override = groupOverride
-      const labelStyle = override?.valueText ?? config.treemapGroupText ?? config.valueText
-      const labelColor = (override?.labelAutoContrast ?? config.valueLabelAutoContrast ?? true) ? categoryLabelColor : labelStyle.color
-      const showName = override?.showLabel === false ? false : override?.showName ?? groupLabelsVisible
-      const showValue = groupShowValue
-      const position = override?.treemapLabelPosition ?? config.treemapGroupLabelPosition ?? 'top-left'
-      const share = value / total
-      const adaptiveSize = treemapAdaptiveFontSize(labelStyle.size, share, 7)
-      const groupLabel = [showName ? override?.label || category : '', showValue ? formatTreemapValue(value) : ''].filter(Boolean).join('\n')
-      return {
-        name: category,
-        value,
-        children,
-        elementKey: key,
-        sourceSeriesName: category,
-        displayCategory: category,
-        displayValue: formatTreemapValue(value),
-        displayLabel: override?.label || category,
-        itemStyle: { color, borderColor: config.canvasBackground ?? '#ffffff', borderWidth: 0 },
-        label: {
-          show: Boolean(groupLabel),
-          formatter: groupLabel,
-          opacity: 1,
-          position: treemapLabelPosition(position),
-          padding: adaptiveSize <= 9 ? 3 : 4,
-          textBorderColor: color,
-          textBorderWidth: 3,
-          overflow: 'break',
-          ...text(labelStyle),
-          fontSize: adaptiveSize,
-          color: labelColor,
-          fontWeight: Math.max(700, labelStyle.weight),
-          lineHeight: Math.round(adaptiveSize * 1.15),
-        },
-      }
-    }), config.treemapGroupOrder)
-    const hasGroups = data.some((node) => node.children)
-    const groupLabels = data.map((node) => ({
-      ...node,
-      children: undefined,
-      upperLabel: undefined,
-      label: node.children ? node.label : { show: false },
-      itemStyle: { color: 'rgba(0,0,0,0)', borderColor: 'rgba(0,0,0,0)', borderWidth: 0 },
-    }))
-    const layout = {
-      left: base.grid.left,
-      top: base.grid.top,
-      right: base.grid.right,
-      bottom: base.grid.bottom,
-      roam: false,
-      nodeClick: false,
-      breadcrumb: { show: false },
-      sort: false,
-      squareRatio: 1.15,
-    }
-    const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    return {
-      ...base,
-      legend: { ...base.legend, show: false },
-      xAxis: undefined,
-      yAxis: undefined,
-      tooltip: { trigger: 'item', confine: true, enterable: false, extraCssText: 'max-width:280px;white-space:normal;pointer-events:none;', formatter: (params: { data?: TreemapNode; treePathInfo?: Array<{ name: string }> }) => {
-        const item = params.data
-        if (!item) return ''
-        const path = params.treePathInfo?.slice(1).map((part) => part.name).filter(Boolean).join(' · ') || item.name
-        return `<b>${escapeHtml(path)}</b><br/>${escapeHtml(item.displayValue ?? formatChartNumber(item.value, config))}`
-      } },
-      series: [{
-        name: 'Treemap',
-        type: 'treemap',
-        ...layout,
-        data,
-        visibleMin: 0,
-        childrenVisibleMin: 0,
-        label: { show: true, position: treemapLabelPosition(config.treemapLabelPosition ?? 'bottom-right'), overflow: 'break', padding: 7 },
-        upperLabel: { show: false },
-        itemStyle: { borderColor: config.canvasBackground ?? '#ffffff', borderWidth: 0, gapWidth: config.treemapGap ?? 2 },
-        levels: [
-          { itemStyle: { borderWidth: 0, gapWidth: config.treemapGroupGap ?? 5 } },
-          { colorSaturation: [.42, .7], upperLabel: { show: false }, itemStyle: { borderColorSaturation: .3, borderWidth: 0, gapWidth: config.treemapGap ?? 2 } },
-          { colorSaturation: [.3, .65], itemStyle: { borderWidth: 0, gapWidth: config.treemapGap ?? 2 } },
-        ],
-        emphasis: { itemStyle: { borderColor: config.axisLineColor, borderWidth: Math.max(2, config.treemapGap ?? 2) } },
-        animationDuration: reducedMotion ? 0 : 420,
-        animationDurationUpdate: reducedMotion ? 0 : 280,
-        animationEasingUpdate: 'cubicOut',
-      }, ...(hasGroups ? [{
-        name: '__treemap-groups',
-        type: 'treemap',
-        ...layout,
-        data: groupLabels,
-        silent: true,
-        z: 5,
-        zlevel: 1,
-        visibleMin: 0,
-        label: { show: true, overflow: 'break', opacity: 1 },
-        upperLabel: { show: false },
-        itemStyle: { color: 'rgba(0,0,0,0)', borderColor: 'rgba(0,0,0,0)', borderWidth: 0, gapWidth: config.treemapGroupGap ?? 5 },
-        levels: [
-          { itemStyle: { color: 'rgba(0,0,0,0)', borderColor: 'rgba(0,0,0,0)', borderWidth: 0, gapWidth: config.treemapGroupGap ?? 5 } },
-          { itemStyle: { color: 'rgba(0,0,0,0)', borderColor: 'rgba(0,0,0,0)', borderWidth: 0, gapWidth: config.treemapGroupGap ?? 5 } },
-        ],
-        emphasis: { disabled: true },
-        animationDuration: 0,
-        animationDurationUpdate: reducedMotion ? 0 : 280,
-        animationEasingUpdate: 'cubicOut',
-      }] : [])],
-    }
-  },
+  validate: validateNativeTreemapMapping,
+  buildOption: legacyTreemapBuilderGuard,
 }
 
 const relationshipSettings: LegacyChartPlugin['settings'] = {
@@ -1168,11 +934,11 @@ const nativeComparisonStemCapabilities: ChartPlugin['capabilities'] = {
 }
 
 export const chartRegistry: ChartPlugin[] = legacyChartRegistry.map((plugin) => {
-  const compiler = plugin.id === 'heatmap' ? compileNativeHeatmapScene : plugin.id === 'waterfall' ? compileNativeWaterfallScene : plugin.id === 'butterfly' ? compileNativeButterflyScene : isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeComparisonStemKind(plugin.id) ? compileNativeComparisonStemScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : isNativeSmoothingKind(plugin.id) ? compileNativeSmoothingScene : isNativeIntervalKind(plugin.id) ? compileNativeIntervalScene : isNativeXYKind(plugin.id) ? compileNativeXYScene : isNativeDistributionKind(plugin.id) ? compileNativeDistributionScene : undefined
+  const compiler = plugin.id === 'treemap' ? compileNativeTreemapScene : plugin.id === 'heatmap' ? compileNativeHeatmapScene : plugin.id === 'waterfall' ? compileNativeWaterfallScene : plugin.id === 'butterfly' ? compileNativeButterflyScene : isNativeBarKind(plugin.id) ? compileNativeBarScene : isNativeComparisonStemKind(plugin.id) ? compileNativeComparisonStemScene : isNativeLineKind(plugin.id) ? compileNativeLineScene : isNativeAreaKind(plugin.id) ? compileNativeAreaScene : plugin.id === 'slope' ? compileNativeSlopeScene : isNativeSmoothingKind(plugin.id) ? compileNativeSmoothingScene : isNativeIntervalKind(plugin.id) ? compileNativeIntervalScene : isNativeXYKind(plugin.id) ? compileNativeXYScene : isNativeDistributionKind(plugin.id) ? compileNativeDistributionScene : undefined
   if (compiler) return {
     ...plugin, compilerMode: 'native' as const,
-    capabilities: plugin.id === 'heatmap' ? { coordinateSystem: 'matrix', axes: { category: { placements: ['side'] }, lane: { placements: ['side'] } }, guides: ['color-scale'], valueLabels: true, markers: false } : plugin.id === 'waterfall' ? { ...nativeBarCapabilities, orientation: ['vertical'] } : plugin.id === 'butterfly' ? { ...nativeBarCapabilities, axes: { category: { placements: ['side', 'internal'] }, value: { scaleTypes: ['linear'] } }, orientation: ['horizontal'], stacking: ['stacked'] } : isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeComparisonStemKind(plugin.id) ? nativeComparisonStemCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : isNativeSmoothingKind(plugin.id) ? nativeSmoothingCapabilities : isNativeIntervalKind(plugin.id) ? nativeIntervalCapabilities : isNativeXYKind(plugin.id) ? nativeXYCapabilities(plugin.id) : nativeDistributionCapabilities,
-    validate: plugin.id === 'butterfly' ? (table: DataTable, config: ChartConfig) => { const generic = plugin.validate(table, config), native = validateNativeButterflyMapping(table, config); return { ok: generic.ok && native.ok, errors: [...generic.errors, ...native.errors] } } : isNativeXYKind(plugin.id) ? validateNativeXYMapping : isNativeDistributionKind(plugin.id) ? validateNativeDistributionMapping : plugin.validate,
+    capabilities: plugin.id === 'treemap' ? { coordinateSystem: 'hierarchy', axes: {}, guides: [], valueLabels: true, markers: false } : plugin.id === 'heatmap' ? { coordinateSystem: 'matrix', axes: { category: { placements: ['side'] }, lane: { placements: ['side'] } }, guides: ['color-scale'], valueLabels: true, markers: false } : plugin.id === 'waterfall' ? { ...nativeBarCapabilities, orientation: ['vertical'] } : plugin.id === 'butterfly' ? { ...nativeBarCapabilities, axes: { category: { placements: ['side', 'internal'] }, value: { scaleTypes: ['linear'] } }, orientation: ['horizontal'], stacking: ['stacked'] } : isNativeBarKind(plugin.id) ? nativeBarCapabilities : isNativeComparisonStemKind(plugin.id) ? nativeComparisonStemCapabilities : isNativeLineKind(plugin.id) ? nativeLineCapabilities : isNativeAreaKind(plugin.id) ? nativeAreaCapabilities : plugin.id === 'slope' ? nativeSlopeCapabilities : isNativeSmoothingKind(plugin.id) ? nativeSmoothingCapabilities : isNativeIntervalKind(plugin.id) ? nativeIntervalCapabilities : isNativeXYKind(plugin.id) ? nativeXYCapabilities(plugin.id) : nativeDistributionCapabilities,
+    validate: plugin.id === 'treemap' ? validateNativeTreemapMapping : plugin.id === 'butterfly' ? (table: DataTable, config: ChartConfig) => { const generic = plugin.validate(table, config), native = validateNativeButterflyMapping(table, config); return { ok: generic.ok && native.ok, errors: [...generic.errors, ...native.errors] } } : isNativeXYKind(plugin.id) ? validateNativeXYMapping : isNativeDistributionKind(plugin.id) ? validateNativeDistributionMapping : plugin.validate,
     compile: compiler,
     buildOption: (table: DataTable, config: ChartConfig) => renderScene(compiler(table, config)),
   }

@@ -8,7 +8,6 @@ const distributionKinds = new Set<ChartKind>(['boxplot', 'violinplot', 'rainclou
 export const loadEchartsForKind = (kind: ChartKind) => Promise.all([
   import('./loadCustom'),
   ...(barKinds.has(kind) ? [import('./loadBar')] : []),
-  ...(kind === 'treemap' ? [import('./loadTreemap')] : []),
   ...(scatterKinds.has(kind) ? [import('./loadScatter'), import('./loadLine')] : []),
   ...(distributionKinds.has(kind) ? [import('./loadScatter'), import('./loadLine')] : []),
   ...(!barKinds.has(kind) && !comparisonStemKinds.has(kind) && kind !== 'treemap' && !scatterKinds.has(kind) && !distributionKinds.has(kind) ? [import('./loadLine')] : []),
@@ -19,5 +18,4 @@ export const preloadAllEcharts = () => Promise.all([
   import('./loadCustom'),
   import('./loadLine'),
   import('./loadScatter'),
-  import('./loadTreemap'),
 ])

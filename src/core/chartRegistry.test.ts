@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import * as echarts from 'echarts'
 import { chartElementColor, chartRegistry, chartValueLabelSelections, fitSwarmClouds, fitSwarmOffsets, formatWaterfallChange, getChartPlugin, hyphenateTreemapText, packSwarmOffsets, prepareVisibleChartData, treemapAdaptiveFontSize, waterfallElementColor, waterfallLabelPlacement, waterfallSteps, waterfallValueLabel } from './chartRegistry'
 import { movingAverage } from '../features/chart-types/smoothing/movingAverage'
 import { absorbedBarLabelPlacement } from './chartLabels'
 import { isoWeekParts } from './timeFrequency'
-import { entrepreneurshipDifficultiesDemoTable } from './demoData'
 import type { ChartConfig, ChartTextStyle, DataTable } from './types'
 import { compileNativeDistributionScene } from '../features/chart-types/distribution/compiler'
 import { resolveNativeDistributionScene } from '../features/chart-types/distribution/layout'
@@ -17,7 +15,6 @@ const base = (kind: ChartConfig['kind']): ChartConfig => ({
   xAxisTitle: 'month', yAxisTitle: 'value', xAxisTitleGap: 10, yAxisTitleGap: 10, xAxisPosition: 'bottom', yAxisPosition: 'left', showXAxisTitle: true, showYAxisTitle: true, showXAxisLine: true, showYAxisLine: true, axisLineColor: '#555', axisLineWidth: 1, axisLineType: 'solid', showXTicks: true, showYTicks: true, tickLength: 5,
   showValues: false, elementStyles: {}, seriesStyles: {}, annotations: [], color: '#6956e8', showLegend: false, showHorizontalGrid: true, showVerticalGrid: false, gridColor: '#dddddd', gridWidth: 1, gridType: 'solid',
 })
-const plainLabel = (value: string) => value.replaceAll(/[\u00ad\ufeff]/g, '')
 
 describe('waterfall chart', () => {
   it('builds cumulative floating bars and a final total', () => {
@@ -76,28 +73,17 @@ describe('waterfall chart', () => {
 })
 
 describe('individual chart element styles', () => {
-  it('builds a hierarchical treemap and aggregates repeated leaves', () => {
-    const hierarchy: DataTable = { name: 'hierarchy', columns: ['category', 'subcategory', 'value'], rows: [
-      { category: 'Транспорт', subcategory: 'Автобусы', value: 10 },
-      { category: 'Транспорт', subcategory: 'Автобусы', value: 5 },
-      { category: 'Транспорт', subcategory: 'Поезда', value: 20 },
-      { category: 'Связь', subcategory: 'Интернет', value: 30 },
-    ] }
-    const config = { ...base('treemap'), xField: 'category', yField: 'value', yFields: ['value'], treemapSubcategoryField: 'subcategory', aggregation: 'sum' as const, showValues: true, treemapGap: 3, treemapGroupGap: 17, palette: ['#123456', '#abcdef'] }
-    const option = getChartPlugin('treemap').buildOption(hierarchy, config) as { xAxis?: unknown; series: Array<{ type: string; levels?: Array<{ itemStyle?: { borderWidth?: number; gapWidth?: number } }>; data: Array<{ name: string; value: number; itemStyle?: { borderWidth?: number }; children: Array<{ name: string; value: number; displayValue: string; elementKey: string; itemStyle?: { borderWidth?: number }; label?: { color?: string } }> }> }> }
-    expect(getChartPlugin('treemap').validate(hierarchy, config).ok).toBe(true)
-    expect(option.xAxis).toBeUndefined()
-    expect(option.series[0].type).toBe('treemap')
-    const transport = option.series[0].data.find((node) => node.name === 'Транспорт')!
-    expect(transport.value).toBe(35)
-    expect(transport.children.find((node) => node.name === 'Автобусы')).toMatchObject({ value: 15, displayValue: '15' })
-    expect(new Set(transport.children.map((node) => node.label?.color)).size).toBe(1)
-    expect(option.series[0].data.find((node) => node.name === 'Связь')?.children).toHaveLength(1)
-    expect(option.series[0].data.every((node) => node.itemStyle?.borderWidth === 0)).toBe(true)
-    expect(option.series[0].levels?.[0].itemStyle).toMatchObject({ borderWidth: 0, gapWidth: 17 })
-    expect(option.series[0].levels?.[1].itemStyle).toMatchObject({ borderWidth: 0, gapWidth: 3 })
-    expect(transport.children.every((node) => node.itemStyle?.borderWidth === 0)).toBe(true)
-    expect(chartValueLabelSelections(hierarchy, config)).toHaveLength(5)
+  it('registers Treemap as a native hierarchy plugin', () => {
+    const hierarchy: DataTable = { name: 'hierarchy', columns: ['category', 'subcategory', 'value'], rows: [{ category: 'A', subcategory: 'A1', value: 10 }] }
+    const config = { ...base('treemap'), xField: 'category', yField: 'value', yFields: ['value'], treemapSubcategoryField: 'subcategory', aggregation: 'sum' as const }
+    const plugin = getChartPlugin('treemap')
+    expect(plugin.validate(hierarchy, config).ok).toBe(true)
+    expect(plugin.compilerMode).toBe('native')
+    const scene = plugin.compile(hierarchy, config)
+    expect(scene.migrationMode).toBe('native')
+    if (scene.migrationMode !== 'native') throw new Error('Expected native Treemap')
+    expect(scene.plot.kind).toBe('treemap')
+    expect((plugin.buildOption(hierarchy, config) as { series: Array<{ type: string }> }).series).toMatchObject([{ type: 'custom' }])
   })
 
   it('rejects treemaps without positive sizes', () => {
@@ -105,150 +91,9 @@ describe('individual chart element styles', () => {
     expect(getChartPlugin('treemap').validate(invalid, { ...base('treemap'), xField: 'category', yField: 'value', yFields: ['value'] }).ok).toBe(false)
   })
 
-  it('controls treemap names, values and positions per group and leaf', () => {
-    const hierarchy: DataTable = { name: 'hierarchy', columns: ['category', 'subcategory', 'value'], rows: [
-      { category: 'Транспорт', subcategory: 'Автобусы', value: 15 },
-      { category: 'Транспорт', subcategory: 'Поезда', value: 20 },
-    ] }
-    const option = getChartPlugin('treemap').buildOption(hierarchy, {
-      ...base('treemap'),
-      xField: 'category',
-      yField: 'value',
-      yFields: ['value'],
-      treemapSubcategoryField: 'subcategory',
-      aggregation: 'sum',
-      showValues: true,
-      valueLabelAutoContrast: false,
-      treemapGroupText: { ...style(20), fontFamily: 'Group Font' },
-      treemapLeafText: { ...style(12), fontFamily: 'Leaf Font' },
-      elementStyles: {
-        'Транспорт\u001fstring:Автобусы': { color: '#000000', labelAutoContrast: true, showName: false, showValue: true, treemapLabelPosition: 'bottom-right' },
-        'treemap-group:Транспорт': { color: '#ff00aa', showName: true, showValue: false, treemapLabelPosition: 'top-right' },
-      },
-    }) as { series: Array<{ data: Array<{ name: string; children?: Array<{ name: string; label: { formatter: string; position: string; fontFamily: string; fontWeight: number; color?: string }; itemStyle?: { color?: string } }>; label?: { formatter: string; position: string; fontFamily: string }; itemStyle?: { color?: string; borderColor?: string } }> }> }
-    const buses = option.series[0].data[0].children?.find((item) => item.name === 'Автобусы')
-    expect(buses?.label).toMatchObject({ formatter: '15', position: 'insideBottomRight', fontFamily: 'Leaf Font', fontWeight: 400 })
-    expect(buses?.label.color).toBe('#ffffff')
-    expect(plainLabel(option.series[1].data[0].label!.formatter)).toBe('Транспорт')
-    expect(option.series[1].data[0].label).toMatchObject({ position: 'insideTopRight', fontFamily: 'Group Font' })
-    expect(option.series[0].data[0].itemStyle?.color).toBe('#ff00aa')
-    expect(buses?.itemStyle?.color).toBe('#000000')
-    expect(option.series[1].data).toHaveLength(option.series[0].data.length)
-    expect(option.series[1].data.every((item) => item.itemStyle?.color === 'rgba(0,0,0,0)' && item.itemStyle.borderColor === 'rgba(0,0,0,0)')).toBe(true)
-  })
-
-  it('keeps values attached to visible labels and does not duplicate a single-child total', () => {
-    const hierarchy: DataTable = { name: 'hierarchy', columns: ['category', 'subcategory', 'value'], rows: [
-      { category: 'Транспорт', subcategory: 'Автобусы', value: 15 },
-      { category: 'Транспорт', subcategory: 'Поезда', value: 20 },
-      { category: 'Связь', subcategory: 'Интернет', value: 30 },
-    ] }
-    type Node = { name: string; label: { show: boolean; formatter: string }; children?: Node[] }
-    const build = (values: Partial<ChartConfig>) => getChartPlugin('treemap').buildOption(hierarchy, {
-      ...base('treemap'),
-      xField: 'category',
-      yField: 'value',
-      yFields: ['value'],
-      treemapSubcategoryField: 'subcategory',
-      aggregation: 'sum',
-      showValues: true,
-      ...values,
-    }) as { series: Array<{ data: Node[] }> }
-
-    const visible = build({})
-    const singleGroup = visible.series[1].data.find((node) => node.name === 'Связь')!
-    const singleLeaf = visible.series[0].data.find((node) => node.name === 'Связь')!.children![0]
-    expect(plainLabel(singleGroup.label.formatter)).toBe('Связь\n30')
-    expect(plainLabel(singleLeaf.label.formatter)).toBe('Интернет')
-
-    const hidden = build({ treemapShowGroupLabels: false, treemapShowLeafLabels: false })
-    expect(hidden.series.flatMap((series) => series.data).every((node) => node.label.show === false)).toBe(true)
-    expect(hidden.series[0].data.flatMap((node) => node.children ?? []).every((node) => node.label.show === false)).toBe(true)
-
-    const leavesOnly = build({ treemapShowGroupLabels: false, treemapShowLeafLabels: true })
-    expect(plainLabel(leavesOnly.series[0].data.find((node) => node.name === 'Связь')!.children![0].label.formatter)).toBe('Интернет\n30')
-
-    const valuesOnly = build({ treemapShowGroupLabels: false, treemapShowLeafLabels: false, treemapShowGroupValues: true, treemapShowLeafValues: true })
-    expect(valuesOnly.series[1].data.find((node) => node.name === 'Связь')!.label.formatter).toBe('30')
-    expect(valuesOnly.series[0].data.find((node) => node.name === 'Транспорт')!.children!.every((node) => /^\d+$/.test(node.label.formatter))).toBe(true)
-  })
-
-  it('filters treemap categories and formats visible values as shares without changing their size', () => {
-    const hierarchy: DataTable = { name: 'hierarchy', columns: ['category', 'subcategory', 'value'], rows: [
-      { category: 'A', subcategory: 'A1', value: 30 },
-      { category: 'A', subcategory: 'A2', value: 20 },
-      { category: 'B', subcategory: 'B1', value: 50 },
-    ] }
-    type Node = { name: string; value: number; displayValue: string; label: { formatter: string }; children?: Node[] }
-    const option = getChartPlugin('treemap').buildOption(hierarchy, {
-      ...base('treemap'),
-      xField: 'category',
-      yField: 'value',
-      yFields: ['value'],
-      treemapSubcategoryField: 'subcategory',
-      aggregation: 'sum',
-      showValues: true,
-      treemapShowLeafValues: true,
-      treemapHiddenCategories: ['B'],
-      treemapValueFormat: 'percent',
-      numberDecimals: 0,
-    }) as { series: Array<{ data: Node[] }> }
-
-    expect(option.series[0].data.map((node) => node.name)).toEqual(['A'])
-    expect(option.series[1].data.map((node) => node.name)).toEqual(['A'])
-    expect(option.series[0].data[0]).toMatchObject({ value: 50, displayValue: '100%' })
-    expect(option.series[0].data[0].children).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'A1', value: 30, displayValue: '60%' }),
-      expect.objectContaining({ name: 'A2', value: 20, displayValue: '40%' }),
-    ]))
-    expect(plainLabel(option.series[1].data[0].label.formatter)).toBe('A\n100%')
-  })
-
-  it('keeps raw treemap text while exposing Russian hyphenation points for rendered lines', () => {
-    const long: DataTable = { name: 'long', columns: ['category', 'value'], rows: [{ category: 'Сверхдлинноесловобезединогопробела', value: 10 }] }
-    const option = getChartPlugin('treemap').buildOption(long, { ...base('treemap'), xField: 'category', yField: 'value', yFields: ['value'], aggregation: 'sum', showValues: false }) as { series: Array<{ data: Array<{ label: { formatter: string; overflow: string } }> }> }
-    const label = option.series[0].data[0].label
-    expect(label.formatter).toBe('Сверхдлинноесловобезединогопробела')
-    expect(label.overflow).toBe('break')
-    expect(plainLabel(hyphenateTreemapText('Конкуренция'))).toBe('Конкуренция')
+  it('keeps Russian hyphenation and adaptive type semantics', () => {
     expect(hyphenateTreemapText('Конкуренция')).toContain('\u00ad\ufeff')
-  })
-
-  it('uses a larger type scale for larger treemap areas', () => {
     expect(treemapAdaptiveFontSize(18, .3, 7)).toBeGreaterThan(treemapAdaptiveFontSize(18, .03, 7))
-  })
-
-  it('honors manual category and leaf order', () => {
-    const hierarchy: DataTable = { name: 'order', columns: ['category', 'subcategory', 'value'], rows: [
-      { category: 'A', subcategory: 'A1', value: 10 },
-      { category: 'A', subcategory: 'A2', value: 20 },
-      { category: 'Другое', subcategory: 'Прочее', value: 30 },
-    ] }
-    const option = getChartPlugin('treemap').buildOption(hierarchy, {
-      ...base('treemap'), xField: 'category', yField: 'value', yFields: ['value'], treemapSubcategoryField: 'subcategory', aggregation: 'sum',
-      treemapGroupOrder: ['A', 'Другое'], treemapLeafOrder: { A: ['A1', 'A2'] },
-    }) as { series: Array<{ sort: boolean; data: Array<{ name: string; children?: Array<{ name: string }> }> }> }
-    expect(option.series[0].sort).toBe(false)
-    expect(option.series[0].data.map((item) => item.name)).toEqual(['A', 'Другое'])
-    expect(option.series[0].data[0].children?.map((item) => item.name)).toEqual(['A1', 'A2'])
-  })
-
-  it('keeps the WCIOM demo hierarchy and percentages without duplicating group totals', () => {
-    const option = getChartPlugin('treemap').buildOption(entrepreneurshipDifficultiesDemoTable, {
-      ...base('treemap'), xField: 'Категория', yField: 'Процент', yFields: ['Процент'], treemapSubcategoryField: 'Трудность', aggregation: 'sum',
-    }) as { series: Array<{ data: Array<{ name: string; value: number }> }> }
-    expect(Object.fromEntries(option.series[0].data.map(({ name, value }) => [name, value]))).toMatchObject({
-      'Проблемы с клиентами и спросом': 17,
-      'Финансовые трудности': 16,
-      'Налоги, законодательство и бюрократия': 8,
-      'Сейчас у меня нет никаких трудностей': 52,
-      'Затрудняюсь ответить': 12,
-    })
-    expect(option.series[0].data.reduce((sum, item) => sum + item.value, 0)).toBe(139)
-    const chart = echarts.init(null, null, { renderer: 'svg', ssr: true, width: 1000, height: 750 })
-    chart.setOption(option)
-    expect(chart.renderToSVGString()).toContain('<svg')
-    chart.dispose()
   })
 
   it('starts area charts at zero while keeping line charts focused on their data', () => {

@@ -12,7 +12,7 @@ import {
 } from 'echarts/components'
 import { SVGRenderer } from 'echarts/renderers'
 import { loadEchartsForKind } from './echarts/loadEchartsForKind'
-import { getChartPlugin, getSeriesColor, hyphenateTreemapText, prepareVisibleChartData } from '../core/chartRegistry'
+import { getChartPlugin, getSeriesColor, prepareVisibleChartData } from '../core/chartRegistry'
 import { barSeriesGeometry, valueLabelBoxPlacement } from '../core/chartLabels'
 import { nearestPixelIndex, prepareChartData, segmentEndpointIndex } from '../core/chartData'
 import { sanitizeAnnotationHtml } from '../core/annotationHtml'
@@ -283,7 +283,7 @@ export function directLegendGraphics(instance: echarts.ECharts, table: DataTable
   })
 }
 function valueLabelHitGraphics(instance: echarts.ECharts, table: DataTable, config: ChartConfig, allSelected: boolean, onSelect?: (selection: ChartElementSelection) => void, onFocus?: (section: ChartSettingsSection) => void) {
-  if (config.kind === 'treemap' || !config.showValues && !Object.values(config.elementStyles).some((style) => style.showLabel)) return []
+  if (!config.showValues && !Object.values(config.elementStyles).some((style) => style.showLabel)) return []
   const prepared = prepareVisibleChartData(table, config), horizontal = isHorizontalBar(config)
   const configured = config.valueLabelPosition ?? 'auto'
   const absorption = isBarChart(config.kind) && Boolean(config.barValueLabelAbsorption)
@@ -423,222 +423,11 @@ function applyStyleOpacity(style: Record<string, unknown> | undefined, opacity: 
 function applyPointOpacity(style: Record<string, unknown> | undefined, opacity: number, fallbackColor?: string) {
   return applyStyleOpacity(style, opacity) ?? (fallbackColor ? { color: fallbackColor, opacity } : undefined)
 }
-export function materializeTreemapHyphens(root: ParentNode | null) {
-  // Treemap labels carry an explicit local x-coordinate. Keeping the repair
-  // inside that set prevents title, subtitle and credit lines from being
-  // mistaken for fragments of one hyphenated word.
-  const nodes = [...(root?.querySelectorAll('text[x]') ?? [])]
-  nodes.forEach((node) => {
-    const value = node.textContent ?? ''
-    const breaksHere = /\u00ad\ufeff$/.test(value)
-    if (/[\u00ad\ufeff]/.test(value)) node.textContent = value.replaceAll(/[\u00ad\ufeff]/g, '') + (breaksHere ? '‐' : '')
-  })
-  const endWord = /[А-ЯЁа-яё]+$/u, startWord = /^[А-ЯЁа-яё]+/u
-  for (let index = 0; index < nodes.length - 1; index += 1) {
-    const first = nodes[index], firstPart = first.textContent?.match(endWord)?.[0]
-    if (!firstPart) continue
-    const chain = [first]
-    const parts = [firstPart]
-    let cursor = index
-    while (cursor + 1 < nodes.length && nodes[cursor].nextElementSibling === nodes[cursor + 1]) {
-      const next = nodes[cursor + 1], part = next.textContent?.match(startWord)?.[0]
-      if (!part) break
-      chain.push(next)
-      parts.push(part)
-      cursor += 1
-      if (part.length !== (next.textContent ?? '').length) break
-    }
-    if (chain.length < 2) continue
-    const word = parts.join('')
-    const segments = hyphenateTreemapText(word, '\u0001').split('\u0001')
-    if (segments.length < chain.length) continue
-    const legalBreaks = segments.slice(0, -1).reduce<number[]>((positions, segment) => [...positions, (positions.at(-1) ?? 0) + segment.length], [])
-    const desiredBreaks = parts.slice(0, -1).reduce<number[]>((positions, part) => [...positions, (positions.at(-1) ?? 0) + part.length], [])
-    const chosen: number[] = []
-    for (const desired of desiredBreaks) {
-      const afterPrevious = legalBreaks.filter((position) => position > (chosen.at(-1) ?? 0))
-      const safe = afterPrevious.filter((position) => position <= desired).at(-1) ?? afterPrevious[0]
-      if (safe == null) break
-      chosen.push(safe)
-    }
-    if (chosen.length !== chain.length - 1) continue
-    const chunks = chosen.reduce<string[]>((result, position, chunkIndex) => [...result, word.slice(chunkIndex ? chosen[chunkIndex - 1] : 0, position)], [])
-    chunks.push(word.slice(chosen.at(-1)))
-    chain.forEach((node, chainIndex) => {
-      const text = node.textContent ?? ''
-      node.textContent = chainIndex === 0
-        ? `${text.slice(0, -parts[0].length)}${chunks[0]}‐`
-        : chainIndex === chain.length - 1
-          ? `${chunks[chainIndex]}${text.slice(parts[chainIndex].length)}`
-          : `${chunks[chainIndex]}‐`
-    })
-    index = cursor
-  }
-}
-export function wrapTreemapLabelText(value: string, width: number, size: number, fontFamily: string, weight: number) {
-  const measure = (text: string) => measureTextWidth(text, size, fontFamily, weight)
-  const lines: string[] = []
-  const pushWord = (word: string) => {
-    const syllables = hyphenateTreemapText(word, '\u0001').split('\u0001')
-    if (syllables.length < 2) {
-      let fragment = ''
-      for (const character of word) {
-        if (fragment && measure(`${fragment}${character}‐`) > width) { lines.push(`${fragment}‐`); fragment = character }
-        else fragment += character
-      }
-      return fragment
-    }
-    let fragment = ''
-    syllables.forEach((syllable, index) => {
-      const candidate = `${fragment}${syllable}`
-      if (fragment && measure(`${candidate}‐`) > width) { lines.push(`${fragment}‐`); fragment = syllable }
-      else fragment = candidate
-      if (index === syllables.length - 1) return
-    })
-    return fragment
-  }
-  const paragraphs = value.split('\n')
-  paragraphs.forEach((paragraph, paragraphIndex) => {
-    let line = ''
-    paragraph.trim().split(/\s+/).filter(Boolean).forEach((word) => {
-      const candidate = line ? `${line} ${word}` : word
-      if (measure(candidate) <= width) { line = candidate; return }
-      if (line) { lines.push(`${line}\u200b`); line = '' }
-      if (measure(word) <= width) line = word
-      else line = pushWord(word) ?? ''
-    })
-    if (line) lines.push(`${line}${paragraphIndex < paragraphs.length - 1 ? '\u200b' : ''}`)
-  })
-  return lines
-}
-interface TreemapLabelFitSource {
-  text: string
-  renderedText: string
-  fontSize: number
-  lineHeight: number
-}
-const treemapLabelFitSources = new WeakMap<object, TreemapLabelFitSource>()
-
-export function fitTreemapLabelBoxes(instance: echarts.ECharts) {
-  type Rect = { x: number; y: number; width: number; height: number }
-  type TextHost = {
-    zlevel?: number
-    getBoundingRect(): { width: number; height: number }
-    getPaintRect(): Rect
-    getTextContent?(): {
-      style?: { text?: unknown; padding?: number | number[]; fontSize?: number; fontFamily?: string; fontWeight?: number; lineHeight?: number; verticalAlign?: string }
-      setStyle(style: Record<string, unknown>): void
-      markRedraw(): void
-      getBoundingRect(): unknown
-    } | null
-  }
-  const displayList = (instance.getZr().storage as unknown as { getDisplayList(update?: boolean): TextHost[] }).getDisplayList(true)
-  const entries = displayList.flatMap((host) => {
-    const label = host.getTextContent?.(), style = label?.style, text = style?.text
-    return label && style && typeof text === 'string' && text ? [{ host, label, style, text, rect: host.getBoundingRect(), paint: host.getPaintRect() }] : []
-  }).filter(({ rect }) => rect.width > 0 && rect.height > 0)
-  const fit = (entry: typeof entries[number], reservedHeight = 0) => {
-    const { label, rect, style, text: currentText } = entry
-    let source = treemapLabelFitSources.get(label)
-    if (!source || currentText !== source.renderedText) {
-      const fontSize = Number(style.fontSize ?? 12)
-      source = {
-        text: currentText,
-        renderedText: currentText,
-        fontSize,
-        lineHeight: Number(style.lineHeight ?? fontSize * 1.2),
-      }
-      treemapLabelFitSources.set(label, source)
-    }
-    const padding = style.padding
-    const horizontal = typeof padding === 'number' ? padding * 2 : Array.isArray(padding) ? Number(padding[1] ?? 0) + Number(padding[3] ?? padding[1] ?? 0) : 0
-    const vertical = typeof padding === 'number' ? padding * 2 : Array.isArray(padding) ? Number(padding[0] ?? 0) + Number(padding[2] ?? padding[0] ?? 0) : 0
-    const width = Math.max(1, rect.width - horizontal), height = Math.max(1, rect.height - vertical - reservedHeight)
-    const originalSize = source.fontSize, originalLineHeight = source.lineHeight
-    const fontFamily = style.fontFamily ?? 'Arial, sans-serif', fontWeight = Number(style.fontWeight ?? 400)
-    let fontSize = originalSize, lines = wrapTreemapLabelText(source.text, width, fontSize, fontFamily, fontWeight)
-    while (fontSize > 5 && lines.length * originalLineHeight * fontSize / originalSize > height) {
-      fontSize -= 1
-      lines = wrapTreemapLabelText(source.text, width, fontSize, fontFamily, fontWeight)
-    }
-    const lineHeight = Math.max(6, Math.round(originalLineHeight * fontSize / originalSize))
-    source.renderedText = lines.join('\n')
-    label.setStyle({ width, height: Math.max(1, rect.height - vertical), text: source.renderedText, overflow: undefined, ellipsis: undefined, fontSize, lineHeight })
-    label.getBoundingRect()
-    label.markRedraw()
-    return lines.length * lineHeight + vertical
-  }
-  const groups = entries.filter(({ host }) => (host.zlevel ?? 0) > 0).map((entry) => ({ ...entry, labelHeight: fit(entry) }))
-  entries.filter(({ host }) => (host.zlevel ?? 0) === 0).forEach((entry) => {
-    const group = groups.find(({ paint }) =>
-      entry.paint.x >= paint.x - 1 && entry.paint.y >= paint.y - 1
-      && entry.paint.x + entry.paint.width <= paint.x + paint.width + 1
-      && entry.paint.y + entry.paint.height <= paint.y + paint.height + 1)
-    if (!group) { fit(entry); return }
-    const position = group.style.verticalAlign ?? 'top'
-    const touchesLabelBand = position === 'bottom'
-      ? entry.paint.y + entry.paint.height >= group.paint.y + group.paint.height - group.labelHeight - 1
-      : position === 'middle'
-        ? entry.paint.y < group.paint.y + (group.paint.height + group.labelHeight) / 2 && entry.paint.y + entry.paint.height > group.paint.y + (group.paint.height - group.labelHeight) / 2
-        : entry.paint.y <= group.paint.y + group.labelHeight + 1
-    fit(entry, touchesLabelBand ? group.labelHeight : 0)
-  })
-}
-function applyTreemapLayout(instance: echarts.ECharts, root: ParentNode | null, selectedElementKey?: string | null) {
-  fitTreemapLabelBoxes(instance)
-  outlineSelectedTreemapGroup(instance, selectedElementKey)
-  instance.getZr().refreshImmediately()
-  materializeTreemapHyphens(root)
-}
-export function outlineSelectedTreemapGroup(instance: echarts.ECharts, selectedElementKey?: string | null) {
-  type TreemapSeries = { name?: string }
-  type TreemapModelSource = { getModel(): { getSeriesByIndex(index: number): { getData(): { getName(index: number): string } } | undefined } }
-  type Displayable = {
-    type?: string
-    setStyle?(style: Record<string, unknown>): void
-    markRedraw?(): void
-  }
-  const series = ((instance.getOption() as unknown as { series?: TreemapSeries[] }).series ?? [])
-  const seriesIndex = series.findIndex((item) => item.name === '__treemap-groups')
-  if (seriesIndex < 0) return
-  const selectedName = selectedElementKey?.startsWith('treemap-group:') ? selectedElementKey.slice('treemap-group:'.length) : null
-  const data = (instance as unknown as TreemapModelSource).getModel().getSeriesByIndex(seriesIndex)?.getData()
-  const displayList = (instance.getZr().storage as unknown as { getDisplayList(update?: boolean): Displayable[] }).getDisplayList(true)
-  displayList.forEach((host) => {
-    const ecData = echarts.helper.getECData(host as never)
-    if (host.type !== 'rect' || ecData.seriesIndex !== seriesIndex || typeof ecData.dataIndex !== 'number') return
-    const selected = Boolean(selectedName && data?.getName(ecData.dataIndex) === selectedName)
-    host.setStyle?.({
-      fill: 'rgba(0,0,0,0)',
-      stroke: selected ? '#6956e8' : 'rgba(0,0,0,0)',
-      lineWidth: selected ? 3 : 0,
-    })
-    host.markRedraw?.()
-  })
-}
 // oxlint-disable-next-line react/only-export-components -- exported for selection rendering regression tests
 export function applySeriesVisualState(option: Record<string, unknown>, table: DataTable, config: ChartConfig, selectedSeriesName?: string | null, selectedElementKey?: string | null, hoveredSeriesName?: string | null) {
-  const selectedElementSeriesName = selectedElementKey?.startsWith('treemap-group:') ? selectedElementKey.slice('treemap-group:'.length) : selectedElementKey?.split('\u001f')[0]
+  const selectedElementSeriesName = selectedElementKey?.split('\u001f')[0]
   const activeSeriesName = hoveredSeriesName ?? selectedSeriesName ?? selectedElementSeriesName ?? null
   const series = option.series as Array<{ id?: string; name?: string; segmentOf?: string; customBarOf?: string; type?: string; silent?: boolean; z?: number; itemStyle?: Record<string, unknown>; lineStyle?: Record<string, unknown>; areaStyle?: Record<string, unknown>; emphasis?: Record<string, unknown>; blur?: Record<string, unknown>; data?: Array<Record<string, unknown> | null> }> | undefined
-  if (config.kind === 'treemap') {
-    const groupSelected = selectedElementKey?.startsWith('treemap-group:')
-    if (groupSelected) return
-    const visit = (points: Array<Record<string, unknown> | null>) => points.forEach((point) => {
-      if (!point) return
-      const selected = point.elementKey === selectedElementKey
-      if (selected) {
-        point.itemStyle = {
-          ...point.itemStyle as object,
-          borderColor: '#6956e8',
-          borderWidth: Math.max(3, Number((point.itemStyle as { borderWidth?: number } | undefined)?.borderWidth ?? 0)),
-        }
-      }
-      visit((point.children as Array<Record<string, unknown> | null> | undefined) ?? [])
-    })
-    series?.forEach((item) => visit(item.data ?? []))
-    return
-  }
   const seriesOrder = prepareVisibleChartData(table, config).series.map((item) => item.name)
   series?.forEach((item) => {
     if (item.emphasis) delete item.emphasis.focus
@@ -720,22 +509,18 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     const [plotBounds, setPlotBounds] = useState<PlotBounds | null>(null)
     const [richLayouts, setRichLayouts] = useState<Partial<Record<'title' | 'subtitle' | 'note' | 'source', RichLayout>>>({})
     const [categoryLabelLayout, setCategoryLabelLayout] = useState<CategoryLabelLayout | null>(null)
-    const [, setTreemapLayoutRevision] = useState(0)
     const chart = useRef<echarts.ECharts | null>(null)
     const renderRevision = useRef(0)
     const displayOption = useRef<Record<string, unknown> | null>(null)
     const exportOption = useRef<Record<string, unknown> | null>(null)
     const renderedKind = useRef<ChartKind | null>(null)
-    const treemapLayout = useRef<{ table: DataTable; config: ChartConfig } | null>(null)
-    const treemapLayoutToken = useRef(0)
+    const nativeTreemapHits = useRef<Array<{ rect: { x: number; y: number; width: number; height: number }; info: { elementKey: string; sourceSeriesName: string; displayCategory: string; displayValue: string; displayLabel?: string; displayColor?: string } }>>([])
     const clickedSeries = useRef<string | null>(null)
     const treemapDrag = useRef<{ source: ChartElementSelection; click: ChartElementSelection; start: [number, number]; moved: boolean; target?: ChartElementSelection; placement?: 'before' | 'after'; signature?: string } | null>(null)
     const suppressTreemapClick = useRef(false)
     const treemapDragPreview = useRef<HTMLDivElement | null>(null)
     const treemapDropIndicator = useRef<HTMLDivElement | null>(null)
     const lastPointer = useRef<[number, number] | null>(null)
-    const selectedElementKeyRef = useRef(selectedElementKey)
-    selectedElementKeyRef.current = selectedElementKey
     const [hoveredSeriesName, setHoveredSeriesName] = useState<string | null>(null)
     const selectedTreemapSeriesName = selectedElementKey?.startsWith('treemap-group:') ? selectedElementKey.slice('treemap-group:'.length) : selectedElementKey?.split('\u001f')[0]
     const activeCategoryLabel = useMemo(() => requestedCategoryLabel ?? (() => {
@@ -743,7 +528,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       return match ? { axis: match[1] as 'x' | 'y', category: match[2] } : null
     })(), [requestedCategoryLabel, selectedElementKey, selectedElementTarget])
     const selectedCategoryLabel = activeCategoryLabel
-    const chartLayoutReady = renderedChartKind === config.kind && (config.kind !== 'treemap' || treemapLayout.current?.table === table && treemapLayout.current.config === config)
+    const chartLayoutReady = renderedChartKind === config.kind
     const beginRenderCycle = (status: ChartRenderStatus) => {
       const revision = ++renderRevision.current
       setRenderLifecycle((current) => ({ ...current, revision, status }))
@@ -785,31 +570,19 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       if (!container.current) return
       const instance = echarts.init(container.current, undefined, { renderer: 'svg' })
       chart.current = instance
-      let fitFrame = 0
-      let active = true
-      const fitTreemap = () => {
-        cancelAnimationFrame(fitFrame)
-        fitFrame = requestAnimationFrame(() => {
-          if (!active || instance.isDisposed() || renderedKind.current !== 'treemap') return
-          applyTreemapLayout(instance, container.current, selectedElementKeyRef.current)
-        })
-      }
       const resize = () => {
         if (instance.isDisposed()) return
         instance.resize({ animation: { duration: 0 } })
-        fitTreemap()
       }
       const observer = new ResizeObserver(resize)
       observer.observe(container.current)
       window.addEventListener('resize', resize)
-      void document.fonts.ready.then(fitTreemap)
-      return () => { active = false; cancelAnimationFrame(fitFrame); observer.disconnect(); window.removeEventListener('resize', resize); if (!instance.isDisposed()) instance.dispose(); if (chart.current === instance) chart.current = null }
+      return () => { observer.disconnect(); window.removeEventListener('resize', resize); if (!instance.isDisposed()) instance.dispose(); if (chart.current === instance) chart.current = null }
     }, [])
 
     useEffect(() => {
       const target = viewport.current
       if (!target) return
-      let fitFrame = 0
       const updateScale = () => {
         const width = Math.max(1, Math.min(1000, config.canvasWidth ?? 1000))
         const height = Math.max(1, Math.min(1000, config.canvasHeight ?? 563))
@@ -817,16 +590,11 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         const instance = chart.current
         if (!instance || instance.isDisposed()) return
         instance.resize({ width, height, animation: { duration: 0 } })
-        cancelAnimationFrame(fitFrame)
-        fitFrame = requestAnimationFrame(() => {
-          if (instance.isDisposed() || renderedKind.current !== 'treemap') return
-          applyTreemapLayout(instance, container.current, selectedElementKeyRef.current)
-        })
       }
       const observer = new ResizeObserver(updateScale)
       observer.observe(target)
       updateScale()
-      return () => { cancelAnimationFrame(fitFrame); observer.disconnect() }
+      return () => { observer.disconnect() }
     }, [config.autoFitCanvas, config.canvasHeight, config.canvasWidth])
 
     useEffect(() => {
@@ -855,18 +623,21 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const compiledScene = plugin.compile(table, renderConfig)
       const plotKind = compiledScene.migrationMode === 'native' ? compiledScene.plot.kind : 'legacy'
       const rendererOwnsDirectLabels = compiledScene.migrationMode === 'native' && compiledScene.plot.kind !== 'bar'
-      type NativeSelectionHit = { rect: { x: number; y: number; width: number; height: number }; info: { elementKey: string; sourceSeriesName: string; displayCategory: string; displayValue: string; displayColor?: string; selectionTarget?: ChartElementSelection['target']; axis?: 'x' | 'y'; selectionMode?: 'series-first' } }
+      type NativeSelectionHit = { rect: { x: number; y: number; width: number; height: number }; info: { elementKey: string; sourceSeriesName: string; displayCategory: string; displayValue: string; displayLabel?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target']; axis?: 'x' | 'y'; selectionMode?: 'series-first' } }
       type NativeCategoryLayout = CategoryLabelLayout
-      const option = renderScene(compiledScene) as Record<string, unknown> & { graphic?: unknown[]; nativeSelectionHits?: NativeSelectionHit[]; nativeCategoryLayouts?: NativeCategoryLayout[] }
+      const option = renderScene(compiledScene) as Record<string, unknown> & { graphic?: unknown[]; nativeSelectionHits?: NativeSelectionHit[]; nativeCategoryLayouts?: NativeCategoryLayout[]; nativeTreemapHits?: typeof nativeTreemapHits.current; nativePlotBounds?: PlotBounds }
       const nativeSelectionHits = option.nativeSelectionHits ?? []
       const nativeCategoryLayouts = option.nativeCategoryLayouts ?? []
+      nativeTreemapHits.current = option.nativeTreemapHits ?? []
+      const nativePlotBounds = option.nativePlotBounds
       delete option.nativeSelectionHits
       delete option.nativeCategoryLayouts
+      delete option.nativeTreemapHits
+      delete option.nativePlotBounds
       const nativeLayoutSnapshot = plugin.compilerMode === 'native' ? cloneChartOption({ grid: option.grid, xAxis: option.xAxis, yAxis: option.yAxis, legend: option.legend }) : null
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       setRenderAnimationEnabled(!reducedMotion)
-      const firstTreemapLayout = config.kind === 'treemap' && (treemapLayout.current?.table !== table || treemapLayout.current.config !== config)
-      option.animation = !reducedMotion && !firstTreemapLayout
+      option.animation = !reducedMotion
       option.animationDuration ??= reducedMotion ? 0 : 420
       option.animationDurationUpdate ??= reducedMotion ? 0 : 240
       option.animationEasing ??= 'cubicOut'
@@ -946,7 +717,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           if (hasPositive) grid.top = Number(grid.top ?? 0) + valueLabelSpace
           if (hasNegative) grid.bottom = Number(grid.bottom ?? 0) + valueLabelSpace
         }
-      } else if (grid && plugin.compilerMode === 'legacy' && config.kind !== 'treemap' && valueLabelSpace && !(config.valueLabelPosition ?? '').startsWith('inside-')) {
+      } else if (grid && plugin.compilerMode === 'legacy' && valueLabelSpace && !(config.valueLabelPosition ?? '').startsWith('inside-')) {
         const valuePosition = config.valueLabelPosition ?? 'auto'
         if (isHorizontalBar(config)) {
           if (valuePosition === 'bottom') grid.left = Number(grid.left ?? 0) + valueLabelSpace
@@ -1036,10 +807,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         grid.right = Math.max(0, Math.round(right - horizontalOverflow * right / Math.max(1, left + right)))
         grid.top = Math.max(0, Math.round(top - verticalOverflow * top / Math.max(1, top + bottom)))
         grid.bottom = Math.max(0, Math.round(bottom - verticalOverflow * bottom / Math.max(1, top + bottom)))
-      }
-      if (grid && config.kind === 'treemap') {
-        const treemapGrid = grid
-        ;(option.series as Array<Record<string, unknown>> | undefined)?.forEach((series) => Object.assign(series, { left: treemapGrid.left, top: treemapGrid.top, right: treemapGrid.right, bottom: treemapGrid.bottom }))
       }
       if (nativeLayoutSnapshot) {
         option.grid = nativeLayoutSnapshot.grid
@@ -1190,13 +957,11 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       })
       cleanOption.graphic = [...cleanLabels, ...decorationGraphics(config.decorations ?? []), ...cleanTitleHits, ...annotations.map((annotation) => ({ ...annotation, style: { ...annotation.style, opacity: 1 } }))]
       setRenderLifecycle((current) => advanceChartRender(current, revision, 'rendering'))
-      const animateTreemapUpdate = config.kind === 'treemap' && renderedKind.current === 'treemap'
-      if (animateTreemapUpdate) instance.setOption(option, { replaceMerge: ['series', 'graphic'] })
-      else instance.setOption(option, true)
+      instance.setOption(option, true)
       renderedKind.current = config.kind
       setRenderedChartKind(config.kind)
       setRenderedPlotKind(plotKind)
-      if (activeCategoryLabel && config.kind !== 'treemap') {
+      if (activeCategoryLabel && plotKind !== 'treemap') {
         const nativeCategoryLayout = nativeCategoryLayouts.find((item) => item.axis === activeCategoryLabel.axis && item.category === activeCategoryLabel.category)
         if (nativeCategoryLayout) setCategoryLabelLayout(nativeCategoryLayout)
         else {
@@ -1228,7 +993,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         else setCategoryLabelLayout(null)
         }
       } else setCategoryLabelLayout(null)
-      const exactBounds = chartPlotBounds(instance, table, config)
+      const exactBounds = nativePlotBounds ?? chartPlotBounds(instance, table, config)
       if (exactBounds) setPlotBounds((current) => current && Math.abs(current.top - exactBounds.top) < .5 && Math.abs(current.bottom - exactBounds.bottom) < .5 && Math.abs(current.left - exactBounds.left) < .5 && Math.abs(current.right - exactBounds.right) < .5 ? current : exactBounds)
       const withoutGeneratedGraphics = (graphics: unknown[]) => graphics.filter((graphic) => {
         if (!graphic || typeof graphic !== 'object') return true
@@ -1325,8 +1090,16 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         instance.setOption({ graphic: option.graphic }, { replaceMerge: ['graphic'] })
       }
       if (nativeSelectionHits.length) {
-        const hits = nativeSelectionHits.map((hit, index) => ({ id: `native-selection-hit-${index}`, type: 'rect', z: 140, cursor: 'pointer', shape: hit.rect, style: hit.info.elementKey === selectedElementKey && hit.info.selectionTarget === selectedElementTarget ? { fill: 'rgba(0,0,0,0)', stroke: '#6956e8', lineWidth: 1 } : { fill: 'rgba(0,0,0,0)' }, onclick: () => {
+        const hits = nativeSelectionHits.map((hit, index) => ({ id: `native-selection-hit-${index}`, type: 'rect', z: 140, cursor: 'pointer', shape: hit.rect, style: hit.info.elementKey === selectedElementKey && hit.info.selectionTarget === selectedElementTarget ? { fill: 'rgba(0,0,0,0)', stroke: '#6956e8', lineWidth: 1 } : { fill: 'rgba(0,0,0,0)' }, onmousedown: (event: { offsetX?: number; offsetY?: number }) => {
           const point = hit.info, seriesName = point.sourceSeriesName
+          if (plotKind !== 'treemap') return
+          const group = { key: `treemap-group:${seriesName}`, seriesName, category: seriesName, value: '', label: seriesName } satisfies ChartElementSelection
+          const leaf = { key: point.elementKey, seriesName, category: point.displayCategory, value: point.displayValue, label: point.displayLabel } satisfies ChartElementSelection
+          const source = selectedElementKey === point.elementKey ? leaf : group
+          treemapDrag.current = { source, click: selectedTreemapSeriesName === seriesName ? leaf : group, start: [Number(event.offsetX ?? 0), Number(event.offsetY ?? 0)], moved: false }
+        }, onclick: () => {
+          const point = hit.info, seriesName = point.sourceSeriesName
+          if (plotKind === 'treemap') return
           if (point.selectionTarget === 'category-label') {
             onSelect?.({ key: point.elementKey, seriesName: '', category: point.displayCategory, value: point.displayValue, target: 'category-label', axis: point.axis })
             onSettingsFocus?.(`${point.axis ?? 'y'}-axis-labels`)
@@ -1350,20 +1123,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       setRenderLifecycle((current) => advanceChartRender(current, revision, 'post-processing'))
       instance.dispatchAction({ type: 'downplay' })
       instance.getZr().flush()
-      if (config.kind === 'treemap') {
-        const token = ++treemapLayoutToken.current
-        const finish = () => {
-          if (token !== treemapLayoutToken.current || instance.isDisposed() || chart.current !== instance) return
-          applyTreemapLayout(instance, container.current, selectedElementKey)
-          treemapLayout.current = { table, config }
-          setTreemapLayoutRevision((revision) => revision + 1)
-        }
-        if (document.fonts.status === 'loaded') finish()
-        else void document.fonts.ready.then(finish)
-      } else {
-        treemapLayout.current = null
-        treemapLayoutToken.current += 1
-      }
       setRenderError('')
       void (async () => {
         await document.fonts.ready
@@ -1404,7 +1163,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const resetHover = () => { setHoveredSeriesName(null); instance.dispatchAction({ type: 'downplay' }) }
       const prepared = prepareVisibleChartData(table, config)
       const horizontalBar = isHorizontalBar(config)
-      const categoryPixels = config.kind === 'treemap' ? [] : prepared.categories.map((_, index) => {
+      const categoryPixels = nativeTreemapHits.current.length ? [] : prepared.categories.map((_, index) => {
         try { return Number(instance.convertToPixel(horizontalBar ? { yAxisIndex: 0 } : { xAxisIndex: 0 }, index)) } catch { return Number.NaN }
       })
       const pointerCategory = (pointer: [number, number]) => pointer[horizontalBar ? 1 : 0]
@@ -1486,13 +1245,13 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           return legacySelection(selection) as ChartElementSelection
         }
         if (clickedValueLabel && event.data?.directLegendLabel) { onSettingsFocus?.('legend'); return }
-        if (config.kind === 'treemap' && selectedTreemapSeriesName !== seriesName) {
+        if (renderedPlotKind === 'treemap' && selectedTreemapSeriesName !== seriesName) {
           onSelect?.({ key: `treemap-group:${seriesName}`, seriesName, category: seriesName, value: '', label: seriesName })
           onSettingsFocus?.('element')
           return
         }
         if (clickedValueLabel && pointData?.elementKey) {
-          if (config.kind !== 'treemap' && selectedSettingsSection !== 'values') { onSettingsFocus?.('values'); return }
+          if (renderedPlotKind !== 'treemap' && selectedSettingsSection !== 'values') { onSettingsFocus?.('values'); return }
           onSelect?.(nativeSelection('value-label') ?? { key: pointData.elementKey, seriesName, category: pointData.displayCategory ?? event.name ?? '', value: pointData.displayValue ?? String(event.value ?? ''), label: pointData.displayLabel, color: pointColor, target: 'value-label' })
           onSettingsFocus?.('element')
           return
@@ -1525,30 +1284,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       // before this effect gets a chance to remove its listeners, at which
       // point instance.getZr() returns null.
       const renderer = instance.getZr()
-      const treemapSelection = (params: unknown, mode: 'source' | 'group' | 'leaf' = 'group') => {
-        const event = params as { seriesName?: string; name?: string; value?: unknown; data?: { elementKey?: string; sourceSeriesName?: string; displayValue?: string; displayCategory?: string; displayLabel?: string }; event?: { offsetX?: number; offsetY?: number } }
-        const point = event.data
-        const category = point?.sourceSeriesName ?? event.seriesName
-        if (config.kind !== 'treemap' || !category || category.startsWith('__')) return null
-        const leafSelected = Boolean(point?.elementKey && !point.elementKey.startsWith('treemap-group:') && (mode === 'leaf' || mode === 'source' && selectedElementKey === point.elementKey))
-        if (!leafSelected) return {
-          selection: { key: `treemap-group:${category}`, seriesName: category, category, value: '', label: category } satisfies ChartElementSelection,
-          point: [Number(event.event?.offsetX ?? 0), Number(event.event?.offsetY ?? 0)] as [number, number],
-        }
-        return {
-          selection: { key: point!.elementKey!, seriesName: category, category: point?.displayCategory ?? event.name ?? '', value: point?.displayValue ?? String(event.value ?? ''), label: point?.displayLabel } satisfies ChartElementSelection,
-          point: [Number(event.event?.offsetX ?? 0), Number(event.event?.offsetY ?? 0)] as [number, number],
-        }
-      }
-      const treemapDown = (params: unknown) => {
-        const item = treemapSelection(params, 'source')
-        if (!item) return
-        const click = treemapSelection(params, selectedTreemapSeriesName === item.selection.seriesName ? 'leaf' : 'group')?.selection ?? item.selection
-        treemapDrag.current = { source: item.selection, click, start: item.point, moved: false }
-      }
-      const sendTreemapMove = (source: ChartElementSelection, target: ChartElementSelection, placement: 'before' | 'after') => {
-        onTreemapMove?.(source, target, placement)
-      }
+      const sendTreemapMove = (source: ChartElementSelection, target: ChartElementSelection, placement: 'before' | 'after') => onTreemapMove?.(source, target, placement)
       const dragLayer = () => container.current?.parentElement
       const showTreemapPreview = (x: number, y: number, label: string) => {
         const layer = dragLayer()
@@ -1575,64 +1311,23 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       }
       const updateTreemapDropTarget = (x: number, y: number) => {
         const drag = treemapDrag.current
-        const canvasBounds = container.current?.getBoundingClientRect()
-        if (!drag?.moved || !canvasBounds || !canvasBounds.width || !canvasBounds.height) return
-        const clientX = canvasBounds.left + x / instance.getWidth() * canvasBounds.width
-        const clientY = canvasBounds.top + y / instance.getHeight() * canvasBounds.height
-        type TreemapPoint = { name?: string; elementKey?: string; sourceSeriesName?: string; displayCategory?: string; displayValue?: string; displayLabel?: string; children?: TreemapPoint[] }
-        const mainSeries = (instance.getOption() as { series?: Array<{ data?: TreemapPoint[] }> }).series?.[0]
-        const flattened: TreemapPoint[] = []
-        const visit = (points: TreemapPoint[]) => points.forEach((point) => { flattened.push(point); visit(point.children ?? []) })
-        visit(mainSeries?.data ?? [])
-        const visiblePath = (path: SVGPathElement) => {
-          const fill = path.getAttribute('fill') ?? ''
-          return fill !== 'none' && fill !== '#ffffff' && !/^rgba?\(0,\s*0,\s*0(?:,\s*0)?\)$/i.test(fill)
-        }
-        const leafPaths = [...(container.current?.querySelectorAll('svg path') ?? [])].filter((path): path is SVGPathElement => path instanceof SVGPathElement && visiblePath(path))
-        const leaves = flattened.filter((point) => !point.children?.length)
-        const hitPath = leafPaths
-          .map((path) => ({ path, box: path.getBoundingClientRect() }))
-          .filter(({ box }) => clientX >= box.left && clientX <= box.right && clientY >= box.top && clientY <= box.bottom)
-          .sort((a, b) => a.box.width * a.box.height - b.box.width * b.box.height)[0]?.path
-        const hit = hitPath ? leaves[leafPaths.indexOf(hitPath)] : undefined
+        if (!drag?.moved) return
+        const hits = nativeTreemapHits.current
+        const leaves = hits.filter((hit) => !hit.info.elementKey.startsWith('treemap-group:'))
+        const hit = leaves.filter(({ rect }) => x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height).sort((left, right) => left.rect.width * left.rect.height - right.rect.width * right.rect.height)[0]
         if (!hit) return
         const sourceIsGroup = drag.source.key.startsWith('treemap-group:')
-        const category = hit.sourceSeriesName ?? hit.name ?? ''
-        const targetPoint = sourceIsGroup ? flattened.find((point) => point.elementKey === `treemap-group:${category}`) : hit
-        if (!targetPoint?.elementKey || targetPoint.elementKey === drag.source.key || !sourceIsGroup && (targetPoint.elementKey.startsWith('treemap-group:') || category !== drag.source.seriesName)) return
-        const targetPaths = sourceIsGroup
-          ? leafPaths.filter((_path, pathIndex) => leaves[pathIndex]?.sourceSeriesName === category)
-          : [hitPath]
-        const boxes = targetPaths.flatMap((path) => path ? [path.getBoundingClientRect()] : [])
-        if (!boxes.length) return
-        const targetBounds = {
-          left: Math.min(...boxes.map((box) => box.left)),
-          top: Math.min(...boxes.map((box) => box.top)),
-          right: Math.max(...boxes.map((box) => box.right)),
-          bottom: Math.max(...boxes.map((box) => box.bottom)),
-        }
-        const scaleX = instance.getWidth() / canvasBounds.width, scaleY = instance.getHeight() / canvasBounds.height
-        const rect = {
-          left: (targetBounds.left - canvasBounds.left) * scaleX,
-          top: (targetBounds.top - canvasBounds.top) * scaleY,
-          width: (targetBounds.right - targetBounds.left) * scaleX,
-          height: (targetBounds.bottom - targetBounds.top) * scaleY,
-        }
+        const category = hit.info.sourceSeriesName
+        const targetHit = sourceIsGroup ? hits.find((candidate) => candidate.info.elementKey === `treemap-group:${category}`) : hit
+        if (!targetHit || targetHit.info.elementKey === drag.source.key || !sourceIsGroup && category !== drag.source.seriesName) return
+        const rect = { left: targetHit.rect.x, top: targetHit.rect.y, width: targetHit.rect.width, height: targetHit.rect.height }
         const horizontalSplit = rect.width >= rect.height
-        const placement: 'before' | 'after' = horizontalSplit
-          ? x < rect.left + rect.width / 2 ? 'before' : 'after'
-          : y < rect.top + rect.height / 2 ? 'before' : 'after'
-        showTreemapIndicator(horizontalSplit
-          ? { left: placement === 'before' ? rect.left : rect.left + rect.width, top: rect.top, width: 3, height: rect.height }
-          : { left: rect.left, top: placement === 'before' ? rect.top : rect.top + rect.height, width: rect.width, height: 3 })
-        const target: ChartElementSelection = sourceIsGroup
-          ? { key: targetPoint.elementKey, seriesName: category, category, value: '', label: targetPoint.displayLabel ?? category }
-          : { key: targetPoint.elementKey, seriesName: category, category: targetPoint.displayCategory ?? targetPoint.name ?? '', value: targetPoint.displayValue ?? '', label: targetPoint.displayLabel ?? targetPoint.name }
+        const placement: 'before' | 'after' = horizontalSplit ? x < rect.left + rect.width / 2 ? 'before' : 'after' : y < rect.top + rect.height / 2 ? 'before' : 'after'
+        showTreemapIndicator(horizontalSplit ? { left: placement === 'before' ? rect.left : rect.left + rect.width, top: rect.top, width: 3, height: rect.height } : { left: rect.left, top: placement === 'before' ? rect.top : rect.top + rect.height, width: rect.width, height: 3 })
+        const target: ChartElementSelection = { key: targetHit.info.elementKey, seriesName: category, category: targetHit.info.displayCategory, value: targetHit.info.displayValue, label: targetHit.info.displayLabel }
         const signature = `${target.key}:${placement}`
         if (drag.signature === signature) return
-        drag.target = target
-        drag.placement = placement
-        drag.signature = signature
+        drag.target = target; drag.placement = placement; drag.signature = signature
         sendTreemapMove(drag.source, target, placement)
       }
       const treemapMove = (event: { offsetX?: number; offsetY?: number }) => {
@@ -1648,7 +1343,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           updateTreemapDropTarget(x, y)
         }
       }
-      const finishTreemapDrag = (params?: unknown) => {
+      const finishTreemapDrag = () => {
         const drag = treemapDrag.current
         if (!drag) return
         treemapDrag.current = null
@@ -1661,15 +1356,8 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           return
         }
         suppressTreemapClick.current = true
-        if (!drag.target && params) {
-          const sourceIsGroup = drag.source.key.startsWith('treemap-group:')
-          const target = treemapSelection(params, sourceIsGroup ? 'group' : 'leaf')?.selection
-          if (target && target.key !== drag.source.key && (sourceIsGroup || target.seriesName === drag.source.seriesName)) sendTreemapMove(drag.source, target, 'before')
-        }
       }
       instance.on('click', handler)
-      instance.on('mousedown', treemapDown)
-      instance.on('mouseup', finishTreemapDrag)
       instance.on('mouseover', hoverHandler)
       instance.on('globalout', resetHover)
       instance.on('mouseout', resetHover)
@@ -1683,8 +1371,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         canvas?.removeEventListener('mouseleave', leaveHandler)
         if (!instance.isDisposed()) {
           instance.off('click', handler)
-          instance.off('mousedown', treemapDown)
-          instance.off('mouseup', finishTreemapDrag)
           instance.off('mouseover', hoverHandler)
           instance.off('globalout', resetHover)
           instance.off('mouseout', resetHover)
@@ -1696,7 +1382,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         renderer.off('mouseup', finishTreemapDrag)
         if (!treemapDrag.current) clearTreemapDragVisuals()
       }
-    }, [activeCategoryLabel?.axis, activeCategoryLabel?.category, config, onAnnotationSelect, onClearSettingsFocus, onSelect, onSeriesSelect, onSettingsFocus, onTreemapMove, readyKind, selectedElementKey, selectedSeriesName, selectedSettingsSection, selectedTreemapSeriesName, table])
+    }, [activeCategoryLabel?.axis, activeCategoryLabel?.category, config, onAnnotationSelect, onClearSettingsFocus, onSelect, onSeriesSelect, onSettingsFocus, onTreemapMove, readyKind, renderedPlotKind, selectedElementKey, selectedSeriesName, selectedSettingsSection, selectedTreemapSeriesName, table])
 
     useImperativeHandle(ref, () => ({
       async exportSvg(options) {
@@ -1706,7 +1392,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         await waitForChartFonts(requestedFontFamilies, config.customFonts)
         instance.setOption(exportOption.current, true)
         instance.getZr().flush()
-        if (config.kind === 'treemap') applyTreemapLayout(instance, container.current)
         try {
           const svg = container.current?.querySelector('svg')
           if (!svg) return
@@ -1718,7 +1403,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           const { exportChartAsSvg } = await import('../features/chart-export/chartExport')
           await exportChartAsSvg(svg, { canvasWidth: config.canvasWidth, canvasHeight: config.canvasHeight, customFonts: config.customFonts }, options, textBlocks)
         } finally {
-          if (displayOption.current) { instance.setOption(displayOption.current, true); instance.getZr().flush(); if (config.kind === 'treemap') applyTreemapLayout(instance, container.current, selectedElementKey) }
+          if (displayOption.current) { instance.setOption(displayOption.current, true); instance.getZr().flush() }
           await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
           await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
           if (!instance.isDisposed() && chart.current === instance && revision === renderRevision.current) setRenderLifecycle((current) => settleChartRender(current, revision))
@@ -1731,7 +1416,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         await waitForChartFonts(requestedFontFamilies, config.customFonts)
         instance.setOption(exportOption.current, true)
         instance.getZr().flush()
-        if (config.kind === 'treemap') applyTreemapLayout(instance, container.current)
         try {
           const svg = container.current?.querySelector('svg')
           if (!svg) return
@@ -1743,7 +1427,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           const { exportChartAsPng } = await import('../features/chart-export/chartExport')
           await exportChartAsPng(svg, { canvasWidth: config.canvasWidth, canvasHeight: config.canvasHeight, customFonts: config.customFonts }, options, textBlocks)
         } finally {
-          if (displayOption.current) { instance.setOption(displayOption.current, true); instance.getZr().flush(); if (config.kind === 'treemap') applyTreemapLayout(instance, container.current, selectedElementKey) }
+          if (displayOption.current) { instance.setOption(displayOption.current, true); instance.getZr().flush() }
           await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
           await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
           if (!instance.isDisposed() && chart.current === instance && revision === renderRevision.current) setRenderLifecycle((current) => settleChartRender(current, revision))
@@ -1770,7 +1454,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     return (
       <div className={`chart-canvas-viewport ${config.autoFitCanvas === false ? 'native-size' : ''}`} ref={viewport}>
         <div
-          className={`chart-canvas-shell logical-canvas ${config.kind === 'treemap' && !chartLayoutReady ? 'layout-pending' : ''}`}
+          className={`chart-canvas-shell logical-canvas ${!chartLayoutReady ? 'layout-pending' : ''}`}
           data-layout-ready={chartLayoutReady ? 'true' : 'false'}
           data-render-settled={renderLifecycle.status === 'settled' ? 'true' : 'false'}
           data-render-status={renderLifecycle.status}

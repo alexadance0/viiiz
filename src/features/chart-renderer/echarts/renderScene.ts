@@ -1,4 +1,4 @@
-import type { ChartScene, NativeButterflyChartScene, NativeComparisonStemChartScene, NativeDistributionChartScene, NativeHeatmapChartScene, NativeSlopeChartScene, NativeWaterfallChartScene, NativeXYChartScene, ResolvedScene } from '../../../entities/chart/model/ChartScene'
+import type { ChartScene, NativeButterflyChartScene, NativeComparisonStemChartScene, NativeDistributionChartScene, NativeHeatmapChartScene, NativeSlopeChartScene, NativeTreemapChartScene, NativeWaterfallChartScene, NativeXYChartScene, ResolvedScene } from '../../../entities/chart/model/ChartScene'
 import { resolveNativeCartesianScene } from '../../chart-types/bar/layout'
 import { renderNativeBarScene } from './renderBarScene'
 import { renderNativePointScene } from './renderLineAreaScene'
@@ -20,10 +20,12 @@ import { resolveNativeButterflyScene } from '../../chart-types/butterfly/layout'
 import { renderButterflyScene } from './renderButterflyScene'
 import { resolveNativeHeatmapScene } from '../../chart-types/heatmap/layout'
 import { renderHeatmapScene } from './renderHeatmapScene'
+import { resolveNativeTreemapScene } from '../../chart-types/treemap/layout'
+import { renderTreemapScene } from './renderTreemapScene'
 
 export function renderScene(scene: ChartScene | ResolvedScene): Record<string, unknown> {
   if (scene.migrationMode === 'legacy') return scene.legacyRendererPayload
-  const resolved = 'geometry' in scene ? scene : scene.plot.kind === 'slope' ? resolveNativeSlopeScene(scene as NativeSlopeChartScene) : scene.plot.kind === 'xy' ? resolveNativeXYScene(scene as NativeXYChartScene) : scene.plot.kind === 'distribution' ? resolveNativeDistributionScene(scene as NativeDistributionChartScene) : scene.plot.kind === 'comparison-stem' ? resolveNativeComparisonStemScene(scene as NativeComparisonStemChartScene) : scene.plot.kind === 'waterfall' ? resolveNativeWaterfallScene(scene as NativeWaterfallChartScene) : scene.plot.kind === 'butterfly' ? resolveNativeButterflyScene(scene as NativeButterflyChartScene) : scene.plot.kind === 'heatmap' ? resolveNativeHeatmapScene(scene as NativeHeatmapChartScene) : resolveNativeCartesianScene(scene)
+  const resolved = 'geometry' in scene ? scene : scene.plot.kind === 'slope' ? resolveNativeSlopeScene(scene as NativeSlopeChartScene) : scene.plot.kind === 'xy' ? resolveNativeXYScene(scene as NativeXYChartScene) : scene.plot.kind === 'distribution' ? resolveNativeDistributionScene(scene as NativeDistributionChartScene) : scene.plot.kind === 'comparison-stem' ? resolveNativeComparisonStemScene(scene as NativeComparisonStemChartScene) : scene.plot.kind === 'waterfall' ? resolveNativeWaterfallScene(scene as NativeWaterfallChartScene) : scene.plot.kind === 'butterfly' ? resolveNativeButterflyScene(scene as NativeButterflyChartScene) : scene.plot.kind === 'heatmap' ? resolveNativeHeatmapScene(scene as NativeHeatmapChartScene) : scene.plot.kind === 'treemap' ? resolveNativeTreemapScene(scene as NativeTreemapChartScene) : resolveNativeCartesianScene(scene)
   if (resolved.plot.kind === 'bar') return renderNativeBarScene(resolved as ResolvedNativeBarScene)
   if (resolved.plot.kind === 'line' || resolved.plot.kind === 'area') return renderNativePointScene(resolved as ResolvedPointScene)
   if (resolved.plot.kind === 'smoothing') return renderSmoothingScene(resolved as ResolvedSmoothingScene)
@@ -35,5 +37,6 @@ export function renderScene(scene: ChartScene | ResolvedScene): Record<string, u
   if (resolved.plot.kind === 'waterfall') return renderWaterfallScene(resolved as ReturnType<typeof resolveNativeWaterfallScene>)
   if (resolved.plot.kind === 'butterfly') return renderButterflyScene(resolved as ReturnType<typeof resolveNativeButterflyScene>)
   if (resolved.plot.kind === 'heatmap') return renderHeatmapScene(resolved as ReturnType<typeof resolveNativeHeatmapScene>)
+  if (resolved.plot.kind === 'treemap') return renderTreemapScene(resolved as ReturnType<typeof resolveNativeTreemapScene>)
   return resolved.plot satisfies never
 }

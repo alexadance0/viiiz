@@ -640,7 +640,32 @@ export interface HeatmapPlotScene {
   cellGap: number
 }
 
-export type NativePlotScene = CartesianBarPlotScene | ComparisonStemPlotScene | WaterfallPlotScene | ButterflyPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene | DistributionPlotScene | HeatmapPlotScene
+export interface TreemapNodeScene {
+  id: ElementId
+  datumId: DatumId
+  seriesId: SeriesId
+  legacyKey: string
+  role: 'group' | 'leaf'
+  name: string
+  groupName: string
+  value: number
+  displayCategory: string
+  displayValue: string
+  displayLabel: string
+  color: string
+  label: { visible: boolean; text: string; style: ChartTextStyle; color: string; position: NonNullable<ChartConfig['treemapLabelPosition']>; adaptiveSize: number }
+  children: TreemapNodeScene[]
+}
+
+export interface TreemapPlotScene {
+  kind: 'treemap'
+  nodes: TreemapNodeScene[]
+  total: number
+  leafGap: number
+  groupGap: number
+}
+
+export type NativePlotScene = CartesianBarPlotScene | ComparisonStemPlotScene | WaterfallPlotScene | ButterflyPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene | DistributionPlotScene | HeatmapPlotScene | TreemapPlotScene
 
 export interface NativeChartScene extends ChartSceneBase {
   migrationMode: 'native'
@@ -663,6 +688,7 @@ export type NativeIntervalChartScene = NativeChartScene & { plot: CartesianInter
 export type NativeXYChartScene = NativeChartScene & { plot: CartesianXYPlotScene }
 export type NativeDistributionChartScene = NativeChartScene & { plot: DistributionPlotScene }
 export type NativeHeatmapChartScene = NativeChartScene & { plot: HeatmapPlotScene }
+export type NativeTreemapChartScene = NativeChartScene & { plot: TreemapPlotScene }
 
 export type ChartScene = LegacyChartScene | NativeChartScene
 
@@ -699,6 +725,10 @@ export interface ResolvedComparisonStemGeometry {
 export interface ResolvedHeatmapGeometry {
   cells: Record<ElementId, Rect>
   scale?: { bar: Rect; ticks: Array<{ x: number; y: number; value: number; label: string; align: 'left' | 'center' | 'right' }> }
+}
+
+export interface ResolvedTreemapGeometry {
+  nodes: Record<ElementId, { rect: Rect; labelRect?: Rect; labelText?: string; fontSize?: number; lineHeight?: number }>
 }
 
 export interface ResolvedSlopeEndpointLabelPlacement {

@@ -5,7 +5,7 @@ Baseline: `13ac62d372432ae51536508084141bca953ea257` (clean worktree).
 ## Characterized legacy owners
 
 - `core/chartRegistry.ts`: family semantics, grid arithmetic, axes, ECharts options and renderer graphics.
-- `components/ChartCanvas.tsx`: frame remeasurement, ECharts lifecycle, renderer feedback, selection, direct labels, heatmap guides, treemap interaction, overlays and export state.
+- `components/ChartCanvas.tsx`: frame remeasurement, ECharts lifecycle, selection, generic editor overlays and export state.
 - ECharts: mark layout and additional automatic label layout.
 - `CanvasSettings.tsx`: a second spacing model and reset literals.
 - `chartExport.ts`: output serialization/font embedding; preview options were temporarily replaced during export.
@@ -19,7 +19,7 @@ Baseline: `13ac62d372432ae51536508084141bca953ea257` (clean worktree).
 
 ## Specialized behavior retained
 
-Treemap layout/font feedback, butterfly internal categories, direct labels, continuous heatmap guides, rich SVG export and current annotation/decorations coordinates remain specialized. They must be migrated independently after parity tests; none are treated as a standard legend or generic Cartesian behavior. Bubble's size guide is now a semantic inside-plot XY guide.
+Butterfly internal categories, direct labels, rich SVG export and current annotation/decorations coordinates remain specialized. Heatmap's continuous guide and Treemap's hierarchy/text fitting are semantic resolved layouts. Bubble's size guide is a semantic inside-plot XY guide.
 
 ## Phase 2 checkpoint — native ordinary bars
 
@@ -35,7 +35,7 @@ Phase 3 baseline: `ab264f5d7a69a466935b25873d68c8e1379a7113`.
 
 `NativeChartScene.plot` is now a discriminated bar/line/area union. Basic line, spline, step-line, area, stacked-area, and normalized-stacked-area compile semantic points, interpolation, missing-value policy, stroke/marker/fill intent, stable identities, and category-label plans. They share the native Cartesian frame/axis/text layout and render through plot-kind dispatch without reaching the legacy option builder.
 
-Specialized interval and Distribution charts, Scatter/Bubble, Lollipop/Horizontal Lollipop, Dumbbell, Waterfall, Butterfly, and Heatmap are native. Treemap remains explicitly legacy.
+All chart families, including Heatmap and Treemap, compile native semantic scenes.
 
 ## Phase 6 checkpoint — native smoothing
 
@@ -55,7 +55,7 @@ Implementation completed in: `d939955`.
 
 Interval charts reuse prepared point data and the shared native Cartesian frame, axes, guides, category-edge behavior, selection visitors, and export lifecycle. The dedicated ECharts adapter translates semantic cells into clipped polygons below visible source lines. The compiler resolves fill colors, opacity, source visibility, boundary presentation, legend/direct/value-label membership, and domain participation; neither the renderer nor `ChartCanvas` branches on the persisted interval product kind.
 
-The legacy `intervalLine()` builder, fake stacked Confidence base/fill series, custom Range band construction, and interval legend filtering were removed from `chartRegistry.ts`. Later phases also removed the Distribution, Lollipop/Dumbbell, Waterfall/Butterfly, and Heatmap runtime builders. Treemap remains explicitly legacy.
+The legacy `intervalLine()` builder, fake stacked Confidence base/fill series, custom Range band construction, and interval legend filtering were removed from `chartRegistry.ts`. Later phases removed the Distribution, Lollipop/Dumbbell, Waterfall/Butterfly, Heatmap, and Treemap runtime builders.
 
 ## Phase 7.1 checkpoint — deterministic native rendering
 
@@ -73,7 +73,7 @@ Phase 8 started from `b089ab3b5a0eeda0d242ae10482f91496340b82b` and completed in
 
 Scatter and Bubble now dispatch through `plot.kind = 'xy'`, with truthful `x`/`y` channels and a dedicated continuous-axis layout. Only actual data groups live in `plot.series`; trend/band/reference/diagonal/quadrant layers and the size-scale guide have separate semantic types and stable IDs. The renderer consumes no table rows and `ChartCanvas` gained no Scatter geometry branches.
 
-The legacy relationship builder, local bubble callback, fake stacked confidence band, `markLine`, `markArea`, fake size-guide series, legacy tooltip, and legend mutation were removed from `chartRegistry.ts`. At the Phase 8 checkpoint Lollipop and Dumbbell were still legacy; later waves migrated them together with Waterfall, Butterfly, and Heatmap. The current legacy family is Treemap.
+The legacy relationship builder, local bubble callback, fake stacked confidence band, `markLine`, `markArea`, fake size-guide series, legacy tooltip, and legend mutation were removed from `chartRegistry.ts`. Later waves migrated all remaining families through Treemap in Wave 5.
 
 The final gate passed three consecutive full E2E runs (44/44 each), the full suite at `--repeat-each=3` (132/132), and the visual file at `--repeat-each=5` (35/35), with no expected snapshot changes. Playwright uses two parallel workers in the supported macOS snapshot environment to avoid host saturation from concurrent SVG/video/trace contexts; this remains a multi-worker verification path.
 
@@ -115,7 +115,11 @@ Waterfall now compiles `plot.kind = 'waterfall'`: source steps retain raw/aggreg
 
 Butterfly now compiles `plot.kind = 'butterfly'`: left/right fields are explicit semantic sides, magnitudes are normalized once, each side stacks independently, and the value domain is symmetric. Its dedicated layout owns mirrored rectangles and center/left/right category placement; the renderer consumes resolved geometry and exposes a renderer-neutral hit map to the outer callback adapter.
 
-Both plugins are explicitly native, their legacy entry points throw, and their old `ChartCanvas` split-axis/category/bar-hit and Waterfall pointer-geometry helpers were removed. Representative visual baselines cover three states per family plus Butterfly bottom-label placement. Wave 4 subsequently migrated Heatmap; Treemap is the remaining legacy family.
+Both plugins are explicitly native, their legacy entry points throw, and their old `ChartCanvas` split-axis/category/bar-hit and Waterfall pointer-geometry helpers were removed. Wave 4 subsequently migrated Heatmap and Wave 5 migrated Treemap.
+
+## Wave 5: Treemap owns hierarchy, tiling and text fitting
+
+The Treemap plugin emits stable group and leaf elements after positive filtering, aggregation, visibility and manual ordering. Native layout resolves every rectangle and label band, including deterministic Russian hyphenation, before rendering. Preview, SVG and PNG share those rectangles; group/leaf selection and drag reorder consume the resolved hit map instead of renderer models, display lists or SVG path scanning.
 
 ## Wave 4: Heatmap owns its matrix and continuous guide
 
