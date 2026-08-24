@@ -8,7 +8,7 @@ import { renderScene } from './renderScene'
 
 const table: DataTable = { name: 'renderer', columns: ['value'], rows: [{ value: 1 }, { value: 1 }, { value: 2 }] }
 const config = (kind: NativeDistributionKind, overrides: Partial<ChartConfig> = {}): ChartConfig => ({ ...createDefaultChartConfig(), kind, xField: 'value', yField: 'value', yFields: ['value'], aggregation: 'none', ...overrides })
-const render = (kind: NativeDistributionKind, overrides: Partial<ChartConfig> = {}) => renderScene(resolveNativeDistributionScene(compileNativeDistributionScene(table, config(kind, overrides)))) as { series: Array<{ type: string; data: Array<{ elementId: string; datumId: string; seriesId: string; elementKey: string; symbolSize?: number }> }>; graphic: Array<{ id?: string }>; xAxis: { type: string }; yAxis: { type: string } }
+const render = (kind: NativeDistributionKind, overrides: Partial<ChartConfig> = {}) => renderScene(resolveNativeDistributionScene(compileNativeDistributionScene(table, config(kind, overrides)))) as { series: Array<{ type: string; data: Array<{ elementId: string; datumId: string; seriesId: string; elementKey: string; symbolSize?: number }> }>; graphic: Array<{ id?: string }>; xAxis: { type: string; axisLabel: { align: string } }; yAxis: { type: string }; nativeSelectionHits: unknown[]; nativeCategoryLayouts: Array<{ category: string }> }
 
 describe('native Distribution renderer', () => {
   it('maps resolved points/counts and barcode primitives with native metadata', () => {
@@ -26,7 +26,10 @@ describe('native Distribution renderer', () => {
     expect(option.graphic.some((item) => item.id?.startsWith('distribution-grid:'))).toBe(true)
     expect(option.graphic.some((item) => item.id?.startsWith('summary:'))).toBe(true)
     expect(option.xAxis.type).toBe('value')
+    expect(option.xAxis.axisLabel.align).toBe('center')
     expect(option.yAxis.type).toBe('value')
+    expect(option.nativeSelectionHits).toHaveLength(3)
+    expect(option.nativeCategoryLayouts[0].category).toBe('value')
   })
 
   it('draws pre-resolved box and density shapes in the shared native renderer', () => {

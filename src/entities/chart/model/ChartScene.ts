@@ -511,6 +511,7 @@ export interface DistributionGroupScene {
 export interface DistributionLaneScene {
   id: DistributionLaneId
   index: number
+  sourceKey: string
   label: string
   groupIds: DistributionGroupId[]
 }

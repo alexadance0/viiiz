@@ -1,9 +1,10 @@
 import { renderToString } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
-import App, { chartModeDefaults, chartModeState, compatibleMeasureSelection, designChangeKey, moveTreemapItem, shouldHideXAxisTitle } from './App'
+import App, { chartModeDefaults, chartModeState, compatibleMeasureSelection, designChangeKey, moveTreemapItem, rememberDataSelection, shouldHideXAxisTitle } from './App'
 import { chartRegistry } from './core/chartRegistry'
 import { createDefaultChartConfig } from './entities/chart/model/defaultChartConfig'
+import { chartTransitionMode } from './components/ChartCanvas'
 
 describe('editor startup', () => {
   it('renders the initial editor route without a runtime exception', () => {
@@ -41,6 +42,22 @@ describe('editor startup', () => {
   it('preserves selected measures when changing chart type', () => {
     expect(compatibleMeasureSelection(['profit', 'orders'], ['profit', 'orders', 'returns'], 'profit')).toEqual(['profit', 'orders'])
     expect(compatibleMeasureSelection(['region'], ['profit', 'orders'], 'region')).toEqual(['profit'])
+  })
+
+  it('distinguishes explicit mapping edits from automatic chart adaptation', () => {
+    const line = { ...createDefaultChartConfig(), yField: 'revenue', yFields: ['revenue', 'orders', 'plan'] }
+    const remembered = rememberDataSelection(line, { ...line, yField: 'orders', yFields: ['orders'] })
+    expect(remembered.preferredDataSelection?.yFields).toEqual(['orders'])
+    const adapted = { ...remembered, kind: 'waterfall' as const, yFields: ['orders'] }
+    expect(adapted.preferredDataSelection?.yFields).toEqual(['orders'])
+  })
+
+  it('uses stable updates for compatible chart transitions and honors reduced motion', () => {
+    expect(chartTransitionMode('line', 'spline', false)).toBe('morph')
+    expect(chartTransitionMode('scatter', 'bubble', false)).toBe('morph')
+    expect(chartTransitionMode('strip-plot', 'jitter-plot', false)).toBe('morph')
+    expect(chartTransitionMode('heatmap', 'waterfall', false)).toBe('fade')
+    expect(chartTransitionMode('line', 'spline', true)).toBe('none')
   })
 
   it('moves treemap items before a target or to the end', () => {

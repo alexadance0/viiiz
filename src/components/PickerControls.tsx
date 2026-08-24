@@ -16,6 +16,11 @@ const channelLabels: Record<ColorChannel, string> = { hue: 'H', saturation: 'S',
 const channelsBySpace: Record<ColorSpace, ColorChannel[]> = { hsb: ['hue', 'saturation', 'brightness'], hsl: ['hue', 'saturation', 'lightness'], rgb: ['red', 'green', 'blue'] }
 const baseSwatches = ['#202027', '#55515e', '#777580', '#6956e8', '#36a476', '#e4a52c', '#db5a5a', '#ffffff']
 const colorText = (color: ReturnType<typeof parseColor>) => color.getChannelValue('alpha') < 1 ? color.toString('css') : color.toString('hex')
+export const normalizeRecentColor = (value: string) => colorText(safeColor(value).toFormat('hsb')).toLowerCase()
+export const mergeRecentColor = (recent: string[], value: string, limit = 12) => {
+  const normalized = normalizeRecentColor(value)
+  return [normalized, ...recent.filter((item) => normalizeRecentColor(item) !== normalized)].slice(0, limit)
+}
 const randomColor = () => `#${Math.floor(Math.random() * 0x1000000).toString(16).padStart(6, '0')}`
 const recentColorsKey = 'datacanvas.recentColors'
 const readRecentColors = () => {
@@ -40,7 +45,6 @@ export function ColorControl({ value, code, icon, title = 'Выбрать цве
   const [color, setColor] = useState(() => safeColor(value).toFormat('hsb'))
   const colorRef = useRef(color)
   const [recentColors, setRecentColors] = useState<string[]>(() => readRecentColors())
-  const [paletteSnapshot, setPaletteSnapshot] = useState<string[]>([])
   const [colorSpace, setColorSpace] = useState<ColorSpace>('hsl')
   useEffect(() => {
     const next = safeColor(value).toFormat('hsb')
@@ -48,11 +52,10 @@ export function ColorControl({ value, code, icon, title = 'Выбрать цве
     setColor(next)
   }, [value])
   const draft = colorText(color)
-  const availablePalette = useMemo(() => [...new Set([...recentColors, ...swatches, ...baseSwatches].filter(Boolean))].slice(0, 18), [recentColors, swatches])
-  const palette = paletteSnapshot.length ? paletteSnapshot : availablePalette
+  const palette = useMemo(() => [...new Map([...recentColors, ...swatches, ...baseSwatches].filter(Boolean).map((item) => [normalizeRecentColor(item), item])).values()].slice(0, 18), [recentColors, swatches])
   const rememberColor = (next: string) => {
     setRecentColors((current) => {
-      const colors = [next, ...current.filter((item) => item.toLowerCase() !== next.toLowerCase())].slice(0, 12)
+      const colors = mergeRecentColor(current, next)
       localStorage.setItem(recentColorsKey, JSON.stringify(colors))
       return colors
     })
@@ -70,7 +73,7 @@ export function ColorControl({ value, code, icon, title = 'Выбрать цве
     updateDraft(parsed)
     publish(colorText(parsed), remember)
   }
-  const finishGesture = () => requestAnimationFrame(() => publish())
+  const finishGesture = () => requestAnimationFrame(() => publish(undefined, true))
   const pickScreenColor = async () => {
     const EyeDropper = (window as unknown as { EyeDropper?: new () => { open(): Promise<{ sRGBHex: string }> } }).EyeDropper
     if (!EyeDropper) return
@@ -78,7 +81,7 @@ export function ColorControl({ value, code, icon, title = 'Выбрать цве
   }
   return <div className={`color-control hero-color-control ${compact ? 'compact' : ''}`}>
     <ColorPicker aria-label={title} value={color} onChange={updateDraft} className="hero-color-picker">
-      <ColorPicker.Trigger className="hero-color-trigger" aria-label={title} onPress={() => setPaletteSnapshot(availablePalette)}>
+      <ColorPicker.Trigger className="hero-color-trigger" aria-label={title}>
         <ColorSwatch color={color} />
         {icon && <span className="hero-color-icon">{icon}</span>}
         {!compact && <><code>{code ?? value}</code><ChevronDown className="hero-color-chevron" size={14} /></>}
@@ -92,7 +95,7 @@ export function ColorControl({ value, code, icon, title = 'Выбрать цве
           <button type="button" onClick={() => commit(randomColor(), true)} title="Случайный цвет"><Shuffle size={13} />Рандом</button>
         </div>
         {popoverContent}
-        <div className="hero-color-swatches">{palette.map((next) => <button type="button" key={next} aria-label={`Цвет ${next}`} className={next.toLowerCase() === draft.toLowerCase() ? 'active' : ''} onClick={() => commit(next)}><i style={{ background: next }} /></button>)}</div>
+        <div className="hero-color-swatches">{palette.map((next) => <button type="button" key={next} aria-label={`Цвет ${next}`} className={normalizeRecentColor(next) === normalizeRecentColor(draft) ? 'active' : ''} onClick={() => commit(next, true)}><i style={{ background: next }} /></button>)}</div>
         <select aria-label="Цветовая модель" className="hero-color-space" value={colorSpace} onChange={(event) => setColorSpace(event.target.value as ColorSpace)}>
           <option value="hsl">HSL</option>
           <option value="hsb">HSB</option>

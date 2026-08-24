@@ -762,7 +762,7 @@ describe('individual chart element styles', () => {
     const option = getChartPlugin('bar').buildOption(table, config) as { xAxis: { type: string }; yAxis: { type: string; axisLabel: { align: string } }; series: Array<{ type: string; barGap?: string; itemStyle?: { borderRadius?: number } }> }
     expect(option.xAxis.type).toBe('value')
     expect(option.yAxis.type).toBe('category')
-    expect(option.yAxis.axisLabel.align).toBe('right')
+    expect(option.yAxis.axisLabel.align).toBe('left')
     expect(option.series[0]).toMatchObject({ type: 'bar', barGap: '20%', itemStyle: { borderRadius: 8 } })
   })
 

@@ -203,6 +203,24 @@ test('waterfall renders cumulative steps, total and semantic controls', async ({
   assertNoErrors()
 })
 
+test('chart switching preserves preferred measures and records explicit restrictive edits', async ({ page }) => {
+  await loadDemo(page)
+  await page.getByRole('button', { name: /^Линия$/ }).click()
+  await setCheckbox(page.getByRole('checkbox', { name: 'orders', exact: true }), true)
+  await setCheckbox(page.getByRole('checkbox', { name: 'plan', exact: true }), true)
+  await page.getByRole('button', { name: 'Waterfall', exact: true }).click()
+  await expect(page.getByLabel('Изменение')).toHaveValue('revenue')
+  await page.getByRole('button', { name: /^Линия$/ }).click()
+  for (const field of ['revenue', 'orders', 'plan']) await expect(page.getByRole('checkbox', { name: field, exact: true })).toBeChecked()
+
+  await page.getByRole('button', { name: 'Waterfall', exact: true }).click()
+  await page.getByLabel('Изменение').selectOption('orders')
+  await page.getByRole('button', { name: /^Линия$/ }).click()
+  await expect(page.getByRole('checkbox', { name: 'orders', exact: true })).toBeChecked()
+  await expect(page.getByRole('checkbox', { name: 'revenue', exact: true })).not.toBeChecked()
+  await expect(page.getByRole('checkbox', { name: 'plan', exact: true })).not.toBeChecked()
+})
+
 test('Butterfly mirrors two measures around a shared category axis', async ({ page }) => {
   const assertNoErrors = await failOnRuntimeErrors(page)
   await page.goto('/editor')
@@ -252,9 +270,6 @@ test('Butterfly mirrors two measures around a shared category axis', async ({ pa
   expect(rightValueBox!.x + rightValueBox!.width / 2).toBeGreaterThan(currentCenter)
   const selectedBarIndex = (await Promise.all([...Array(await leftPaths.count()).keys()].map(async (index) => ({ index, box: await leftPaths.nth(index).boundingBox() })))).filter((item) => item.box && item.box.width > 20).sort((a, b) => b.box!.width - a.box!.width)[0].index
   await leftPaths.nth(selectedBarIndex).click({ force: true })
-  await expect(page.locator('.series-editor')).toBeVisible()
-  const selectedBarAfterRender = (await Promise.all([...Array(await leftPaths.count()).keys()].map(async (index) => ({ index, box: await leftPaths.nth(index).boundingBox() })))).filter((item) => item.box && item.box.width > 20).sort((a, b) => b.box!.width - a.box!.width)[0].index
-  await leftPaths.nth(selectedBarAfterRender).click({ force: true })
   await expect(page.locator('.element-editor').filter({ hasText: 'Выбран элемент' })).toBeVisible()
   await expect(page.locator('.bar-selection-editor code').first()).toHaveText('#0072b2')
   assertNoErrors()
@@ -618,12 +633,15 @@ test('color and date pickers keep controls stable at white and inside the popove
   const swatches = colorPopover.locator('.hero-color-swatches button')
   const initialSwatches = await swatches.evaluateAll((items) => items.map((item) => item.getAttribute('aria-label')))
   await colorPopover.getByRole('button', { name: 'Цвет #ffffff' }).click()
+  const committedSwatches = await swatches.evaluateAll((items) => items.map((item) => item.getAttribute('aria-label')))
+  expect(committedSwatches[0]).toBe('Цвет #ffffff')
+  expect(committedSwatches.length).toBeLessThanOrEqual(initialSwatches.length)
   const hue = colorPopover.getByRole('slider', { name: /оттенок/ })
   const hueField = colorPopover.locator('.hero-color-fields input').first()
   const hueBefore = await hueField.inputValue()
   await hue.press('ArrowRight')
   await expect(hueField).not.toHaveValue(hueBefore)
-  expect(await swatches.evaluateAll((items) => items.map((item) => item.getAttribute('aria-label')))).toEqual(initialSwatches)
+  expect(await swatches.evaluateAll((items) => items.map((item) => item.getAttribute('aria-label')))).toEqual(committedSwatches)
   await page.keyboard.press('Escape')
 
   await page.locator('summary').filter({ hasText: /^Оси, шкалы и подписи$/ }).click()
@@ -633,6 +651,31 @@ test('color and date pickers keep controls stable at white and inside the popove
   const [popoverBox, nextBox] = await Promise.all([datePopover.boundingBox(), nextMonth.boundingBox()])
   expect(nextBox!.x + nextBox!.width).toBeLessThanOrEqual(popoverBox!.x + popoverBox!.width - 8)
   expect(nextBox!.x).toBeGreaterThan(popoverBox!.x)
+})
+
+test('color picker maps pointer midpoints to centered thumbs and recalls recent colors', async ({ page }) => {
+  await loadDemo(page)
+  await page.getByRole('button', { name: /^Линия$/ }).click()
+  await page.getByRole('button', { name: /Настроить оформление/ }).click()
+  await page.locator('summary').filter({ hasText: /^Палитра$/ }).click()
+  const trigger = page.locator('.custom-palette .hero-color-trigger').first()
+  await trigger.click()
+  const popover = page.locator('.hero-color-popover')
+  const sliders = popover.locator('.color-slider')
+  for (const index of [0, 1]) {
+    const track = sliders.nth(index).locator('.color-slider__track')
+    const box = await track.boundingBox()
+    expect(box).not.toBeNull()
+    await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2)
+    const [trackBox, thumbBox] = await Promise.all([track.boundingBox(), sliders.nth(index).locator('.color-slider__thumb').boundingBox()])
+    expect(Math.abs(thumbBox!.x + thumbBox!.width / 2 - (trackBox!.x + trackBox!.width / 2))).toBeLessThan(2)
+    expect(Math.abs(thumbBox!.y + thumbBox!.height / 2 - (trackBox!.y + trackBox!.height / 2))).toBeLessThan(2)
+  }
+  const recent = await popover.locator('.hero-color-swatches button').first().getAttribute('aria-label')
+  expect(recent).toMatch(/^Цвет /)
+  await page.keyboard.press('Escape')
+  await trigger.click()
+  await expect(popover.locator('.hero-color-swatches button').first()).toHaveAttribute('aria-label', recent!)
 })
 
 test('color settings use compact aligned controls without dead space', async ({ page }) => {
@@ -1278,6 +1321,30 @@ test('category label editor follows the vertical axis label position', async ({ 
   await expect(editor).toHaveCSS('white-space', 'pre-wrap')
   await editor.fill('Подпись категории\nна второй строке')
   await expect.poll(() => editor.evaluate((element) => (element as HTMLElement).innerText)).toBe('Подпись категории\nна второй строке')
+})
+
+test('distribution lane category label uses semantic identity while a continuous axis tick stays non-editable', async ({ page }) => {
+  await page.goto('/editor')
+  await page.getByRole('button', { name: 'Распределения' }).click()
+  await page.getByRole('button', { name: /Выбрать график/ }).click()
+  await page.getByRole('button', { name: 'Strip plot' }).click()
+  await expectRenderedChart(page)
+  const lane = page.locator('.canvas-paper svg text').filter({ hasText: /^profit$/ }).first()
+  await lane.click({ force: true })
+  await lane.click({ force: true })
+  const editor = page.locator('.canvas-rich-text-content')
+  await expect(editor).toBeVisible()
+  await expect(editor).toHaveText('profit')
+  await editor.fill('Прибыль')
+  await expect(page.locator('.canvas-paper svg text').filter({ hasText: /^Прибыль$/ })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Точечный', exact: true }).click()
+  await page.getByLabel('Период / ось X').selectOption('profit')
+  await expectRenderedChart(page)
+  const numericTick = page.locator('.canvas-paper svg text').filter({ hasText: /^\d+(?:[,.]\d+)?$/ }).first()
+  await numericTick.click({ force: true })
+  await numericTick.click({ force: true })
+  await expect(page.locator('.canvas-rich-text-content')).toHaveCount(0)
 })
 
 test('formatted title exports as native SVG text with its selected font', async ({ page }) => {

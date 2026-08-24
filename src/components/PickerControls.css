@@ -128,12 +128,17 @@
 
 .hero-color-popover .color-area__thumb,
 .hero-color-popover .color-slider__thumb {
+  box-sizing: border-box;
   width: 14px;
   height: 14px;
   border: 2px solid #fff;
   border-radius: 8px;
   background: var(--color-area-thumb-color, #202027);
   box-shadow: 0 0 0 1px #202027;
+}
+
+.hero-color-popover .color-slider__thumb {
+  top: 50%;
 }
 
 .hero-color-popover .color-slider {

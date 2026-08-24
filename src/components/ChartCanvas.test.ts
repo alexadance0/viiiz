@@ -46,14 +46,16 @@ describe('native canvas adapters', () => {
     expect(point?.itemStyle).toMatchObject({ color: '#168a72', borderColor: '#168a72' })
   })
 
-  it('does not add glow, opacity or size changes to distribution dots', () => {
+  it('highlights a semantic distribution observation and dims its peers', () => {
     const distributionTable: DataTable = { name: 'distribution', columns: ['value'], rows: [{ value: 10 }, { value: 10 }, { value: 20 }] }
     const distributionConfig: ChartConfig = { ...config, kind: 'jitter-plot', yField: 'value', yFields: ['value'], distributionPointSize: 9, distributionPointOpacity: .55 }
     const option = getChartPlugin('jitter-plot').buildOption(distributionTable, distributionConfig) as Record<string, unknown> & { series: Array<{ name?: string; silent?: boolean; symbolSize?: number; itemStyle?: { opacity?: number; shadowBlur?: number }; data?: Array<{ symbolSize?: number; itemStyle?: { opacity?: number; shadowBlur?: number } }> }> }
-    const pointSeries = () => option.series.filter((series) => !series.silent)
-    const before = structuredClone(pointSeries())
-    applySeriesVisualState(option, distributionConfig, 'value', 'value\u001fnumber:10')
-    expect(pointSeries()).toEqual(before)
+    const pointSeries = option.series.find((series) => !series.silent)!
+    const selectedKey = (pointSeries.data?.[0] as { elementKey?: string })?.elementKey
+    applySeriesVisualState(option, distributionConfig, null, selectedKey)
+    expect(pointSeries.data?.[0].itemStyle).toMatchObject({ opacity: 1 })
+    expect(pointSeries.data?.[1].itemStyle).toMatchObject({ opacity: .341 })
+    expect(pointSeries.itemStyle).toMatchObject({ shadowBlur: 4 })
   })
 
   it('dims bar peers while keeping the selected bar fully visible', () => {

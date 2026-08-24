@@ -158,6 +158,8 @@ export interface ChartConfig {
   plotFooterGap?: number
   noteSourceGap?: number
   kind: ChartKind
+  /** User-selected roles retained while a chart kind temporarily narrows its effective mapping. */
+  preferredDataSelection?: { xField: string; yFields: string[]; seriesField: string }
   xField: string
   /** Two X positions shown by a slope chart. Values use `slopePositionKey`. */
   slopeXValues?: string[]

@@ -8,6 +8,11 @@ export const valueLabelPosition = (config: ChartConfig, kind: ChartConfig['kind'
   return ({ 'inside-top': 'insideTop', 'inside-center': 'inside', 'inside-bottom': 'insideBottom' } as const)[configured as 'inside-top' | 'inside-center' | 'inside-bottom'] ?? configured
 }
 
+export const valueLabelAlignment = (position: string) => ({
+  align: position === 'left' ? 'right' as const : position === 'right' ? 'left' as const : 'center' as const,
+  verticalAlign: position === 'top' ? 'bottom' as const : position === 'bottom' ? 'top' as const : 'middle' as const,
+})
+
 export const isInsideValueLabel = (config: Pick<ChartConfig, 'valueLabelPosition'>) =>
   ['inside-top', 'inside-center', 'inside-bottom'].includes(config.valueLabelPosition ?? '')
 

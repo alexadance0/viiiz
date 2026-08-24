@@ -64,8 +64,8 @@ const capabilities = (id: ChartKind): ChartPlugin['capabilities'] => {
   if (id === 'heatmap') return { coordinateSystem: 'matrix', axes: { category: { placements: ['side'] }, lane: { placements: ['side'] } }, guides: ['color-scale'], valueLabels: true, markers: false }
   if (id === 'scatter' || id === 'bubble') return { coordinateSystem: 'cartesian', axes: { x: { scaleTypes: ['linear', 'date'] }, y: { scaleTypes: ['linear', 'log'] } }, guides: id === 'bubble' ? ['legend', 'size-scale'] : ['legend'], valueLabels: true, markers: true }
   if (isNativeDistributionKind(id)) return { coordinateSystem: 'cartesian', axes: { lane: { placements: ['side'] }, value: { scaleTypes: ['linear'] } }, guides: ['legend'], valueLabels: true, markers: true, orientation: ['horizontal', 'vertical'] }
-  if (id === 'butterfly') return { coordinateSystem: 'cartesian', axes: { category: { placements: ['side', 'internal'] }, value: { scaleTypes: ['linear'] } }, guides: ['legend', 'direct-series'], valueLabels: true, markers: false, orientation: ['horizontal'], stacking: ['stacked'] }
-  if (id === 'waterfall') return { coordinateSystem: 'cartesian', axes: { category: { placements: ['side'] }, value: { scaleTypes: ['linear', 'log'] } }, guides: ['legend', 'direct-series'], valueLabels: true, markers: false, orientation: ['vertical'], stacking: ['none', 'stacked', 'normalized'] }
+  if (id === 'butterfly') return { coordinateSystem: 'cartesian', axes: { category: { placements: ['side', 'internal'] }, value: { scaleTypes: ['linear'] } }, guides: ['legend'], valueLabels: true, markers: false, orientation: ['horizontal'], stacking: ['stacked'] }
+  if (id === 'waterfall') return { coordinateSystem: 'cartesian', axes: { category: { placements: ['side'] }, value: { scaleTypes: ['linear', 'log'] } }, guides: [], valueLabels: true, markers: false, orientation: ['vertical'], stacking: ['none', 'stacked', 'normalized'] }
   if (id === 'slope') return { coordinateSystem: 'cartesian', axes: { category: { placements: ['side'] }, value: { scaleTypes: ['linear', 'log'] } }, guides: [], valueLabels: true, markers: true, endpointLabels: true }
   const markers = !isNativeBarKind(id) || isNativeComparisonStemKind(id)
   return { coordinateSystem: 'cartesian', axes: { category: { placements: ['side'] }, value: { scaleTypes: ['linear', 'log'] } }, guides: ['legend', 'direct-series'], valueLabels: true, markers, orientation: isNativeBarKind(id) || isNativeComparisonStemKind(id) ? ['vertical', 'horizontal'] : undefined, stacking: isNativeBarKind(id) || isNativeAreaKind(id) ? ['none', 'stacked', 'normalized'] : undefined }
@@ -122,7 +122,7 @@ const lineSettings = (id: ChartKind) => {
 
 const barSettings = (id: typeof barChartDefinitions[number][0], category: ChartPlugin['category']) => {
   const base = genericSettings(id, category)
-  if (id === 'waterfall') return { ...base, series: [] as ChartPlugin['settings']['series'], features: { ...base.features, directLabels: false } }
+  if (id === 'waterfall' || id === 'butterfly') return { ...base, series: id === 'waterfall' ? [] as ChartPlugin['settings']['series'] : base.series, features: { ...base.features, directLabels: false } }
   if (id === 'lollipop' || id === 'horizontal-lollipop') return { ...base, series: ['color', 'markers'] as ChartPlugin['settings']['series'], features: { ...base.features, barLayout: false } }
   return base
 }

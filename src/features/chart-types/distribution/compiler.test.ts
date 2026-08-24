@@ -69,6 +69,22 @@ describe('native Distribution compiler', () => {
     expect(changed.plot.lanes.map((lane) => lane.label)).toEqual(['other', 'value'])
   })
 
+  it('keeps observation category and color identity across category reorder and hide', () => {
+    const first = compileNativeDistributionScene(table, config('strip-plot', { distributionGroupField: 'group', distributionCategoryStyles: { A: { color: '#123456' }, B: { color: '#654321' } } }))
+    const changed = compileNativeDistributionScene(table, config('strip-plot', { distributionGroupField: 'group', distributionCategoryOrder: ['B', 'A', 'Без категории'], distributionCategoryStyles: { A: { color: '#123456' }, B: { color: '#654321', visible: false } } }))
+    const identity = (scene: typeof first) => new Map(scene.plot.groups.flatMap((group) => group.observations.map((observation) => [observation.datumId, { groupId: group.id, category: group.categoryKey, color: group.color }])))
+    const before = identity(first), after = identity(changed)
+    for (const [datumId, value] of after) expect(value).toEqual(before.get(datumId))
+    expect([...after.values()].some((value) => value.category === 'B')).toBe(false)
+  })
+
+  it('uses semantic lane keys for editable overrides instead of lane coordinates', () => {
+    const horizontal = compileNativeDistributionScene(table, config('strip-plot', { categoryLabelOverrides: { y: { value: 'Продажи' } } }))
+    const vertical = compileNativeDistributionScene(table, config('strip-plot', { distributionOrientation: 'vertical', categoryLabelOverrides: { x: { value: 'Продажи' } } }))
+    expect(horizontal.plot.lanes[0]).toMatchObject({ sourceKey: 'value', label: 'Продажи', index: 0 })
+    expect(vertical.plot.lanes[0]).toMatchObject({ sourceKey: 'value', label: 'Продажи', index: 0 })
+  })
+
   it('builds exact Counts aggregates with semantic sizes and aggregate legacy keys', () => {
     const scene = compileNativeDistributionScene(table, config('counts-plot'))
     const layer = scene.plot.layers.find((item) => item.kind === 'counts')!

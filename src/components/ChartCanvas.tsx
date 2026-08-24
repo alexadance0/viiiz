@@ -19,7 +19,7 @@ import { DecorationOverlay } from './DecorationOverlay'
 import { AnnotationDisplay, CanvasTextDisplay } from './ChartCanvasDisplays'
 import { measureTextWidth, wrapMeasuredText } from '../core/textMetrics'
 import { decorationGraphics, type PlotBounds } from './chartDecorations'
-import { isDistributionChart, usesHorizontalAxes } from '../core/chartKinds'
+import { usesHorizontalAxes } from '../core/chartKinds'
 import type { ChartExportOptions, ExportTextBlock } from '../features/chart-export/chartExport'
 import { DEFAULT_COMPOSITION_SPACING } from '../entities/chart/model/defaults'
 import { renderScene, resolveNativeScene } from '../features/chart-renderer/echarts/renderScene'
@@ -43,6 +43,7 @@ echarts.use([
 ])
 
 const isHorizontalBar = (config: ChartConfig) => usesHorizontalAxes(config)
+const chartIsBusy = (instance: echarts.ECharts) => Boolean((instance as unknown as { __flagInMainProcess?: boolean }).__flagInMainProcess)
 
 export const positionYAxisTitleGraphic = <T extends object>(graphic: T, x: number, y: number, native: boolean): T & { left?: unknown; right?: unknown; top?: unknown; x?: number; y?: number } => native
   ? { ...graphic, top: undefined, y }
@@ -54,6 +55,18 @@ export interface ChartCanvasHandle {
 }
 
 export type ChartSettingsSection = 'title' | 'subtitle' | 'x-axis-title' | 'y-axis-title' | 'x-axis-labels' | 'y-axis-labels' | 'grid' | 'legend' | 'values' | 'note' | 'source' | 'series' | 'element'
+export type ChartTransitionMode = 'update' | 'morph' | 'fade' | 'none'
+export const chartTransitionMode = (previous: ChartKind | null, next: ChartKind, reducedMotion: boolean): ChartTransitionMode => {
+  if (reducedMotion) return 'none'
+  if (!previous || previous === next) return 'update'
+  const families: ChartKind[][] = [
+    ['line', 'spline', 'step-line'],
+    ['scatter', 'bubble'],
+    ['strip-plot', 'jitter-plot'],
+    ['violinplot', 'raincloud'],
+  ]
+  return families.some((family) => family.includes(previous) && family.includes(next)) ? 'morph' : 'fade'
+}
 
 const RHYTHM = { edge: DEFAULT_COMPOSITION_SPACING.canvasInsets.top, titleSubtitle: DEFAULT_COMPOSITION_SPACING.titleSubtitle, headerLegend: DEFAULT_COMPOSITION_SPACING.headerLegend, headerPlot: DEFAULT_COMPOSITION_SPACING.headerPlot, legendPlot: DEFAULT_COMPOSITION_SPACING.legendPlot, plotFooter: DEFAULT_COMPOSITION_SPACING.plotFooter, noteSource: DEFAULT_COMPOSITION_SPACING.noteSource } as const
 interface Props {
@@ -164,9 +177,6 @@ export function applySeriesVisualState(option: Record<string, unknown>, config: 
     delete item.blur
     const rawName = item.name ?? ''
     if (item.interactionLayer === 'hit' || rawName.startsWith('__')) return
-    // Distribution dots deliberately keep the quiet Beeswarm appearance even
-    // while their settings row or series is selected.
-    if (isDistributionChart(config.kind)) return
     const name = item.segmentOf ?? item.customBarOf ?? item.name
     if (!name || (item.silent && !item.segmentOf && !item.customBarOf)) return
     const selectedElementSeries = selectedElementKey?.startsWith(`${name}\u001f`)
@@ -229,6 +239,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     const [renderedChartKind, setRenderedChartKind] = useState<ChartKind | null>(null)
     const [renderedPlotKind, setRenderedPlotKind] = useState('')
     const [renderAnimationEnabled, setRenderAnimationEnabled] = useState(false)
+    const [renderRetry, setRenderRetry] = useState(0)
     const [renderLifecycle, setRenderLifecycle] = useState(initialChartRenderLifecycle)
     const requestedFontFamilies = useMemo(() => collectFontFamilies(config), [config])
     const fontSignature = `${requestedFontFamilies.join('|')}|${(config.customFonts ?? []).map(({ name, dataUrl, weight, style }) => `${name}:${weight ?? 400}:${style ?? 'normal'}:${dataUrl}`).join('|')}`
@@ -244,6 +255,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     const exportOption = useRef<Record<string, unknown> | null>(null)
     const renderedKind = useRef<ChartKind | null>(null)
     const nativeTreemapHits = useRef<Array<{ rect: { x: number; y: number; width: number; height: number }; info: { elementKey: string; sourceSeriesName: string; displayCategory: string; displayValue: string; displayLabel?: string; displayColor?: string } }>>([])
+    const editableAxisLabels = useRef(new Map<string, { sourceKey: string; displayText: string }>())
     const clickedSeries = useRef<string | null>(null)
     const treemapDrag = useRef<{ source: ChartElementSelection; click: ChartElementSelection; start: [number, number]; moved: boolean; target?: ChartElementSelection; placement?: 'before' | 'after'; signature?: string } | null>(null)
     const suppressTreemapClick = useRef(false)
@@ -298,36 +310,38 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       if (!container.current) return
       const instance = echarts.init(container.current, undefined, { renderer: 'svg' })
       chart.current = instance
+      let resizeFrame = 0
       const resize = () => {
-        if (instance.isDisposed()) return
-        instance.resize({ animation: { duration: 0 } })
+        cancelAnimationFrame(resizeFrame)
+        resizeFrame = requestAnimationFrame(() => { if (!instance.isDisposed()) { if (chartIsBusy(instance)) resize(); else instance.resize({ animation: { duration: 0 } }) } })
       }
       const observer = new ResizeObserver(resize)
       observer.observe(container.current)
       window.addEventListener('resize', resize)
-      return () => { observer.disconnect(); window.removeEventListener('resize', resize); if (!instance.isDisposed()) instance.dispose(); if (chart.current === instance) chart.current = null }
+      return () => { observer.disconnect(); window.removeEventListener('resize', resize); cancelAnimationFrame(resizeFrame); if (!instance.isDisposed()) instance.dispose(); if (chart.current === instance) chart.current = null }
     }, [])
 
     useEffect(() => {
       const target = viewport.current
       if (!target) return
+      let resizeFrame = 0
       const updateScale = () => {
         const width = Math.max(1, Math.min(1000, config.canvasWidth ?? 1000))
         const height = Math.max(1, Math.min(1000, config.canvasHeight ?? 563))
         setCanvasScale(config.autoFitCanvas === false ? 1 : Math.min(1, target.clientWidth / width, target.clientHeight / height))
-        const instance = chart.current
-        if (!instance || instance.isDisposed()) return
-        instance.resize({ width, height, animation: { duration: 0 } })
+        cancelAnimationFrame(resizeFrame)
+        resizeFrame = requestAnimationFrame(() => { const instance = chart.current; if (instance && !instance.isDisposed()) { if (chartIsBusy(instance)) updateScale(); else instance.resize({ width, height, animation: { duration: 0 } }) } })
       }
       const observer = new ResizeObserver(updateScale)
       observer.observe(target)
       updateScale()
-      return () => { observer.disconnect() }
+      return () => { observer.disconnect(); cancelAnimationFrame(resizeFrame) }
     }, [config.autoFitCanvas, config.canvasHeight, config.canvasWidth])
 
     useEffect(() => {
       const instance = chart.current
       if (!instance || instance.isDisposed() || readyKind !== config.kind || readyFontSignature !== fontSignature) return
+      if (chartIsBusy(instance)) { const retry = window.setTimeout(() => setRenderRetry((value) => value + 1), 0); return () => window.clearTimeout(retry) }
       const revision = beginRenderCycle('compiling')
       try {
       const selectDecoration = onDecorationSelect ?? ((id: string) => { const decoration = config.decorations?.find((item) => item.id === id); if (decoration) onDecorationChange?.(decoration) })
@@ -351,6 +365,17 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const compiledScene = plugin.compile(table, renderConfig)
       const resolvedScene = resolveNativeScene(compiledScene)
       const plotKind = resolvedScene.plot.kind
+      const editable = new Map<string, { sourceKey: string; displayText: string }>()
+      if (resolvedScene.plot.kind === 'distribution' && resolvedScene.plot.variant !== 'histogram' && resolvedScene.plot.variant !== 'kde') {
+        const axis = resolvedScene.plot.orientation === 'horizontal' ? 'y' : 'x'
+        resolvedScene.plot.lanes.forEach((lane) => editable.set(`${axis}:${lane.index}`, { sourceKey: lane.sourceKey, displayText: lane.label }))
+      } else if ('categories' in resolvedScene.plot && 'categoryAxis' in resolvedScene.plot) {
+        const axis = resolvedScene.plot.categoryAxis.orientation === 'horizontal' ? 'x' : 'y'
+        resolvedScene.plot.categories.forEach((category) => editable.set(`${axis}:${category.coordinate}`, { sourceKey: category.coordinate, displayText: category.label }))
+      } else if ('positions' in resolvedScene.plot && Array.isArray(resolvedScene.plot.positions)) {
+        resolvedScene.plot.positions.forEach((position) => editable.set(`x:${position.coordinate}`, { sourceKey: position.coordinate, displayText: position.label }))
+      }
+      editableAxisLabels.current = editable
       type NativeSelectionHit = { rect: { x: number; y: number; width: number; height: number }; info: { elementKey: string; sourceSeriesName: string; displayCategory: string; displayValue: string; displayLabel?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target']; axis?: 'x' | 'y'; selectionMode?: 'series-first' } }
       type NativeCategoryLayout = CategoryLabelLayout
       const option = renderScene(resolvedScene) as Record<string, unknown> & { graphic?: unknown[]; nativeSelectionHits?: NativeSelectionHit[]; nativeCategoryLayouts?: NativeCategoryLayout[]; nativeTreemapHits?: typeof nativeTreemapHits.current; nativePlotBounds?: PlotBounds }
@@ -363,6 +388,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       delete option.nativeTreemapHits
       delete option.nativePlotBounds
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const transitionMode = chartTransitionMode(renderedKind.current, config.kind, reducedMotion)
       setRenderAnimationEnabled(!reducedMotion)
       option.animation = !reducedMotion
       option.animationDuration ??= reducedMotion ? 0 : 420
@@ -568,7 +594,12 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       })
       cleanOption.graphic = [...cleanLabels, ...decorationGraphics(config.decorations ?? []), ...cleanTitleHits, ...annotations.map((annotation) => ({ ...annotation, style: { ...annotation.style, opacity: 1 } }))]
       setRenderLifecycle((current) => advanceChartRender(current, revision, 'rendering'))
-      instance.setOption(option, true)
+      if (transitionMode === 'morph') {
+        const series = option.series as Array<Record<string, unknown>> | undefined
+        series?.forEach((item) => { if (item.silent !== true) item.universalTransition = true })
+      }
+      if (transitionMode === 'fade' || transitionMode === 'none') instance.setOption(option, true)
+      else instance.setOption(option, { notMerge: false, replaceMerge: ['series', 'xAxis', 'yAxis', 'graphic'] })
       renderedKind.current = config.kind
       setRenderedChartKind(config.kind)
       setRenderedPlotKind(plotKind)
@@ -687,7 +718,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         option.graphic = [...withoutGeneratedGraphics(option.graphic), ...displayEditorial]
         cleanOption.graphic = [...withoutGeneratedGraphics(cleanOption.graphic), ...cleanEditorial]
       }
-      if (exactBounds || barGrid.length || exactDisplayDecorations.length) instance.setOption({ graphic: option.graphic }, { replaceMerge: ['graphic'] })
+      let refreshGraphics = Boolean(exactBounds || barGrid.length || exactDisplayDecorations.length)
       if (nativeSelectionHits.length) {
         const hits = nativeSelectionHits.map((hit, index) => ({ id: `native-selection-hit-${index}`, type: 'rect', z: 140, cursor: 'pointer', shape: hit.rect, style: hit.info.elementKey === selectedElementKey && hit.info.selectionTarget === selectedElementTarget ? { fill: 'rgba(0,0,0,0)', stroke: '#6956e8', lineWidth: 1 } : { fill: 'rgba(0,0,0,0)' }, onmousedown: (event: { offsetX?: number; offsetY?: number }) => {
           const point = hit.info, seriesName = point.sourceSeriesName
@@ -704,17 +735,15 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
             onSettingsFocus?.(`${point.axis ?? 'y'}-axis-labels`)
             return
           }
-          if (point.selectionMode === 'series-first' && clickedSeries.current !== seriesName) {
-            onSeriesSelect?.({ name: seriesName, color: point.displayColor ?? getSeriesColor(config, seriesName, 0) })
-            clickedSeries.current = seriesName
-            onSettingsFocus?.('series')
-            return
-          }
           onSelect?.({ key: point.elementKey, seriesName, category: point.displayCategory, value: point.displayValue, color: point.displayColor, target: point.selectionTarget })
           onSettingsFocus?.('element')
         } }))
         option.graphic = [...(Array.isArray(option.graphic) ? option.graphic : []), ...hits]
-        instance.setOption({ graphic: option.graphic }, { replaceMerge: ['graphic'] })
+        refreshGraphics = true
+      }
+      if (refreshGraphics) {
+        const refresh = () => { if (revision !== renderRevision.current || instance.isDisposed()) return; if (chartIsBusy(instance)) window.setTimeout(refresh, 0); else instance.setOption({ graphic: option.graphic }, { replaceMerge: ['graphic'] }) }
+        window.setTimeout(refresh, 0)
       }
       displayOption.current = option
       exportOption.current = cleanOption
@@ -725,7 +754,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       void (async () => {
         await document.fonts.ready
         if (revision !== renderRevision.current || instance.isDisposed() || chart.current !== instance) return
-        instance.resize({ width: Math.min(1000, config.canvasWidth ?? 1000), height: Math.min(1000, config.canvasHeight ?? 563), animation: { duration: 0 } })
+        if (!chartIsBusy(instance)) instance.resize({ width: Math.min(1000, config.canvasWidth ?? 1000), height: Math.min(1000, config.canvasHeight ?? 563), animation: { duration: 0 } })
         instance.getZr().flush()
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
@@ -742,7 +771,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         setRenderLifecycle((current) => failChartRender(current, revision))
         setRenderError(cause instanceof Error ? cause.message : 'Не удалось отрисовать график')
       }
-    }, [activeCategoryLabel, table, config, fontSignature, hoveredSeriesName, onAnnotationSelect, onDecorationChange, onDecorationSelect, onSelect, onSeriesSelect, onSettingsFocus, readyFontSignature, readyKind, selectedAnnotationId, selectedElementKey, selectedElementTarget, selectedSeriesName, selectedSettingsSection])
+    }, [activeCategoryLabel, table, config, fontSignature, hoveredSeriesName, onAnnotationSelect, onDecorationChange, onDecorationSelect, onSelect, onSeriesSelect, onSettingsFocus, readyFontSignature, readyKind, renderRetry, selectedAnnotationId, selectedElementKey, selectedElementTarget, selectedSeriesName, selectedSettingsSection])
 
     useEffect(() => {
       const instance = chart.current
@@ -766,9 +795,12 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           const section = `${axis}-axis-labels` as ChartSettingsSection
           if (event.targetType === 'axisName') { onSettingsFocus?.(`${axis}-axis-title`); return }
           if (selectedSettingsSection !== section) { onSettingsFocus?.(section); return }
-          const category = String(event.value ?? event.name ?? '')
+          const coordinate = String(event.value ?? event.name ?? '')
+          const editable = editableAxisLabels.current.get(`${axis}:${coordinate}`)
+          if (!editable) { onSettingsFocus?.(section); return }
+          const category = editable.sourceKey
           onClearSettingsFocus?.()
-          onSelect?.({ key: `category-label:${axis}:${category}`, seriesName: '', category, value: config.categoryLabelOverrides?.[axis]?.[category] ?? category, target: 'category-label', axis })
+          onSelect?.({ key: `category-label:${axis}:${category}`, seriesName: '', category, value: editable.displayText, target: 'category-label', axis })
           return
         }
         if (event.componentType === 'legend') { onSettingsFocus?.('legend'); return }
@@ -796,8 +828,12 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           return
         }
         if (clickedValueLabel && pointData?.elementKey) {
-          if (renderedPlotKind !== 'treemap' && selectedSettingsSection !== 'values') { onSettingsFocus?.('values'); return }
           onSelect?.(nativeSelection('value-label') ?? { key: pointData.elementKey, seriesName, category: pointData.displayCategory ?? event.name ?? '', value: pointData.displayValue ?? String(event.value ?? ''), label: pointData.displayLabel, color: pointColor, target: 'value-label' })
+          onSettingsFocus?.('element')
+          return
+        }
+        if (pointData?.elementKey) {
+          onSelect?.(nativeSelection() ?? { key: pointData.elementKey, seriesName, category: pointData.displayCategory ?? event.name ?? '', value: pointData.displayValue ?? String(event.value ?? ''), label: pointData.displayLabel, color: pointColor })
           onSettingsFocus?.('element')
           return
         }
@@ -807,9 +843,6 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           onSettingsFocus?.('series')
           return
         }
-        if (!pointData?.elementKey) return
-        onSelect?.(nativeSelection() ?? { key: pointData.elementKey, seriesName, category: pointData.displayCategory ?? event.name ?? '', value: pointData.displayValue ?? String(event.value ?? ''), label: pointData.displayLabel, color: pointColor })
-        onSettingsFocus?.('element')
       }
       const hoverHandler = (params: unknown) => {
         const event = params as { seriesName?: string; data?: { sourceSeriesName?: string; selectionTarget?: ChartElementSelection['target'] } }

@@ -1,4 +1,5 @@
 import { axisAffixApplies, formatXAxisNumber, formatYAxisNumber } from '../../../core/numberFormat'
+import { valueLabelAlignment } from '../../../core/chartLabels'
 import { measureTextWidth } from '../../../core/textMetrics'
 import type { ChartTextStyle } from '../../../core/types'
 import type { AreaSeriesScene, CartesianAreaPlotScene, CartesianLinePlotScene, LineSeriesScene, NativeChartScene, ResolvedSceneGeometry, SmoothingLayerScene } from '../../../entities/chart/model/ChartScene'
@@ -157,13 +158,14 @@ export function renderCartesianPointBase(scene: ResolvedCartesianPointRenderMode
       ...interpolationOption(item.interpolation), showSymbol: true, symbol: item.marker.shape, symbolSize: item.marker.size, connectNulls: item.missing === 'connect',
       lineStyle: { ...item.stroke, opacity: item.presentation?.opacity ?? item.stroke.opacity }, itemStyle: { color: item.marker.fill, borderColor: item.marker.stroke, borderWidth: item.marker.strokeWidth },
       areaStyle: scene.plot.mode === 'area' && 'fill' in scene.plot.series[seriesIndex] ? scene.plot.series[seriesIndex].fill : undefined, emphasis: { scale: false },
-      label: { show: config.showValues, position: config.valueLabelPosition === 'auto' || config.valueLabelPosition == null ? 'top' : config.valueLabelPosition, formatter: (params: { dataIndex?: number }) => params.dataIndex == null ? '' : item.points[params.dataIndex]?.label.text ?? '', ...textStyle(config.valueText) },
+      label: { show: config.showValues, position: config.valueLabelPosition === 'auto' || config.valueLabelPosition == null ? 'top' : config.valueLabelPosition, formatter: (params: { dataIndex?: number }) => params.dataIndex == null ? '' : item.points[params.dataIndex]?.label.text ?? '', ...textStyle(config.valueText), ...valueLabelAlignment(config.valueLabelPosition === 'auto' || config.valueLabelPosition == null ? 'top' : config.valueLabelPosition) },
       markLine: seriesIndex === 0 && config.showZeroLine && config.yAxisScaleType !== 'log' ? { silent: true, symbol: 'none', data: [{ yAxis: 0 }], lineStyle: { color: config.zeroLineColor, width: config.zeroLineWidth, type: config.zeroLineType }, label: { show: false } } : undefined,
       endLabel: showDirect && !directLeft ? directLabel : undefined,
       labelLine: showDirect ? { show: direct?.leaderLine ?? false, length: config.directLabelGap ?? 14, length2: 8, lineStyle: { color: direct?.color ?? item.color, width: config.directLabelLineWidth ?? 1, type: config.directLabelLineType ?? 'solid' } } : undefined,
       labelLayout: showDirect ? { align: directLeft ? 'right' : 'left', moveOverlap: 'shiftY', hideOverlap: false } : { hideOverlap: config.valueLabelHideOverlap ?? false, moveOverlap: 'shiftY' },
       data: item.points.map((point, index) => {
-        const pointLabel = { show: point.label.visible, formatter: point.label.text, position: point.label.position === 'auto' ? 'top' : point.label.position, ...textStyle(point.label.style) }
+        const resolvedLabelPosition = point.label.position === 'auto' ? 'top' : point.label.position
+        const pointLabel = { show: point.label.visible, formatter: point.label.text, position: resolvedLabelPosition, ...textStyle(point.label.style), ...valueLabelAlignment(resolvedLabelPosition) }
         const directPoint = showDirect && directLeft && index === firstIndex
         return {
           value: point.value, name: scene.plot.categories[index]?.coordinate, elementId: point.id, datumId: point.datumId, seriesId: point.seriesId, elementKey: point.legacyKey, sourceSeriesName: item.name, displayValue: point.displayValue, displayCategory: point.displayCategory, displayColor: item.color,

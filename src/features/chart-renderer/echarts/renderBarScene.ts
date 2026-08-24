@@ -1,5 +1,5 @@
 import { formatXAxisNumber, formatYAxisNumber } from '../../../core/numberFormat'
-import { absorbedBarLabelPlacement, barSeriesGeometry, denseValueLabelStride, showDenseValueLabel, valueLabelPosition } from '../../../core/chartLabels'
+import { absorbedBarLabelPlacement, barSeriesGeometry, denseValueLabelStride, showDenseValueLabel, valueLabelAlignment, valueLabelPosition } from '../../../core/chartLabels'
 import { measureTextWidth } from '../../../core/textMetrics'
 import type { ChartTextStyle } from '../../../core/types'
 import type { CartesianBarPlotScene, NativeChartScene, ResolvedSceneGeometry } from '../../../entities/chart/model/ChartScene'
@@ -132,7 +132,7 @@ export function renderNativeCartesianAxis(scene: ResolvedCartesianAxisScene, cha
       type: 'category', boundaryGap: true, position: side, data: scene.plot.categories.map((category) => category.coordinate),
       name: axis.orientation === 'vertical' ? '' : axis.title?.visible ? axis.title.text : '', nameLocation: 'middle', nameGap, nameRotate: axis.orientation === 'vertical' ? 90 : 0, nameTextStyle: axis.title ? textStyle(axis.title.style) : undefined,
       axisLine: { show: axis.line.visible, onZero: false, lineStyle }, axisTick: { show: axis.ticks.visible, inside: false, alignWithLabel: true, interval, length: axis.ticks.length, lineStyle },
-      axisLabel: { show: axis.labels.visible, inside: false, margin: axis.labels.gap, rotate: axis.labels.rotation ?? 0, interval, hideOverlap: false, width: config.xAxisLabelOverflow === 'wrap' ? Math.max(20, slot - 8) : undefined, overflow: config.xAxisLabelOverflow === 'wrap' ? 'break' : config.xAxisLabelOverflow === 'truncate' ? 'truncate' : undefined, formatter: (value: string, index: number) => scene.plot.categories[index]?.label ?? labels.get(value) ?? value, ...textStyle(axis.labels.style), align: axis.orientation === 'vertical' ? side === 'right' ? 'left' : 'right' : undefined },
+      axisLabel: { show: axis.labels.visible, inside: false, margin: axis.orientation === 'vertical' && side === 'left' ? axis.labels.gap + axis.labels.size : axis.labels.gap, rotate: axis.labels.rotation ?? 0, interval, hideOverlap: false, width: config.xAxisLabelOverflow === 'wrap' ? Math.max(20, slot - 8) : undefined, overflow: config.xAxisLabelOverflow === 'wrap' ? 'break' : config.xAxisLabelOverflow === 'truncate' ? 'truncate' : undefined, formatter: (value: string, index: number) => scene.plot.categories[index]?.label ?? labels.get(value) ?? value, ...textStyle(axis.labels.style), align: axis.orientation === 'vertical' ? side === 'right' ? 'left' : 'left' : 'center' },
       splitLine: { show: scene.plot.orientation === 'vertical' ? config.showVerticalGrid : config.showHorizontalGrid, lineStyle: { color: config.gridColor, width: config.gridWidth, type: config.gridType } },
       inverse: scene.plot.orientation === 'horizontal' ? config.categoryAxisInverse ?? true : false,
       triggerEvent: true,
@@ -145,7 +145,7 @@ export function renderNativeCartesianAxis(scene: ResolvedCartesianAxisScene, cha
     type: config.yAxisScaleType === 'log' ? 'log' : 'value', position: side, min: scene.plot.valueDomain.min, max: scene.plot.valueDomain.max, interval: config.yAxisScaleType === 'log' ? undefined : scene.plot.valueDomain.step,
     name: axis.orientation === 'vertical' ? '' : axis.title?.visible ? axis.title.text : '', nameLocation: 'middle', nameGap, nameRotate: axis.orientation === 'vertical' ? 90 : 0, nameTextStyle: axis.title ? textStyle(axis.title.style) : undefined,
     axisLine: { show: axis.line.visible, lineStyle }, axisTick: { show: axis.ticks.visible, inside: false, length: axis.ticks.length, lineStyle },
-    axisLabel: { show: axis.labels.visible, margin: axis.labels.gap, formatter: (value: number) => { const position = tickPosition(value); return edgeOverlay && (config.yAxisAffixScope === position || config.yAxisAffixScope === 'edges' && position !== 'middle') ? formatYAxisNumber(value, { ...config, numberPrefix: '', numberSuffix: '', yAxisAffixScope: 'all' }) : formatter(value, config, position) }, ...textStyle(axis.labels.style), align: axis.orientation === 'vertical' ? side === 'right' ? 'left' : 'right' : undefined },
+    axisLabel: { show: axis.labels.visible, margin: axis.labels.gap, formatter: (value: number) => { const position = tickPosition(value); return edgeOverlay && (config.yAxisAffixScope === position || config.yAxisAffixScope === 'edges' && position !== 'middle') ? formatYAxisNumber(value, { ...config, numberPrefix: '', numberSuffix: '', yAxisAffixScope: 'all' }) : formatter(value, config, position) }, ...textStyle(axis.labels.style), align: axis.orientation === 'horizontal' ? 'center' : side === 'right' ? 'left' : 'right' },
     splitLine: { show: scene.plot.orientation === 'horizontal' ? config.showVerticalGrid : config.showHorizontalGrid, lineStyle: { color: config.gridColor, width: config.gridWidth, type: config.gridType } },
   }
 }
@@ -199,15 +199,16 @@ export function renderNativeBarScene(scene: ResolvedNativeBarScene): Record<stri
     const seriesStyle = config.seriesStyles[item.name]
     const directStyle = seriesStyle?.directLabelText ?? config.directLabelText ?? config.legendText
     const directGuideItem = directGuide?.kind === 'direct-series' ? directGuide.items.find((guideItem) => guideItem.seriesId === item.id) : undefined
+    const resolvedLabelPosition = valueLabelPosition(config, config.kind)
     return {
       id: item.id, name: item.name, type: 'bar', stack: scene.plot.stacking === 'none' ? undefined : 'total', triggerEvent: true, clip: true,
       barCategoryGap: `${100 - Math.max(10, Math.min(100, scene.plot.barWidth))}%`, barGap: `${scene.plot.seriesGap}%`,
       itemStyle: { color: item.color, opacity: seriesStyle?.fillOpacity ?? config.barFillOpacity ?? 1, borderWidth: 0, borderRadius: config.barBorderRadius ?? 0 },
-      label: { show: config.showValues && !config.barValueLabelAbsorption, position: valueLabelPosition(config, config.kind), formatter: (params: { dataIndex?: number; value?: unknown }) => params.dataIndex == null ? formatYAxisNumber(params.value, config) : item.marks[params.dataIndex]?.label.text ?? '', ...textStyle(config.valueText), color: (config.valueLabelPosition ?? '').startsWith('inside-') ? contrastText(item.color) : config.valueText.color, hideOverlap: config.valueLabelHideOverlap ?? false },
+      label: { show: config.showValues && !config.barValueLabelAbsorption, position: resolvedLabelPosition, formatter: (params: { dataIndex?: number; value?: unknown }) => params.dataIndex == null ? formatYAxisNumber(params.value, config) : item.marks[params.dataIndex]?.label.text ?? '', ...textStyle(config.valueText), ...valueLabelAlignment(resolvedLabelPosition), color: (config.valueLabelPosition ?? '').startsWith('inside-') ? contrastText(item.color) : config.valueText.color, hideOverlap: config.valueLabelHideOverlap ?? false },
       labelLayout: () => ({ hideOverlap: config.valueLabelHideOverlap ?? false, moveOverlap: horizontal ? 'shiftY' : 'shiftX' }),
       markLine: config.showZeroLine && config.yAxisScaleType !== 'log' ? { silent: true, symbol: 'none', data: [{ [horizontal ? 'xAxis' : 'yAxis']: 0 }], lineStyle: { color: config.zeroLineColor, width: config.zeroLineWidth, type: config.zeroLineType }, label: { show: false } } : undefined,
       data: item.marks.map((mark, index) => {
-        const pointLabel = { show: mark.label.visible, formatter: mark.label.text, position: valueLabelPosition(config, config.kind), ...textStyle(mark.label.style), color: mark.label.autoContrast && (config.valueLabelPosition ?? '').startsWith('inside-') ? contrastText(mark.style.color) : mark.label.style.color }
+        const pointLabel = { show: mark.label.visible, formatter: mark.label.text, position: resolvedLabelPosition, ...textStyle(mark.label.style), ...valueLabelAlignment(resolvedLabelPosition), color: mark.label.autoContrast && (config.valueLabelPosition ?? '').startsWith('inside-') ? contrastText(mark.style.color) : mark.label.style.color }
         const direct = config.showDirectLabels && seriesStyle?.showDirectLabel !== false && index === lastIndex
         const custom = mark.style.width != null || mark.style.borderWidth > 0
         return {

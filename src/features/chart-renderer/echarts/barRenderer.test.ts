@@ -45,4 +45,10 @@ describe('native ECharts bar adapter', () => {
     expect(option.series[0].data.at(-1)?.label?.formatter).toBe('Primary\nLatest value')
     expect(option.graphic.some((item) => item.id?.startsWith('direct-guide-line:'))).toBe(true)
   })
+
+  it('derives value-label text alignment from placement instead of text style', () => {
+    const source = barFixtures[0]
+    const option = renderScene(getChartPlugin('bar').compile(source.table, { ...source.config, showValues: true, valueLabelPosition: 'top', valueText: { ...source.config.valueText, align: 'left' } })) as { series: Array<{ label: { align: string; verticalAlign: string } }> }
+    expect(option.series[0].label).toMatchObject({ align: 'center', verticalAlign: 'bottom' })
+  })
 })

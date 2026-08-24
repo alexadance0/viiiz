@@ -53,8 +53,16 @@ describe('native Distribution layout', () => {
       const center = distributionOrientation === 'horizontal' ? firstShape.baseline?.y1 ?? first.distributionGeometry.marks[0]?.laneCenterPixel : firstShape.baseline?.x1 ?? first.distributionGeometry.marks[0]?.laneCenterPixel
       expect(firstShape.polygon).not.toEqual(secondShape.polygon)
       expect(center).toBeDefined()
-      expect(resolveNativeDistributionScene(compileNativeDistributionScene(table, config('raincloud', { distributionOrientation }))).distributionGeometry.densitySummaries).toHaveLength(1)
-      expect(resolveNativeDistributionScene(compileNativeDistributionScene(table, config('ridgeline', { distributionOrientation }))).distributionGeometry.densityShapes[0].baseline).toBeDefined()
+      const rain = resolveNativeDistributionScene(compileNativeDistributionScene(table, config('raincloud', { distributionOrientation })))
+      expect(rain.distributionGeometry.densitySummaries).toHaveLength(1)
+      const separate = resolveNativeDistributionScene(compileNativeDistributionScene(table, config('raincloud', { distributionOrientation, distributionRaincloudPointMode: 'separate' })))
+      expect(Math.abs(separate.distributionGeometry.marks[0].crossOffsetPixel)).toBeGreaterThan(Math.abs(rain.distributionGeometry.marks[0].crossOffsetPixel))
+      const ridge = resolveNativeDistributionScene(compileNativeDistributionScene(table, config('ridgeline', { distributionOrientation, showHorizontalGrid: true, showVerticalGrid: true })))
+      const baseline = ridge.distributionGeometry.densityShapes[0].baseline!
+      const lane = ridge.distributionGeometry.laneLabels[0]
+      expect(distributionOrientation === 'horizontal' ? baseline.y1 : baseline.x1).toBeCloseTo(lane.coordinate, 6)
+      const grid = ridge.distributionGeometry.laneGrid[0]
+      expect(distributionOrientation === 'horizontal' ? grid.y1 : grid.x1).toBeCloseTo(lane.coordinate, 6)
     }
   })
 
