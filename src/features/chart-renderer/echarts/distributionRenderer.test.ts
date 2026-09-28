@@ -8,7 +8,7 @@ import { renderScene } from './renderScene'
 
 const table: DataTable = { name: 'renderer', columns: ['value'], rows: [{ value: 1 }, { value: 1 }, { value: 2 }] }
 const config = (kind: NativeDistributionKind, overrides: Partial<ChartConfig> = {}): ChartConfig => ({ ...createDefaultChartConfig(), kind, xField: 'value', yField: 'value', yFields: ['value'], aggregation: 'none', ...overrides })
-const render = (kind: NativeDistributionKind, overrides: Partial<ChartConfig> = {}) => renderScene(resolveNativeDistributionScene(compileNativeDistributionScene(table, config(kind, overrides)))) as { series: Array<{ type: string; data: Array<{ elementId: string; datumId: string; seriesId: string; elementKey: string; symbolSize?: number }> }>; graphic: Array<{ id?: string }>; xAxis: { type: string; axisLabel: { align: string } }; yAxis: { type: string }; nativeSelectionHits: unknown[]; nativeCategoryLayouts: Array<{ category: string }> }
+const render = (kind: NativeDistributionKind, overrides: Partial<ChartConfig> = {}) => renderScene(resolveNativeDistributionScene(compileNativeDistributionScene(table, config(kind, overrides)))) as { series: Array<{ type: string; data: Array<{ elementId: string; datumId: string; seriesId: string; elementKey: string; symbolSize?: number }> }>; graphic: Array<{ id?: string }>; xAxis: { type: string; axisLabel: { align: string } }; yAxis: { type: string; axisLabel: { align: string } }; nativeSelectionHits: unknown[]; nativeCategoryLayouts: Array<{ category: string }> }
 
 describe('native Distribution renderer', () => {
   it('maps resolved points/counts and barcode primitives with native metadata', () => {
@@ -28,13 +28,23 @@ describe('native Distribution renderer', () => {
     expect(option.xAxis.type).toBe('value')
     expect(option.xAxis.axisLabel.align).toBe('center')
     expect(option.yAxis.type).toBe('value')
+    expect(option.yAxis.axisLabel.align).toBe('right')
     expect(option.nativeSelectionHits).toHaveLength(3)
     expect(option.nativeCategoryLayouts[0].category).toBe('value')
+  })
+
+  it('mirrors category lane alignment when the vertical axis moves', () => {
+    expect(render('strip-plot', { yAxisPosition: 'right' }).yAxis.axisLabel.align).toBe('left')
+    expect(render('strip-plot', { categoryAxisLabelAlignment: 'outer' }).yAxis.axisLabel.align).toBe('left')
+    expect(render('strip-plot', { yAxisPosition: 'right', categoryAxisLabelAlignment: 'outer' }).yAxis.axisLabel.align).toBe('right')
   })
 
   it('draws pre-resolved box and density shapes in the shared native renderer', () => {
     expect(render('boxplot').series.some((series) => series.type === 'custom')).toBe(true)
     for (const kind of ['violinplot', 'raincloud', 'ridgeline'] as const) expect(render(kind).series[0].type).toBe('custom')
+    const ridge = render('ridgeline')
+    expect(ridge.yAxis.axisLabel).toMatchObject({ show: false })
+    expect(ridge.graphic.some((item) => item.id?.startsWith('distribution-lane-label:'))).toBe(true)
   })
 
   it('adapts resolved Histogram and KDE geometry without renderer-side math', () => {
@@ -43,6 +53,15 @@ describe('native Distribution renderer', () => {
     expect(histogram.series[0]).toMatchObject({ type: 'custom', data: expect.arrayContaining([expect.objectContaining({ elementId: expect.any(String), datumId: expect.any(String) })]) })
     expect(histogram.graphic.some((item) => item.id?.includes('frequency-summary'))).toBe(true)
     expect(render('kde-plot').series[0]).toMatchObject({ type: 'custom' })
+  })
+
+  it('keeps semantic legend identity when display labels and colors are equal', () => {
+    const duplicateTable: DataTable = { name: 'legend-identity', columns: ['value', 'other'], rows: [{ value: 1, other: 2 }, { value: 3, other: 4 }] }
+    const sharedColor = createDefaultChartConfig().palette![0]
+    const duplicateConfig = config('violinplot', { yFields: ['value', 'other'], showLegend: true, seriesStyles: { value: { color: sharedColor, legendLabel: 'Одинаково' }, other: { color: sharedColor, legendLabel: 'Одинаково' } } })
+    const option = renderScene(resolveNativeDistributionScene(compileNativeDistributionScene(duplicateTable, duplicateConfig))) as { legend: { data: Array<{ name: string }>; formatter(name: string): string } }
+    expect(option.legend.data.map((item) => item.name)).toEqual(['value', 'other'])
+    expect(option.legend.data.map((item) => option.legend.formatter(item.name))).toEqual(['Одинаково', 'Одинаково'])
   })
 
   it('does not import or inspect a DataTable and leaves placement work outside renderer', () => {

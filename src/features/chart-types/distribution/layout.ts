@@ -10,6 +10,8 @@ import type { LayoutReservation, ResolvedReservation } from '../../chart-layout/
 import { layoutText, plainTextDocument } from '../../chart-layout/textLayout'
 import { deterministicDistributionOffset } from './jitter'
 import { fitSwarmClouds } from './swarm'
+import { numericTicks } from '../../chart-layout/axisTicks'
+import { sideLegendWidth } from '../../chart-layout/legendLayout'
 
 export interface ResolvedDistributionMarkPlacement {
   elementId: ElementId
@@ -40,7 +42,7 @@ export type ResolvedDistributionScene = NativeDistributionChartScene & { geometr
 const lineHeight = (style: AxisSpec['labels']['style']) => Math.round(style.size * style.lineHeight / 100)
 function measuredAxis(scene: NativeDistributionChartScene, source: AxisSpec, estimated: Rect): AxisSpec {
   const domain = source.id === 'frequency' ? scene.plot.frequencyDomain ?? scene.plot.laneDomain : scene.plot.valueDomain
-  const labels = source.channel === 'lane' ? scene.plot.lanes.map((lane) => lane.label) : [domain.min, domain.max].map((value) => formatYAxisNumber(value, scene.compatibilityConfig))
+  const labels = source.channel === 'lane' ? scene.plot.lanes.map((lane) => lane.label) : numericTicks(domain.min, domain.max, 'step' in domain ? domain.step : domain.interval).map((value) => formatYAxisNumber(value, scene.compatibilityConfig))
   const rotation = source.orientation === 'horizontal' ? source.labels.rotation ?? 0 : 0
   const layouts = labels.map((label) => layoutText({ document: plainTextDocument(label, source.labels.style), maxWidth: Math.max(1, estimated.width), rotation }))
   const size = Math.ceil(Math.max(0, ...layouts.map((layout) => source.orientation === 'horizontal' ? layout.rotatedSize.height : layout.rotatedSize.width)))
@@ -57,9 +59,16 @@ function reservations(scene: NativeDistributionChartScene, estimated: ReturnType
   const legend = scene.guides.find((guide) => guide.kind === 'categorical-legend')
   if (legend?.visible) {
     const widths = legend.items.filter((item) => item.visible).map((item) => measureTextWidth(item.label, scene.compatibilityConfig.legendText.size, scene.compatibilityConfig.legendText.fontFamily, scene.compatibilityConfig.legendText.weight) + 38)
-    if (widths.length) { const horizontal = legend.position === 'top' || legend.position === 'bottom'; let rows = 1, occupied = 0; if (horizontal) widths.forEach((width) => { if (occupied && occupied + width > estimated.content.width) { rows++; occupied = width } else occupied += width }); const size = horizontal ? rows * lineHeight(scene.compatibilityConfig.legendText) + (rows - 1) * 7 : Math.min(estimated.content.width * .28, Math.max(90, ...widths)); const reservation = guideReservation(legend, size, composition.legendPlot, 20); if (reservation) result.push(reservation) }
+    if (widths.length) { const horizontal = legend.position === 'top' || legend.position === 'bottom'; let rows = 1, occupied = 0; if (horizontal) widths.forEach((width) => { if (occupied && occupied + width > estimated.content.width) { rows++; occupied = width } else occupied += width }); const size = horizontal ? rows * lineHeight(scene.compatibilityConfig.legendText) + (rows - 1) * 7 : sideLegendWidth(legend.items.filter((item) => item.visible).map((item) => item.label), scene.compatibilityConfig.legendText, estimated.content); const reservation = guideReservation(legend, size, composition.legendPlot, 20); if (reservation) result.push(reservation) }
   }
-  for (const item of [valueAxis, laneAxis]) { const reservation = axisReservation(item, 50); if (reservation) result.push(reservation) }
+  const laneLayoutAxis = laneAxis.labels.visible && laneAxis.ticks.visible ? { ...laneAxis, ticks: { ...laneAxis.ticks, length: Math.max(0, laneAxis.ticks.length - laneAxis.labels.gap) } } : laneAxis
+  for (const item of [valueAxis, laneLayoutAxis]) { const reservation = axisReservation(item, 50); if (reservation) result.push(reservation) }
+  if (valueAxis.orientation === 'horizontal' && valueAxis.labels.visible) {
+    const edge = Math.ceil(Math.max(...[scene.plot.valueDomain.min, scene.plot.valueDomain.max].map((value) => measureTextWidth(formatYAxisNumber(value, scene.compatibilityConfig), valueAxis.labels.style.size, valueAxis.labels.style.fontFamily, valueAxis.labels.style.weight))) / 2) + 10
+    const laneSide = laneAxis.placement.kind === 'side' ? laneAxis.placement.side : 'left'
+    if (laneSide !== 'left') result.push({ id: 'axis:value-edge-left', side: 'left', size: edge, gap: 0, mode: 'outside', priority: 55 })
+    if (laneSide !== 'right') result.push({ id: 'axis:value-edge-right', side: 'right', size: edge, gap: 0, mode: 'outside', priority: 55 })
+  }
   return result
 }
 
@@ -82,7 +91,7 @@ export function resolveNativeDistributionScene(scene: NativeDistributionChartSce
     const elements = Object.fromEntries(frequencyBins.map(({ mark, rect }) => [mark.id, rect])), geometry: ResolvedSceneGeometry = { canvas: frame.canvas, content: frame.content, plot: frame.plot, reservations: reservationGeometry, axes, elements, guides: {} }
     return { ...scene, plot: { ...scene.plot, valueAxis, laneAxis, frequencyAxis: laneAxis }, geometry, resolvedReservations: frame.resolvedReservations, distributionGeometry: { marks: [], summaries: [], boxShapes: [], densityShapes: [], densitySummaries: [], frequencyBins, frequencyCurves, frequencySummaries, laneGrid: [], laneLabels: [], laneBand: 0 } }
   }
-  const lanePixel = (lane: number) => project(lane, laneDomain.min, laneDomain.max, horizontal ? frame.plot.y : frame.plot.x, horizontal ? frame.plot.height : frame.plot.width, horizontal)
+  const lanePixel = (lane: number) => project(lane, laneDomain.min, laneDomain.max, horizontal ? frame.plot.y : frame.plot.x, horizontal ? frame.plot.height : frame.plot.width)
   const laneBand = Math.abs(lanePixel(1) - lanePixel(0)), groupIndex = new Map(scene.plot.groups.map((group, index) => [group.id, index]))
   const splitViolin = scene.plot.variant === 'violin' && scene.plot.layers.find((layer) => layer.kind === 'density')?.groups.some((item) => item.mode === 'half-first') && scene.plot.layers.find((layer) => layer.kind === 'density')?.groups.some((item) => item.mode === 'half-second')
   const groupGeometry = (group: NativeDistributionChartScene['plot']['groups'][number]) => { const grouped = Boolean(scene.compatibilityConfig.distributionGroupField && (scene.plot.variant === 'box' || scene.plot.variant === 'violin' || scene.plot.variant === 'raincloud')) && !splitViolin; const slot = scene.plot.widthRatio / Math.max(1, group.subgroupCount); return { lane: scene.plot.lanes.find((item) => item.id === group.laneId)!.index + (grouped ? (group.subgroupIndex - (group.subgroupCount - 1) / 2) * slot : 0), widthRatio: grouped ? slot * .84 : scene.plot.widthRatio } }
@@ -101,7 +110,7 @@ export function resolveNativeDistributionScene(scene: NativeDistributionChartSce
       const random = deterministicDistributionOffset(index, groupIndex.get(group.id) ?? 0), density = scene.plot.layers.find((layer) => layer.kind === 'density')?.groups.find((item) => item.groupId === group.id)
       const offset = scene.plot.variant === 'jitter' ? random * scene.plot.jitterAmount * scene.plot.widthRatio * laneBand : scene.plot.variant === 'beeswarm' ? swarmOffsets.get(mark.id) ?? 0 : scene.plot.variant === 'raincloud' ? ((scene.compatibilityConfig.distributionRaincloudPointMode ?? 'overlay') === 'separate' ? .36 + random * .08 : .16 + random * .1) * geometry.widthRatio * laneBand : scene.plot.variant === 'violin' && density?.mode !== 'full' ? (density?.mode === 'half-first' ? -1 : 1) * (.08 + Math.abs(random) * .12) * geometry.widthRatio * laneBand : (scene.plot.variant === 'box' || scene.plot.variant === 'violin') ? random * .1 * geometry.widthRatio * laneBand : 0
       const primary = valuePixel(mark.value), diameter = 'marker' in mark ? mark.marker.size : 0, x = horizontal ? primary : center + offset, y = horizontal ? center + offset : primary
-      const placement: ResolvedDistributionMarkPlacement = { elementId: mark.id, groupId: group.id, mark, valuePixel: primary, laneCenterPixel: center, laneCoordinate: geometry.lane + (horizontal ? -offset : offset) / Math.max(Number.EPSILON, laneBand), crossOffsetPixel: offset, x, y, markerDiameter: diameter }
+      const placement: ResolvedDistributionMarkPlacement = { elementId: mark.id, groupId: group.id, mark, valuePixel: primary, laneCenterPixel: center, laneCoordinate: geometry.lane + offset / Math.max(Number.EPSILON, laneBand), crossOffsetPixel: offset, x, y, markerDiameter: diameter }
       if ('stroke' in mark) { const half = Math.min(28, Math.max(4, laneBand * scene.plot.widthRatio / 2)); placement.line = horizontal ? { x1: x, y1: y - half, x2: x, y2: y + half } : { x1: x - half, y1: y, x2: x + half, y2: y } }
       return placement
     })

@@ -445,6 +445,7 @@ export interface ChartConfig {
   zeroLineType?: 'solid' | 'dashed' | 'dotted'
   xAxisLabelRotate?: 0 | 30 | 45 | 60 | 90 | 'auto'
   xAxisLabelOverflow?: 'auto' | 'wrap' | 'truncate'
+  categoryAxisLabelAlignment?: 'plot' | 'outer'
   categoryLabelOverrides?: { x?: Record<string, string>; y?: Record<string, string> }
   legendMarker?: 'auto' | 'circle' | 'square' | 'line' | 'diamond' | 'triangle'
 }

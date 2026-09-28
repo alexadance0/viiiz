@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as echarts from 'echarts'
-import { applySeriesVisualState, positionYAxisTitleGraphic } from './ChartCanvas'
+import { applySeriesVisualState, chartTransitionMode, enableCustomSeriesTransitions, positionYAxisTitleGraphic } from './ChartCanvas'
 import { customFontCss } from '../features/chart-export/chartExport'
 import { decorationGraphics } from './chartDecorations'
 import { getChartPlugin } from '../core/chartRegistry'
@@ -27,6 +27,15 @@ describe('native title layout', () => {
 })
 
 describe('native canvas adapters', () => {
+  it('enables morphs, fades, custom shape updates and reduced-motion fallback', () => {
+    expect(chartTransitionMode('scatter', 'bubble', false)).toBe('morph')
+    expect(chartTransitionMode('bar', 'line', false)).toBe('fade')
+    expect(chartTransitionMode('bar', 'line', true)).toBe('none')
+    const option = { series: [{ type: 'custom', renderItem: () => ({ type: 'rect', shape: { x: 10, width: 20 }, style: { fill: '#222222' } }) }] }
+    enableCustomSeriesTransitions(option, true)
+    expect(option.series[0].renderItem()).toMatchObject({ shape: { transition: 'all' }, style: { transition: 'all', enterFrom: { opacity: 0 } } })
+  })
+
   it('embeds uploaded fonts for SVG and PNG export', () => {
     expect(customFontCss([{ name: 'DM Sans', dataUrl: 'data:font/woff2;base64,abc', weight: 700, style: 'italic' }])).toBe('@font-face{font-family:"DM Sans";src:url("data:font/woff2;base64,abc");font-weight:700;font-style:italic;}')
   })

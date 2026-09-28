@@ -35,12 +35,18 @@ export function resolveNativeWaterfallScene(source: NativeWaterfallChartScene): 
       const labelHeight = Math.round(mark.label.style.size * mark.label.style.lineHeight / 100) * Math.max(1, mark.label.text.split('\n').length)
       const requested = mark.total && mark.label.position === 'bottom' ? 'top' : mark.total && mark.label.position === 'inside-bottom' ? 'inside-top' : mark.label.position ?? 'auto'
       const placement = waterfallLabelPlacement(startY, endY, width, labelWidth, labelHeight, requested, source.compatibilityConfig.waterfallLabelGap ?? 6)
-      const stride = Math.max(1, Math.ceil((labelWidth + 8) / Math.max(1, band)))
-      if (!source.compatibilityConfig.valueLabelHideOverlap || mark.total || source.compatibilityConfig.elementStyles[mark.legacyKey]?.showLabel === true || index % stride === 0) label = { x: x + width / 2, y: placement.y, width: labelWidth + 8, height: labelHeight + 4, align: 'center', verticalAlign: placement.verticalAlign, inside: placement.inside }
+      label = { x: x + width / 2, y: placement.y, width: labelWidth + 8, height: labelHeight + 4, align: 'center', verticalAlign: placement.verticalAlign, inside: placement.inside }
     }
     marks[mark.id] = { rect, label }
     base.geometry.elements[mark.id] = rect
   })
+  if (source.compatibilityConfig.valueLabelHideOverlap) {
+    const bounds = (label: NonNullable<ResolvedWaterfallMarkGeometry['label']>) => ({ x: label.x - label.width / 2, y: label.verticalAlign === 'top' ? label.y : label.verticalAlign === 'bottom' ? label.y - label.height : label.y - label.height / 2, width: label.width, height: label.height })
+    const overlaps = (a: ReturnType<typeof bounds>, b: ReturnType<typeof bounds>) => a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+    const accepted: ReturnType<typeof bounds>[] = []
+    const ordered = source.plot.marks.flatMap((mark, index) => marks[mark.id]?.label ? [{ mark, index, priority: mark.total ? 2 : source.compatibilityConfig.elementStyles[mark.legacyKey]?.showLabel === true ? 1 : 0 }] : []).sort((a, b) => b.priority - a.priority || a.index - b.index)
+    ordered.forEach(({ mark }) => { const label = marks[mark.id].label!; const rect = bounds(label); if (accepted.some((item) => overlaps(item, rect))) delete marks[mark.id].label; else accepted.push(rect) })
+  }
   const connectors = Object.fromEntries(source.plot.connectors.map((connector, index) => {
     const fromMark = source.plot.marks[index], toMark = source.plot.marks[index + 1]
     const width = (mark: typeof fromMark) => band * Math.max(.1, Math.min(1, (mark.style.width ?? source.plot.barWidth) / 100))

@@ -629,7 +629,7 @@ export interface HeatmapCellScene {
 export interface HeatmapPlotScene {
   kind: 'heatmap'
   categories: Array<{ id: DatumId; value: DataValue; label: string; coordinate: string }>
-  rows: Array<{ id: SeriesId; name: string; cells: HeatmapCellScene[] }>
+  rows: Array<{ id: SeriesId; sourceKey: string; name: string; cells: HeatmapCellScene[] }>
   categoryAxis: AxisSpec
   rowAxis: AxisSpec
   colorDomain: { min: number; max: number; midpoint: number; midpointRatio: number; diverging: boolean }
@@ -719,7 +719,7 @@ export interface ResolvedComparisonStemGeometry {
 
 export interface ResolvedHeatmapGeometry {
   cells: Record<ElementId, Rect>
-  scale?: { bar: Rect; ticks: Array<{ x: number; y: number; value: number; label: string; align: 'left' | 'center' | 'right' }> }
+  scale?: { bar: Rect; ticks: Array<{ x: number; y: number; value: number; label: string; align: 'left' | 'center' | 'right'; verticalAlign: 'top' | 'middle' | 'bottom' }> }
 }
 
 export interface ResolvedTreemapGeometry {

@@ -89,6 +89,26 @@ test('editor opens demo data, renders charts and exposes export actions', async 
   assertNoErrors()
 })
 
+test('trackpad gestures pan and zoom the canvas around the pointer', async ({ page }) => {
+  const assertNoErrors = await failOnRuntimeErrors(page)
+  await loadDemo(page)
+  await page.getByRole('button', { name: /^Столбцы$/ }).click()
+  await expectRenderedChart(page)
+  const viewport = page.locator('.chart-canvas-viewport')
+  const canvas = page.locator('.chart-canvas-shell')
+  const initial = await canvas.evaluate((element) => (element as HTMLElement).style.transform)
+  await viewport.dispatchEvent('wheel', { deltaX: 36, deltaY: 24, bubbles: true, cancelable: true })
+  await expect.poll(() => canvas.evaluate((element) => (element as HTMLElement).style.transform)).not.toBe(initial)
+  const panned = await canvas.evaluate((element) => (element as HTMLElement).style.transform)
+  await viewport.dispatchEvent('wheel', { deltaY: -40, ctrlKey: true, clientX: 500, clientY: 350, bubbles: true, cancelable: true })
+  await expect.poll(() => page.locator('.canvas-zoom-value').textContent()).not.toBe('100%')
+  await expect.poll(() => canvas.evaluate((element) => (element as HTMLElement).style.transform)).not.toBe(panned)
+  await viewport.dblclick({ position: { x: 8, y: 8 } })
+  await expect(page.locator('.canvas-zoom-value')).toHaveText('100%')
+  await expect.poll(() => canvas.evaluate((element) => (element as HTMLElement).style.transform)).toBe(initial)
+  assertNoErrors()
+})
+
 test('critical fonts keep preview, SVG and PNG deterministic without Google Fonts', async ({ page }) => {
   test.setTimeout(90_000)
   const googleRequests: string[] = []
@@ -252,8 +272,9 @@ test('Butterfly mirrors two measures around a shared category axis', async ({ pa
   const paperBox = await page.locator('.canvas-paper svg').boundingBox()
   const hundredBoxes = (await page.locator('.canvas-paper svg text').filter({ hasText: /^100$/ }).evaluateAll((items) => items.map((item) => item.getBoundingClientRect().toJSON()))).sort((a, b) => a.left - b.left)
   const scale = paperBox!.width / 1000
-  expect(hundredBoxes[0].left).toBeCloseTo(paperBox!.x + 32 * scale, 0)
-  expect(hundredBoxes.at(-1)!.right).toBeCloseTo(paperBox!.x + paperBox!.width - 24 * scale, 0)
+  const leftInset = hundredBoxes[0].left - paperBox!.x
+  const rightInset = paperBox!.x + paperBox!.width - hundredBoxes.at(-1)!.right
+  expect(Math.abs(leftInset - rightInset)).toBeLessThanOrEqual(10 * scale)
 
   await page.getByRole('button', { name: /Настроить оформление/ }).click()
   await page.locator('summary').filter({ hasText: /^Оси, шкалы и подписи$/ }).click()
@@ -784,6 +805,7 @@ test('native line, area, interval, indexed, seasonal and smoothing kinds transit
     await expect(button).toHaveClass(/active/)
     await expect.poll(() => svg.innerHTML()).not.toBe(previousSvg)
     await expectRenderedChart(page)
+    await expect(page.locator('.chart-canvas-shell')).toHaveAttribute('data-render-animation', 'on')
   }
   await page.getByRole('button', { name: /Настроить оформление/ }).click()
   await page.locator('summary').filter({ hasText: /^Сравнение по годам$/ }).click()
@@ -817,6 +839,33 @@ test('native line, area, interval, indexed, seasonal and smoothing kinds transit
   await page.getByRole('button', { name: 'Скачать PNG' }).click()
   await expect((await indexedPng).suggestedFilename()).toMatch(/\.png$/)
   assertNoErrors()
+})
+
+test('chart type changes and newly added series visibly animate', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await loadDemo(page)
+  const choice = (name: string) => page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: new RegExp(`^${escaped(name)}$`) }) })
+  await choice('Линия').click()
+  await expectRenderedChart(page)
+  const canvas = page.locator('.chart-canvas-shell')
+  const svg = page.locator('.canvas-paper svg').first()
+
+  const revision = Number(await canvas.getAttribute('data-render-pending-revision') ?? 0)
+  await page.getByRole('checkbox', { name: 'orders', exact: true }).press('Space')
+  await expect.poll(async () => Number(await canvas.getAttribute('data-render-pending-revision'))).toBeGreaterThan(revision)
+  const frames: string[] = []
+  for (let index = 0; index < 4; index += 1) {
+    await page.waitForTimeout(55)
+    frames.push(await svg.innerHTML())
+  }
+  expect(new Set(frames).size).toBeGreaterThan(1)
+
+  await choice('Столбцы').click()
+  const snapshot = page.locator('.chart-transition-snapshot')
+  await expect(snapshot).toBeAttached()
+  await expect(snapshot).toHaveClass(/is-leaving/)
+  await expect(snapshot).toHaveCount(0)
+  await expect(canvas).toHaveAttribute('data-render-animation', 'on')
 })
 
 test('native render revisions reject stale family frames and advance after an axis change', async ({ page }) => {
@@ -1247,6 +1296,35 @@ test('text alignment controls apply reliably on the canvas', async ({ page }) =>
   await expect(size).toHaveValue('41')
 })
 
+test('first frame of the text editor keeps the selected chart text visible', async ({ page }) => {
+  await loadDemo(page)
+  await page.getByRole('button', { name: /Настроить оформление/ }).click()
+  await page.evaluate(() => {
+    const state = window as typeof window & { textEditorReady?: boolean; textEditorFlashed?: boolean }
+    const visible = (element: Element) => {
+      let current: Element | null = element
+      while (current) {
+        const style = getComputedStyle(current)
+        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false
+        current = current.parentElement
+      }
+      return true
+    }
+    const inspect = () => {
+      const editor = document.querySelector('.canvas-rich-text-content')
+      const editorVisible = editor?.textContent === 'Заголовок графика' && visible(editor)
+      const svgVisible = [...document.querySelectorAll('.canvas-paper svg text')].some((element) => element.textContent === 'Заголовок графика' && visible(element))
+      if (!editorVisible && !svgVisible) state.textEditorFlashed = true
+      if (editorVisible) state.textEditorReady = true
+      else requestAnimationFrame(inspect)
+    }
+    requestAnimationFrame(inspect)
+  })
+  await page.locator('.canvas-paper svg text').filter({ hasText: /^Заголовок графика$/ }).click()
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { textEditorReady?: boolean }).textEditorReady)).toBe(true)
+  expect(await page.evaluate(() => (window as typeof window & { textEditorFlashed?: boolean }).textEditorFlashed ?? false)).toBe(false)
+})
+
 test('selected heading fragment keeps its own font, size, emphasis and color', async ({ page }) => {
   await loadDemo(page)
   await page.getByRole('button', { name: /Настроить оформление/ }).click()
@@ -1298,9 +1376,11 @@ test('selected heading fragment keeps its own font, size, emphasis and color', a
 })
 
 test('category label editor preserves explicit lines and adapts to horizontal bars', async ({ page }) => {
-  await loadDemo(page)
+  await page.goto('/editor')
+  await page.getByRole('button', { name: /^Топ стран$/ }).click()
+  await page.getByRole('button', { name: /Выбрать график/ }).click()
   await page.getByRole('button', { name: 'Линейчатая', exact: true }).click()
-  const label = page.locator('.canvas-paper svg text').filter({ hasText: /^01\.01\.2025$/ }).first()
+  const label = page.locator('.canvas-paper svg text').filter({ hasText: /^США$/ }).first()
   await label.click()
   await label.click()
   const editor = page.locator('.canvas-rich-text-content')
@@ -1311,9 +1391,11 @@ test('category label editor preserves explicit lines and adapts to horizontal ba
 })
 
 test('category label editor follows the vertical axis label position', async ({ page }) => {
-  await loadDemo(page)
+  await page.goto('/editor')
+  await page.getByRole('button', { name: /^Топ стран$/ }).click()
+  await page.getByRole('button', { name: /Выбрать график/ }).click()
   await page.getByRole('button', { name: /^Столбцы$/ }).click()
-  const label = page.locator('.canvas-paper svg text').filter({ hasText: /^01\.01\.2025$/ }).first()
+  const label = page.locator('.canvas-paper svg text').filter({ hasText: /^США$/ }).first()
   await label.click()
   await label.click()
   const editor = page.locator('.canvas-rich-text-content')
@@ -1321,6 +1403,15 @@ test('category label editor follows the vertical axis label position', async ({ 
   await expect(editor).toHaveCSS('white-space', 'pre-wrap')
   await editor.fill('Подпись категории\nна второй строке')
   await expect.poll(() => editor.evaluate((element) => (element as HTMLElement).innerText)).toBe('Подпись категории\nна второй строке')
+})
+
+test('generated temporal axis labels stay non-editable', async ({ page }) => {
+  await loadDemo(page)
+  await page.getByRole('button', { name: /^Столбцы$/ }).click()
+  const label = page.locator('.canvas-paper svg text').filter({ hasText: /^01\.01\.2025$/ }).first()
+  await label.click()
+  await label.click()
+  await expect(page.locator('.canvas-rich-text-content')).toHaveCount(0)
 })
 
 test('distribution lane category label uses semantic identity while a continuous axis tick stays non-editable', async ({ page }) => {

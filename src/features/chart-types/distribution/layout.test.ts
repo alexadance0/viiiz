@@ -17,6 +17,15 @@ describe('native Distribution layout', () => {
     expect(vertical.distributionGeometry.marks[0].valuePixel).toBe(vertical.distributionGeometry.marks[0].y)
   })
 
+  it('places the first horizontal lane at the same top-side coordinate for native points and resolved shapes', () => {
+    const measures: DataTable = { name: 'lanes', columns: ['first', 'second'], rows: [{ first: 1, second: 2 }] }
+    const scene = resolveNativeDistributionScene(compileNativeDistributionScene(measures, { ...config('raincloud'), yField: 'first', yFields: ['first', 'second'], distributionOrientation: 'horizontal' }))
+    const first = scene.distributionGeometry.marks.find((mark) => mark.groupId === scene.plot.groups[0].id)!
+    const second = scene.distributionGeometry.marks.find((mark) => mark.groupId === scene.plot.groups[1].id)!
+    expect(first.laneCenterPixel).toBeLessThan(second.laneCenterPixel)
+    expect(first.laneCoordinate).toBeCloseTo(scene.plot.groups[0].subgroupIndex + first.crossOffsetPixel / scene.distributionGeometry.laneBand)
+  })
+
   it('packs all groups sharing a lane as one beeswarm cloud', () => {
     const scene = resolveNativeDistributionScene(compileNativeDistributionScene(table, config('beeswarm', { distributionGroupField: 'group', distributionPointSize: 10 })))
     const sameValue = scene.distributionGeometry.marks.filter((mark) => mark.mark.value === 1)
@@ -61,6 +70,9 @@ describe('native Distribution layout', () => {
       const baseline = ridge.distributionGeometry.densityShapes[0].baseline!
       const lane = ridge.distributionGeometry.laneLabels[0]
       expect(distributionOrientation === 'horizontal' ? baseline.y1 : baseline.x1).toBeCloseTo(lane.coordinate, 6)
+      const extent = ridge.plot.layers.find((layer) => layer.kind === 'density')!.groups[0].widthRatio
+      const padding = distributionOrientation === 'horizontal' ? -ridge.plot.laneDomain.min : ridge.plot.laneDomain.max - ridge.plot.lanes.length + 1
+      expect(padding).toBeCloseTo(extent)
       const grid = ridge.distributionGeometry.laneGrid[0]
       expect(distributionOrientation === 'horizontal' ? grid.y1 : grid.x1).toBeCloseTo(lane.coordinate, 6)
     }

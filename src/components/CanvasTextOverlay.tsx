@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ChartConfig, ChartTextStyle } from '../core/types'
 import { annotationTextHtml, sanitizeAnnotationHtml } from '../core/annotationHtml'
 import { TextFragmentToolbar } from './TextFragmentToolbar'
@@ -69,7 +69,7 @@ export function CanvasTextOverlay({ id, text, html, style, left, top, width, cus
     const computed = window.getComputedStyle(target)
     setToolbarStyle({ ...style, fontFamily: computed.fontFamily || style.fontFamily, size: Math.round(Number.parseFloat(computed.fontSize)) || style.size, color: computed.color || style.color })
   }, [style])
-  useEffect(() => {
+  useLayoutEffect(() => {
     const incoming = sanitizeRichTextHtml(html ?? annotationTextHtml(inputText))
     if (editor.current && incoming !== lastHtml.current && inputText !== lastText.current) editor.current.innerHTML = incoming
     lastHtml.current = incoming

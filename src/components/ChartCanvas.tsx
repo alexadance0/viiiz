@@ -11,6 +11,7 @@ import {
   TooltipComponent,
 } from 'echarts/components'
 import { SVGRenderer } from 'echarts/renderers'
+import { UniversalTransition } from 'echarts/features'
 import { loadEchartsForKind } from './echarts/loadEchartsForKind'
 import { getChartPlugin, getSeriesColor } from '../core/chartRegistry'
 import { sanitizeAnnotationHtml } from '../core/annotationHtml'
@@ -27,9 +28,9 @@ import { invalidateTextLayoutCache, layoutText, plainTextDocument } from '../fea
 import { legacySelection, type ChartSelection } from '../entities/chart/model/ChartSelection'
 import { advanceChartRender, failChartRender, initialChartRenderLifecycle, settleChartRender, type ChartRenderStatus } from './chartRenderLifecycle'
 import { collectFontFamilies, waitForChartFonts } from '../core/textFonts'
+import { CanvasTextOverlay } from './CanvasTextOverlay'
 
 const AnnotationOverlay = lazy(() => import('./AnnotationOverlay').then(({ AnnotationOverlay: Component }) => ({ default: Component })))
-const CanvasTextOverlay = lazy(() => import('./CanvasTextOverlay').then(({ CanvasTextOverlay: Component }) => ({ default: Component })))
 
 echarts.use([
   GridComponent,
@@ -39,6 +40,7 @@ echarts.use([
   GraphicComponent,
   MarkLineComponent,
   TitleComponent,
+  UniversalTransition,
   SVGRenderer,
 ])
 
@@ -66,6 +68,49 @@ export const chartTransitionMode = (previous: ChartKind | null, next: ChartKind,
     ['violinplot', 'raincloud'],
   ]
   return families.some((family) => family.includes(previous) && family.includes(next)) ? 'morph' : 'fade'
+}
+
+type CustomElementOption = Record<string, unknown> & { children?: CustomElementOption[]; shape?: Record<string, unknown>; style?: Record<string, unknown> }
+
+const animateCustomElement = (element: CustomElementOption | null | undefined) => {
+  if (!element) return element
+  if (element.shape) element.shape = { transition: 'all', ...element.shape }
+  if (element.style) element.style = { transition: 'all', enterFrom: { opacity: 0 }, ...element.style }
+  element.children?.forEach(animateCustomElement)
+  return element
+}
+
+// oxlint-disable-next-line react/only-export-components -- exported for the shared motion regression test
+export function enableCustomSeriesTransitions(option: Record<string, unknown>, enabled: boolean) {
+  if (!enabled) return
+  const series = option.series as Array<{ type?: string; silent?: boolean; animation?: boolean; renderItem?: (...args: unknown[]) => CustomElementOption | null }> | undefined
+  series?.forEach((item) => {
+    if (item.type !== 'custom' || item.silent || item.animation === false || !item.renderItem) return
+    const renderItem = item.renderItem
+    item.renderItem = (...args) => animateCustomElement(renderItem(...args)) ?? null
+  })
+}
+
+function fadePreviousPlot(container: HTMLElement, bounds: PlotBounds, duration: number) {
+  container.querySelectorAll('.chart-transition-snapshot').forEach((snapshot) => snapshot.remove())
+  const source = container.querySelector('svg')
+  if (!source) return
+  const snapshot = source.cloneNode(true) as SVGElement
+  const width = Math.max(1, source.clientWidth), height = Math.max(1, source.clientHeight)
+  snapshot.classList.add('chart-transition-snapshot')
+  snapshot.setAttribute('aria-hidden', 'true')
+  snapshot.style.clipPath = `inset(${Math.max(0, bounds.top)}px ${Math.max(0, width - bounds.right)}px ${Math.max(0, height - bounds.bottom)}px ${Math.max(0, bounds.left)}px)`
+  snapshot.style.setProperty('--chart-transition-duration', `${duration}ms`)
+  container.append(snapshot)
+  requestAnimationFrame(() => snapshot.classList.add('is-leaving'))
+  window.setTimeout(() => snapshot.remove(), duration + 50)
+}
+const chartTransitionFamily = (kind: ChartKind) => {
+  if (kind === 'line' || kind === 'spline' || kind === 'step-line') return 'line'
+  if (kind === 'scatter' || kind === 'bubble') return 'xy'
+  if (kind === 'strip-plot' || kind === 'jitter-plot') return 'distribution-points'
+  if (kind === 'violinplot' || kind === 'raincloud') return 'distribution-density'
+  return kind
 }
 
 const RHYTHM = { edge: DEFAULT_COMPOSITION_SPACING.canvasInsets.top, titleSubtitle: DEFAULT_COMPOSITION_SPACING.titleSubtitle, headerLegend: DEFAULT_COMPOSITION_SPACING.headerLegend, headerPlot: DEFAULT_COMPOSITION_SPACING.headerPlot, legendPlot: DEFAULT_COMPOSITION_SPACING.legendPlot, plotFooter: DEFAULT_COMPOSITION_SPACING.plotFooter, noteSource: DEFAULT_COMPOSITION_SPACING.noteSource } as const
@@ -234,6 +279,8 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     const container = useRef<HTMLDivElement>(null)
     const viewport = useRef<HTMLDivElement>(null)
     const [canvasScale, setCanvasScale] = useState(1)
+    const [gestureZoom, setGestureZoom] = useState(viewZoom)
+    const [viewPan, setViewPan] = useState({ x: 0, y: 0 })
     const [renderError, setRenderError] = useState('')
     const [readyKind, setReadyKind] = useState<ChartKind | null>(null)
     const [renderedChartKind, setRenderedChartKind] = useState<ChartKind | null>(null)
@@ -250,6 +297,11 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     const [richLayouts, setRichLayouts] = useState<Partial<Record<'title' | 'subtitle' | 'note' | 'source', RichLayout>>>({})
     const [categoryLabelLayout, setCategoryLabelLayout] = useState<CategoryLabelLayout | null>(null)
     const chart = useRef<echarts.ECharts | null>(null)
+    const gestureZoomRef = useRef(viewZoom)
+    const spacePressed = useRef(false)
+    const panDrag = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
+    const viewPanRef = useRef(viewPan)
+    viewPanRef.current = viewPan
     const renderRevision = useRef(0)
     const displayOption = useRef<Record<string, unknown> | null>(null)
     const exportOption = useRef<Record<string, unknown> | null>(null)
@@ -268,7 +320,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       return match ? { axis: match[1] as 'x' | 'y', category: match[2] } : null
     })(), [requestedCategoryLabel, selectedElementKey, selectedElementTarget])
     const selectedCategoryLabel = activeCategoryLabel
-    const chartLayoutReady = renderedChartKind === config.kind
+    const chartLayoutReady = renderedChartKind != null
     const beginRenderCycle = (status: ChartRenderStatus) => {
       const revision = ++renderRevision.current
       setRenderLifecycle((current) => ({ ...current, revision, status }))
@@ -338,6 +390,36 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       return () => { observer.disconnect(); cancelAnimationFrame(resizeFrame) }
     }, [config.autoFitCanvas, config.canvasHeight, config.canvasWidth])
 
+    useEffect(() => { gestureZoomRef.current = viewZoom; setGestureZoom(viewZoom) }, [viewZoom])
+
+    useEffect(() => {
+      const target = viewport.current
+      if (!target) return
+      const typing = (value: EventTarget | null) => value instanceof HTMLElement && (value.matches('input, textarea, select') || value.isContentEditable)
+      const publishZoom = (zoom: number) => window.dispatchEvent(new CustomEvent('canvas-view-zoom', { detail: zoom }))
+      const wheel = (event: WheelEvent) => {
+        if (typing(document.activeElement) || (event.target as HTMLElement).closest('.canvas-floating-menu')) return
+        event.preventDefault(); event.stopPropagation()
+        if (Math.abs(event.deltaX) <= .5 && Math.abs(event.deltaY) <= .5) return
+        if (event.ctrlKey || event.metaKey) {
+          const current = gestureZoomRef.current, sensitivity = event.ctrlKey && !event.metaKey && /Mac|iPod|iPhone|iPad/.test(navigator.platform || '') ? .012 : .0012
+          const next = Math.min(5, Math.max(.1, Math.round(current * Math.exp(-event.deltaY * sensitivity) * 100) / 100))
+          if (next === current) return
+          const bounds = target.getBoundingClientRect(), pointX = event.clientX - bounds.left - bounds.width / 2, pointY = event.clientY - bounds.top - bounds.height / 2, ratio = next / current
+          gestureZoomRef.current = next; setGestureZoom(next); setViewPan((pan) => ({ x: pointX - (pointX - pan.x) * ratio, y: pointY - (pointY - pan.y) * ratio })); publishZoom(next)
+        } else setViewPan((pan) => ({ x: pan.x - event.deltaX, y: pan.y - event.deltaY }))
+      }
+      const keyDown = (event: KeyboardEvent) => { if (event.code === 'Space' && !typing(event.target)) { spacePressed.current = true; target.classList.add('space-pan'); event.preventDefault() } }
+      const keyUp = (event: KeyboardEvent) => { if (event.code === 'Space') { spacePressed.current = false; target.classList.remove('space-pan') } }
+      const pointerDown = (event: PointerEvent) => { if (!(event.button === 1 || event.button === 0 && spacePressed.current)) return; const pan = viewPanRef.current; panDrag.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y }; target.classList.add('panning'); target.setPointerCapture(event.pointerId); event.preventDefault() }
+      const pointerMove = (event: PointerEvent) => { const drag = panDrag.current; if (drag) setViewPan({ x: drag.panX + event.clientX - drag.x, y: drag.panY + event.clientY - drag.y }) }
+      const pointerUp = (event: PointerEvent) => { if (!panDrag.current) return; panDrag.current = null; target.classList.remove('panning'); if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId) }
+      const auxiliary = (event: MouseEvent) => { if (event.button === 1) event.preventDefault() }
+      const reset = (event: MouseEvent) => { if (!(event.target as Element).closest('.category-label-editor, .chart-rich-editor')) { gestureZoomRef.current = 1; setGestureZoom(1); setViewPan({ x: 0, y: 0 }); publishZoom(1) } }
+      target.addEventListener('wheel', wheel, { passive: false, capture: true }); target.addEventListener('pointerdown', pointerDown); target.addEventListener('pointermove', pointerMove); target.addEventListener('pointerup', pointerUp); target.addEventListener('pointercancel', pointerUp); target.addEventListener('auxclick', auxiliary); target.addEventListener('dblclick', reset); window.addEventListener('keydown', keyDown); window.addEventListener('keyup', keyUp)
+      return () => { target.removeEventListener('wheel', wheel, true); target.removeEventListener('pointerdown', pointerDown); target.removeEventListener('pointermove', pointerMove); target.removeEventListener('pointerup', pointerUp); target.removeEventListener('pointercancel', pointerUp); target.removeEventListener('auxclick', auxiliary); target.removeEventListener('dblclick', reset); window.removeEventListener('keydown', keyDown); window.removeEventListener('keyup', keyUp) }
+    }, [])
+
     useEffect(() => {
       const instance = chart.current
       if (!instance || instance.isDisposed() || readyKind !== config.kind || readyFontSignature !== fontSignature) return
@@ -369,11 +451,14 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       if (resolvedScene.plot.kind === 'distribution' && resolvedScene.plot.variant !== 'histogram' && resolvedScene.plot.variant !== 'kde') {
         const axis = resolvedScene.plot.orientation === 'horizontal' ? 'y' : 'x'
         resolvedScene.plot.lanes.forEach((lane) => editable.set(`${axis}:${lane.index}`, { sourceKey: lane.sourceKey, displayText: lane.label }))
+      } else if (resolvedScene.plot.kind === 'heatmap') {
+        resolvedScene.plot.categories.filter((category) => typeof category.value === 'string').forEach((category) => editable.set(`x:${category.coordinate}`, { sourceKey: category.coordinate, displayText: category.label }))
+        resolvedScene.plot.rows.forEach((row) => editable.set(`y:${row.sourceKey}`, { sourceKey: row.sourceKey, displayText: row.name }))
       } else if ('categories' in resolvedScene.plot && 'categoryAxis' in resolvedScene.plot) {
         const axis = resolvedScene.plot.categoryAxis.orientation === 'horizontal' ? 'x' : 'y'
-        resolvedScene.plot.categories.forEach((category) => editable.set(`${axis}:${category.coordinate}`, { sourceKey: category.coordinate, displayText: category.label }))
+        resolvedScene.plot.categories.filter((category) => typeof category.value === 'string').forEach((category) => editable.set(`${axis}:${category.coordinate}`, { sourceKey: category.coordinate, displayText: category.label }))
       } else if ('positions' in resolvedScene.plot && Array.isArray(resolvedScene.plot.positions)) {
-        resolvedScene.plot.positions.forEach((position) => editable.set(`x:${position.coordinate}`, { sourceKey: position.coordinate, displayText: position.label }))
+        resolvedScene.plot.positions.filter((position) => typeof position.value === 'string').forEach((position) => editable.set(`x:${position.coordinate}`, { sourceKey: position.coordinate, displayText: position.label }))
       }
       editableAxisLabels.current = editable
       type NativeSelectionHit = { rect: { x: number; y: number; width: number; height: number }; info: { elementKey: string; sourceSeriesName: string; displayCategory: string; displayValue: string; displayLabel?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target']; axis?: 'x' | 'y'; selectionMode?: 'series-first' } }
@@ -391,10 +476,11 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const transitionMode = chartTransitionMode(renderedKind.current, config.kind, reducedMotion)
       setRenderAnimationEnabled(!reducedMotion)
       option.animation = !reducedMotion
-      option.animationDuration ??= reducedMotion ? 0 : 420
-      option.animationDurationUpdate ??= reducedMotion ? 0 : 240
-      option.animationEasing ??= 'cubicOut'
-      option.animationEasingUpdate ??= 'cubicOut'
+      option.animationDuration = reducedMotion ? 0 : 240
+      option.animationDurationUpdate = reducedMotion ? 0 : 240
+      option.animationEasing ??= 'quarticOut'
+      option.animationEasingUpdate ??= 'quarticOut'
+      enableCustomSeriesTransitions(option, !reducedMotion)
       const selectionStyle = { backgroundColor: 'rgba(0,0,0,0)', borderColor: '#6956e8', borderWidth: 1, borderRadius: 5, padding: [2, 4] }
       const labelSelectionStyle = { ...selectionStyle, padding: 0 }
       const availableWidth = Math.max(120, (config.canvasWidth ?? container.current?.clientWidth ?? 1000) - marginLeft - marginRight)
@@ -594,12 +680,15 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       })
       cleanOption.graphic = [...cleanLabels, ...decorationGraphics(config.decorations ?? []), ...cleanTitleHits, ...annotations.map((annotation) => ({ ...annotation, style: { ...annotation.style, opacity: 1 } }))]
       setRenderLifecycle((current) => advanceChartRender(current, revision, 'rendering'))
-      if (transitionMode === 'morph') {
+      {
         const series = option.series as Array<Record<string, unknown>> | undefined
-        series?.forEach((item) => { if (item.silent !== true) item.universalTransition = true })
+        series?.forEach((item) => {
+          if (item.id != null) item.id = `${chartTransitionFamily(config.kind)}:${String(item.id)}`
+          if (transitionMode === 'morph' && item.silent !== true) item.universalTransition = { enabled: true, divideShape: 'clone' }
+        })
       }
-      if (transitionMode === 'fade' || transitionMode === 'none') instance.setOption(option, true)
-      else instance.setOption(option, { notMerge: false, replaceMerge: ['series', 'xAxis', 'yAxis', 'graphic'] })
+      if (transitionMode === 'fade' && plotBounds && container.current) fadePreviousPlot(container.current, plotBounds, 200)
+      instance.setOption(option, { notMerge: false, replaceMerge: ['series', 'xAxis', 'yAxis', 'graphic'] })
       renderedKind.current = config.kind
       setRenderedChartKind(config.kind)
       setRenderedPlotKind(plotKind)
@@ -1024,8 +1113,8 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const visible = field === 'title' ? config.showTitle !== false : field === 'subtitle' ? config.showSubtitle !== false : field === 'note' ? config.showNote !== false : config.showSource !== false
       return html && layout && visible && field !== richField ? [{ field, html, layout, style }] : []
     })
-    const safeZoom = Math.min(2, Math.max(.5, viewZoom))
-    const canvasTransform = config.autoFitCanvas === false ? `scale(${safeZoom})` : `translate(-50%, -50%) scale(${canvasScale * safeZoom})`
+    const safeZoom = Math.min(5, Math.max(.1, gestureZoom))
+    const canvasTransform = config.autoFitCanvas === false ? `translate(${viewPan.x}px, ${viewPan.y}px) scale(${safeZoom})` : `translate(calc(-50% + ${viewPan.x}px), calc(-50% + ${viewPan.y}px)) scale(${canvasScale * safeZoom})`
     return (
       <div className={`chart-canvas-viewport ${config.autoFitCanvas === false ? 'native-size' : ''}`} ref={viewport}>
         <div

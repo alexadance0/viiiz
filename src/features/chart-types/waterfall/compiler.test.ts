@@ -26,6 +26,16 @@ describe('native Waterfall compiler and layout', () => {
     expect(Object.keys(resolved.waterfallGeometry.connectors)).toHaveLength(3)
   })
 
+  it('hides labels only after testing their resolved rectangles for collisions', () => {
+    const dense: DataTable = { name: 'dense', columns: ['factor', 'change'], rows: Array.from({ length: 8 }, (_, index) => ({ factor: `Step ${index}`, change: index % 2 ? -1 : 2 })) }
+    const resolved = resolveNativeWaterfallScene(compileNativeWaterfallScene(dense, config({ canvasWidth: 280, valueLabelPosition: 'top', valueLabelHideOverlap: true, valueText: { ...config().valueText, size: 20 }, numberPrefix: 'Изменение ' })))
+    const labels = Object.values(resolved.waterfallGeometry.marks).flatMap((mark) => mark.label ? [mark.label] : [])
+    const rectangles = labels.map((label) => ({ x: label.x - label.width / 2, y: label.verticalAlign === 'bottom' ? label.y - label.height : label.y, width: label.width, height: label.height }))
+    expect(labels.length).toBeLessThan(resolved.plot.marks.length)
+    expect(rectangles.every((rect, index) => rectangles.slice(index + 1).every((other) => rect.x + rect.width <= other.x || other.x + other.width <= rect.x || rect.y + rect.height <= other.y || other.y + other.height <= rect.y))).toBe(true)
+    expect(resolved.waterfallGeometry.marks[resolved.plot.marks.at(-1)!.id].label).toBeTruthy()
+  })
+
   it.each([
     ['auto', 'top'],
     ['bottom', 'bottom'],

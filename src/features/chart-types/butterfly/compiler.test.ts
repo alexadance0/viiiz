@@ -37,6 +37,12 @@ describe('native Butterfly compiler and layout', () => {
     expect(rightA.x + rightA.width).toBeCloseTo(rightB.x)
   })
 
+  it('keeps center mode inside the shared cartesian reservations', () => {
+    const resolved = resolveNativeButterflyScene(compileNativeButterflyScene(table, config({ butterflyCategoryPosition: 'center', xAxisNumberPrefix: 'Очень длинный префикс ' })))
+    expect(resolved.geometry.plot.x).toBeGreaterThan(resolved.geometry.content.x + 16)
+    expect(resolved.geometry.plot.x + resolved.geometry.plot.width).toBeLessThan(resolved.geometry.content.x + resolved.geometry.content.width - 16)
+  })
+
   it('preserves Butterfly document semantics and combines generic duplicate-category validation', () => {
     const scene = compileNativeButterflyScene(table, config())
     expect(scene.document.chart).toMatchObject({ family: 'butterfly', kind: 'butterfly', categoryPlacement: 'center' })
@@ -53,11 +59,15 @@ describe('native Butterfly compiler and layout', () => {
     const left = resolved.plot.series[0].marks[0], right = resolved.plot.series[1].marks[0]
     expect(resolved.butterflyGeometry.labels[left.id]).toMatchObject({ align: 'center', inside: true })
     expect(resolved.butterflyGeometry.labels[right.id]).toMatchObject({ align: 'center', inside: true })
-    const option = renderButterflyScene(resolved) as { graphic: Array<{ id?: string; style?: { fill?: string } }>; nativeSelectionHits: Array<{ info: { selectionTarget?: string; axis?: string; elementKey: string } }>; nativeCategoryLayouts: Array<{ category: string; width: number }> }
+    const option = renderButterflyScene(resolved) as { graphic: Array<{ id?: string; shape?: { x: number; width: number }; style?: { fill?: string } }>; nativeSelectionHits: Array<{ info: { selectionTarget?: string; axis?: string; elementKey: string } }>; nativeCategoryLayouts: Array<{ category: string; width: number }> }
     expect(option.graphic.find((item) => item.id === `value-label:${left.id}`)?.style?.fill).toBe('#202027')
     expect(option.graphic.find((item) => item.id === `value-label:${right.id}`)?.style?.fill).toBe('#fff')
     expect(option.nativeSelectionHits.some((hit) => hit.info.selectionTarget === 'category-label' && hit.info.axis === 'y' && hit.info.elementKey.startsWith('category-label:y:'))).toBe(true)
     expect(option.nativeCategoryLayouts.every((layout) => layout.width > 0)).toBe(true)
+    expect(option.graphic.find((item) => item.id === 'butterfly-center-mask')).toMatchObject({
+      shape: { x: resolved.butterflyGeometry.categories[0].x, width: resolved.butterflyGeometry.centerGap },
+      style: { fill: resolved.document.canvas.background },
+    })
   })
 
   it.each(['auto', 'top', 'bottom', 'inside-top', 'inside-center', 'inside-bottom'] as const)('mirrors the %s value-label mode on both sides', (valueLabelPosition) => {

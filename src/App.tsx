@@ -182,6 +182,8 @@ function App() {
 
   useEffect(() => () => processingController.current?.abort(), [])
 
+  useEffect(() => { const update = (event: Event) => setCanvasZoom((event as CustomEvent<number>).detail); window.addEventListener('canvas-view-zoom', update); return () => window.removeEventListener('canvas-view-zoom', update) }, [])
+
   useEffect(() => {
     if (skipDesignHistory.current) { skipDesignHistory.current = false; previousDesignConfig.current = config; return }
     if (step !== 'chart' && step !== 'design') { previousDesignConfig.current = config; return }
@@ -209,7 +211,7 @@ function App() {
   const clearCanvasSelection = () => {
     setSelectedElement(null); setSelectedSeries(null); setSelectedAnnotation(null); setSelectedDecoration(null); setSelectedSettingsSection(null)
   }
-  const changeCanvasZoom = (next: number) => setCanvasZoom(Math.min(2, Math.max(.5, Number(next.toFixed(2)))))
+  const changeCanvasZoom = (next: number) => setCanvasZoom(Math.min(5, Math.max(.1, Number(next.toFixed(2)))))
 
   useEffect(() => {
     if (step !== 'chart' && step !== 'design') return

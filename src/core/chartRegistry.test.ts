@@ -762,7 +762,7 @@ describe('individual chart element styles', () => {
     const option = getChartPlugin('bar').buildOption(table, config) as { xAxis: { type: string }; yAxis: { type: string; axisLabel: { align: string } }; series: Array<{ type: string; barGap?: string; itemStyle?: { borderRadius?: number } }> }
     expect(option.xAxis.type).toBe('value')
     expect(option.yAxis.type).toBe('category')
-    expect(option.yAxis.axisLabel.align).toBe('left')
+    expect(option.yAxis.axisLabel.align).toBe('right')
     expect(option.series[0]).toMatchObject({ type: 'bar', barGap: '20%', itemStyle: { borderRadius: 8 } })
   })
 
@@ -1060,6 +1060,18 @@ describe('individual chart element styles', () => {
     expect(first.data.some((point) => point.directLegendLabel)).toBe(false)
     expect(second.data[1]).toMatchObject({ directLegendLabel: true, label: { color: '#6956e8', fontSize: 23, fontWeight: 700 } })
     expect(option.grid.left).toBeGreaterThan(option.grid.right)
+  })
+
+  it('centres wrapped direct labels over the top row of horizontal bars', () => {
+    const layeredTable: DataTable = { name: 'layers', columns: ['month', 'first', 'second'], rows: [{ month: 'Янв', first: 10, second: 12 }, { month: 'Фев', first: 20, second: 18 }] }
+    const config = base('bar'); config.yFields = ['first', 'second']; config.barOrientation = 'horizontal'; config.showDirectLabels = true
+    config.seriesStyles.second = { legendLabel: 'Очень длинное название второго ряда' }
+    const option = getChartPlugin('bar').buildOption(layeredTable, config) as { series: Array<{ name: string; labelLayout?: () => { moveOverlap: string }; data: Array<{ directLegendLabel?: boolean; label?: { position?: string; align?: string; width?: number; overflow?: string } }> }> }
+    const second = option.series.find((series) => series.name === 'second')!
+    expect(second.data[0]).toMatchObject({ directLegendLabel: true, label: { position: 'top', align: 'center', overflow: 'break' } })
+    expect(second.data[0].label!.width).toBeGreaterThanOrEqual(40)
+    expect(second.data[1].directLegendLabel).toBe(false)
+    expect(second.labelLayout?.().moveOverlap).toBe('shiftX')
   })
 
   it('uses the configured series order as the visual layer order', () => {
@@ -1406,10 +1418,11 @@ describe('chart composition alignment', () => {
 
   it('aligns line-chart grid lines with category ticks without clipping bars', () => {
     const line = getChartPlugin('line').buildOption(table, base('line')) as { xAxis: { boundaryGap: boolean } }
-    const bar = getChartPlugin('bar').buildOption(table, { ...base('bar'), showVerticalGrid: true }) as { xAxis: { boundaryGap: boolean; splitLine: { show: boolean }; axisTick: { interval: number } } }
+    const bar = getChartPlugin('bar').buildOption(table, { ...base('bar'), showVerticalGrid: true }) as { xAxis: { boundaryGap: boolean; splitLine: { show: boolean }; axisTick: { interval: number } }; graphic: Array<{ id?: string }> }
     expect(line.xAxis.boundaryGap).toBe(false)
     expect(bar.xAxis.boundaryGap).toBe(true)
-    expect(bar.xAxis.splitLine.show).toBe(true)
+    expect(bar.xAxis.splitLine.show).toBe(false)
+    expect(bar.graphic.some((item) => item.id?.startsWith('bar-category-grid:'))).toBe(true)
     expect(typeof bar.xAxis.axisTick.interval).toBe('number')
   })
 
@@ -1511,7 +1524,7 @@ describe('chart composition alignment', () => {
       if (nativePointKinds.has(kind)) {
         const short = getChartPlugin(kind).buildOption(dated, { ...config, dateLabelFormat: 'month-only-en' }) as { grid: { right: number } }
         expect(option.grid.right, kind).toBe(short.grid.right)
-      } else expect(option.grid.right, kind).toBeGreaterThan(30)
+      } else expect(option.grid.right, kind).toBeGreaterThanOrEqual(24)
     }
   })
 

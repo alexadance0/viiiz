@@ -7,6 +7,8 @@ import type { Rect } from '../../chart-layout/geometry'
 import { guideReservation } from '../../chart-layout/guides/types'
 import type { LayoutReservation, ResolvedReservation } from '../../chart-layout/reservations'
 import { layoutText, plainTextDocument } from '../../chart-layout/textLayout'
+import { numericTicks } from '../../chart-layout/axisTicks'
+import { sideLegendWidth } from '../../chart-layout/legendLayout'
 import { formatNativeXYDateTick } from './compiler'
 
 const lineHeight = (style: AxisSpec['labels']['style']) => Math.round(style.size * style.lineHeight / 100)
@@ -20,7 +22,7 @@ function measureAxis(scene: NativeXYChartScene, source: AxisSpec, estimatedPlot:
   const config = scene.compatibilityConfig
   const scale = source.channel === 'x' ? scene.plot.xScale : scene.plot.yScale
   const minimum = scale.minimum ?? scale.automaticDomain.minimum, maximum = scale.maximum ?? scale.automaticDomain.maximum
-  const values = minimum <= 0 && maximum >= 0 ? [minimum, 0, maximum] : [minimum, maximum]
+  const values = numericTicks(minimum, maximum, scale.step)
   const labels = values.map((value, index) => source.channel === 'x'
     ? scale.type === 'time' ? formatNativeXYDateTick(new Date(value), scale.timeProfile, scale.dateLabelFormat, index === 0) : formatXAxisNumber(value, config)
     : formatYAxisNumber(value, config))
@@ -48,7 +50,7 @@ export function resolveNativeXYScene(scene: NativeXYChartScene): ResolvedXYScene
       const horizontal = legend.position === 'top' || legend.position === 'bottom'
       let rows = 1, occupied = 0
       if (horizontal) widths.forEach((width) => { if (occupied && occupied + width > initial.content.width) { rows++; occupied = width } else occupied += width })
-      const size = horizontal ? rows * lineHeight(scene.compatibilityConfig.legendText) + (rows - 1) * 7 : Math.min(initial.content.width * .28, Math.max(90, ...widths))
+      const size = horizontal ? rows * lineHeight(scene.compatibilityConfig.legendText) + (rows - 1) * 7 : sideLegendWidth(legend.items.filter((item) => item.visible).map((item) => item.label), scene.compatibilityConfig.legendText, initial.content)
       const reservation = guideReservation(legend, size, scene.document.composition.legendPlot, 20)
       if (reservation) reservations.push(reservation)
     }
@@ -57,13 +59,7 @@ export function resolveNativeXYScene(scene: NativeXYChartScene): ResolvedXYScene
   const xReservation = axisReservation(layoutAxis(xAxis), 50), yReservation = axisReservation(layoutAxis(yAxis), 50)
   if (xReservation) reservations.push(xReservation)
   if (yReservation) reservations.push(yReservation)
-  if (yAxis.labels.visible && yAxis.placement.kind === 'side') reservations.push({ id: 'axis:y-label-safety', side: yAxis.placement.side, size: 2, gap: 0, mode: 'outside', priority: 51 })
   if (yAxis.labels.visible) reservations.push({ id: 'axis:y-edge-top', side: 'top', size: Math.ceil(lineHeight(yAxis.labels.style) / 2), gap: 0, mode: 'outside', priority: 55 })
-  if (xAxis.labels.visible) {
-    const values = [scene.plot.xScale.minimum ?? scene.plot.xScale.automaticDomain.minimum, scene.plot.xScale.maximum ?? scene.plot.xScale.automaticDomain.maximum]
-    const edge = Math.ceil(Math.max(...values.map((value) => measureTextWidth(scene.plot.xScale.type === 'time' ? formatNativeXYDateTick(new Date(value), scene.plot.xScale.timeProfile, scene.plot.xScale.dateLabelFormat, true) : formatXAxisNumber(value, scene.compatibilityConfig), xAxis.labels.style.size, xAxis.labels.style.fontFamily, xAxis.labels.style.weight))) / 2) + 10
-    reservations.push({ id: 'axis:x-edge-left', side: 'left', size: edge, gap: 0, mode: 'outside', priority: 55 }, { id: 'axis:x-edge-right', side: 'right', size: edge, gap: 0, mode: 'outside', priority: 55 })
-  }
   const frame = resolveFrame({ canvas: scene.document.canvas, spacing: scene.document.composition, reservations })
   const reservationGeometry = Object.fromEntries(frame.resolvedReservations.map(({ reservation, bounds }) => [reservation.id, bounds]))
   const axes = {

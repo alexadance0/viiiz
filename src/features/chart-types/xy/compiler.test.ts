@@ -52,6 +52,21 @@ describe('native XY compiler', () => {
     expect(guide.y).toBeGreaterThanOrEqual(resolved.geometry.plot.y)
   })
 
+  it.each(['scatter', 'bubble'] as const)('anchors %s Y labels to the common edge without narrowing the plot for X labels', (kind) => {
+    const left = resolveNativeXYScene(compileNativeXYScene(table, config(kind, { scatterSizeField: kind === 'bubble' ? 'size' : '', yAxisPosition: 'left' })))
+    const leftRail = left.geometry.reservations['axis:y']
+    expect(left.geometry.reservations['axis:x-edge-left']).toBeUndefined()
+    expect(left.geometry.reservations['axis:x-edge-right']).toBeUndefined()
+    expect(left.geometry.plot.x).toBe(left.geometry.content.x + leftRail.width)
+    expect(leftRail.width).toBe(left.plot.yAxis.labels.size + left.plot.yAxis.labels.gap)
+    expect(left.geometry.plot.x + left.geometry.plot.width).toBe(left.geometry.content.x + left.geometry.content.width)
+
+    const right = resolveNativeXYScene(compileNativeXYScene(table, config(kind, { scatterSizeField: kind === 'bubble' ? 'size' : '', yAxisPosition: 'right' })))
+    const rightRail = right.geometry.reservations['axis:y']
+    expect(right.geometry.plot.x).toBe(right.geometry.content.x)
+    expect(right.geometry.plot.x + right.geometry.plot.width + rightRail.width).toBe(right.geometry.content.x + right.geometry.content.width)
+  })
+
   it('centralizes label and bubble-field inference and preserves validation messages', () => {
     expect(inferScatterLabelField(table, 'x', ['y'], 'size', 'group')).toBe('label')
     expect(inferBubbleSizeField(table, 'x', ['y'], 'size')).toBe('size')

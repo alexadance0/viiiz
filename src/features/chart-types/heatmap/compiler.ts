@@ -3,7 +3,7 @@ import { planCategoryDateLabels } from '../../../core/chartDateAxis'
 import { formatChartNumber, formatYAxisNumber } from '../../../core/numberFormat'
 import type { ChartConfig, DataTable } from '../../../core/types'
 import { chartDocumentFromLegacy } from '../../../entities/chart/model/legacyChartConfigAdapter'
-import type { ChartElement } from '../../../entities/chart/model/ChartElement'
+import { aggregateDatumId, type ChartElement } from '../../../entities/chart/model/ChartElement'
 import type { HeatmapCellScene, NativeHeatmapChartScene } from '../../../entities/chart/model/ChartScene'
 import type { GuideSpec } from '../../chart-layout/guides/types'
 import { compileNativeBarScene } from '../bar/compiler'
@@ -52,7 +52,8 @@ export function compileNativeHeatmapScene(table: DataTable, sourceConfig: ChartC
     : mixHexColors(low, high, (value - domain.min) / (domain.max - domain.min))
   const rows = ordered.map(({ series }, rowIndex) => ({
     id: series.id,
-    name: series.name,
+    sourceKey: series.name,
+    name: sourceConfig.categoryLabelOverrides?.y?.[series.name] ?? series.name,
     cells: series.marks.map((mark, columnIndex): HeatmapCellScene => {
       const fill = mark.value == null ? missingColor : color(mark.value)
       return { id: mark.id, datumId: mark.datumId, seriesId: mark.seriesId, legacyKey: mark.legacyKey, rowIndex, columnIndex, value: mark.value, displayCategory: `${categories[columnIndex]?.label ?? ''} · ${series.name}`, displayValue: mark.value == null ? missingLabel : formatChartNumber(mark.value, sourceConfig), color: sourceConfig.elementStyles[mark.legacyKey]?.color ?? fill, label: { visible: sourceConfig.elementStyles[mark.legacyKey]?.showLabel ?? sourceConfig.showValues, text: sourceConfig.elementStyles[mark.legacyKey]?.label || (mark.value == null ? missingLabel : formatChartNumber(mark.value, sourceConfig)), style: sourceConfig.elementStyles[mark.legacyKey]?.valueText ?? sourceConfig.valueText, color: sourceConfig.valueLabelAutoContrast ?? true ? contrastText(sourceConfig.elementStyles[mark.legacyKey]?.color ?? fill) : sourceConfig.valueText.color } }
@@ -66,6 +67,7 @@ export function compileNativeHeatmapScene(table: DataTable, sourceConfig: ChartC
   const elements: ChartElement[] = [
     ...rows.flatMap((row) => row.cells.map((cell): ChartElement => ({ id: cell.id, role: 'mark', coordinateSpace: 'data', selectable: true, seriesId: cell.seriesId, datumId: cell.datumId, legacyKey: cell.legacyKey }))),
     ...categories.map((category): ChartElement => ({ id: `category-label:${category.id}`, role: 'category-label', coordinateSpace: 'canvas', selectable: true, axisId: 'category', datumId: category.id, text: category.label })),
+    ...rows.map((row): ChartElement => ({ id: `row-label:${row.id}`, role: 'category-label', coordinateSpace: 'canvas', selectable: true, axisId: 'row', datumId: aggregateDatumId(row.id, 'row-label'), text: row.name })),
   ]
   return { document: chartDocumentFromLegacy(table, sourceConfig), compatibilityConfig: sourceConfig, frameElements: base.frameElements, elements, guides, plot: { kind: 'heatmap', categories, rows, categoryAxis: base.plot.categoryAxis, rowAxis, colorDomain: domain, cellGap: sourceConfig.heatmapCellGap ?? 1 } }
 }

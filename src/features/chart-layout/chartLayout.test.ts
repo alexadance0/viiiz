@@ -8,6 +8,7 @@ import { compositionSpacing } from './spacing'
 import { createDefaultChartConfig } from '../../entities/chart/model/defaultChartConfig'
 import { chartDocumentFromLegacy } from '../../entities/chart/model/legacyChartConfigAdapter'
 import { getChartPlugin } from '../../core/chartRegistry'
+import { numericTicks } from './axisTicks'
 
 describe('frame layout contracts', () => {
   it('applies visible outside reservations once and keeps plot inside canvas', () => {
@@ -53,6 +54,10 @@ describe('axis layout contracts', () => {
   it('maps semantic channels to physical axes by orientation', () => {
     expect(resolveLogicalAxes('vertical', 'bottom', 'left')).toMatchObject({ category: { orientation: 'horizontal' }, value: { orientation: 'vertical' } })
     expect(resolveLogicalAxes('horizontal', 'left', 'bottom')).toMatchObject({ category: { orientation: 'vertical' }, value: { orientation: 'horizontal' } })
+  })
+
+  it('enumerates intermediate numeric ticks used by the renderer', () => {
+    expect(numericTicks(-200_000, 200_000, 100_000)).toEqual([-200_000, -100_000, 0, 100_000, 200_000])
   })
 })
 
