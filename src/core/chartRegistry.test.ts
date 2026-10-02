@@ -15,7 +15,7 @@ const base = (kind: ChartConfig['kind']): ChartConfig => ({
   kind, xField: 'month', yField: 'value', yFields: ['value'], seriesField: '', aggregation: 'none', valueMode: 'absolute', missingMode: 'gap',
   title: '', subtitle: '', note: '', source: '', titleText: style(20), subtitleText: style(14), axisTitleText: style(12), axisLabelText: style(11), legendText: style(11), valueText: style(11), noteText: style(10), sourceText: style(9),
   xAxisTitle: 'month', yAxisTitle: 'value', xAxisTitleGap: 10, yAxisTitleGap: 10, xAxisPosition: 'bottom', yAxisPosition: 'left', showXAxisTitle: true, showYAxisTitle: true, showXAxisLine: true, showYAxisLine: true, axisLineColor: '#555', axisLineWidth: 1, axisLineType: 'solid', showXTicks: true, showYTicks: true, tickLength: 5,
-  showValues: false, elementStyles: {}, seriesStyles: {}, annotations: [], color: '#6956e8', showLegend: false, showHorizontalGrid: true, showVerticalGrid: false, gridColor: '#dddddd', gridWidth: 1, gridType: 'solid',
+  showValues: false, elementStyles: {}, seriesStyles: {}, annotations: [], color: '#1677a6', showLegend: false, showHorizontalGrid: true, showVerticalGrid: false, gridColor: '#dddddd', gridWidth: 1, gridType: 'solid',
 })
 
 describe('waterfall chart', () => {
@@ -48,9 +48,9 @@ describe('waterfall chart', () => {
     expect(option.series[0].data.map((item) => item.displayValue)).toEqual(['100', '-30', '20', '90'])
     expect(waterfallElementColor(data, { ...base('waterfall'), xField: 'factor', yField: 'change', yFields: ['change'] }, 'change\u001fstring:Выручка')).toBe('#36a476')
     expect(waterfallElementColor(data, { ...base('waterfall'), xField: 'factor', yField: 'change', yFields: ['change'] }, 'change\u001fstring:Расходы')).toBe('#db5a5a')
-    expect(waterfallElementColor(data, { ...base('waterfall'), xField: 'factor', yField: 'change', yFields: ['change'] }, 'change\u001fstring:Итого')).toBe('#6956e8')
-    expect(chartElementColor(data, { ...base('waterfall'), xField: 'factor', yField: 'change', yFields: ['change'] }, 'change\u001fstring:Итого')).toBe('#6956e8')
-    expect(chartValueLabelSelections(data, { ...base('waterfall'), xField: 'factor', yField: 'change', yFields: ['change'] }).find((item) => item.category === 'Итого')?.color).toBe('#6956e8')
+    expect(waterfallElementColor(data, { ...base('waterfall'), xField: 'factor', yField: 'change', yFields: ['change'] }, 'change\u001fstring:Итого')).toBe('#1677a6')
+    expect(chartElementColor(data, { ...base('waterfall'), xField: 'factor', yField: 'change', yFields: ['change'] }, 'change\u001fstring:Итого')).toBe('#1677a6')
+    expect(chartValueLabelSelections(data, { ...base('waterfall'), xField: 'factor', yField: 'change', yFields: ['change'] }).find((item) => item.category === 'Итого')?.color).toBe('#1677a6')
     expect(option.yAxis.min).toBeLessThanOrEqual(0)
     expect(option.yAxis.max).toBeGreaterThanOrEqual(100)
   })
@@ -592,7 +592,7 @@ describe('individual chart element styles', () => {
     const option = getChartPlugin('line').buildOption(table, config) as { legend: { itemWidth: number; itemHeight: number; textStyle: { fontSize: number }; data: Array<{ icon: string; itemStyle: { color: string } }> }; xAxis: { axisLabel: { fontSize: number } }; series: Array<{ lineStyle?: { width: number } }> }
     expect(option.xAxis.axisLabel.fontSize).toBe(27)
     expect(option.legend).toMatchObject({ itemWidth: 24, itemHeight: 10, textStyle: { fontSize: 23 } })
-    expect(option.legend.data[0]).toMatchObject({ icon: 'path://M0 4H24V7H0Z', itemStyle: { color: '#6956e8' } })
+    expect(option.legend.data[0]).toMatchObject({ icon: 'path://M0 4H24V7H0Z', itemStyle: { color: '#1677a6' } })
     expect(option.series[0].lineStyle?.width).toBe(3)
   })
 
@@ -1053,12 +1053,12 @@ describe('individual chart element styles', () => {
   it('supports per-series direct-label visibility and typography', () => {
     const layeredTable: DataTable = { name: 'layers', columns: ['month', 'first', 'second'], rows: [{ month: 'Янв', first: 10, second: 12 }, { month: 'Фев', first: 20, second: 18 }] }
     const config = base('bar'); config.yFields = ['first', 'second']; config.showDirectLabels = true; config.yAxisPosition = 'right'
-    config.seriesStyles = { first: { showDirectLabel: false }, second: { directLabelText: { ...style(23), color: '#6956e8', weight: 700 } } }
+    config.seriesStyles = { first: { showDirectLabel: false }, second: { directLabelText: { ...style(23), color: '#1677a6', weight: 700 } } }
     const option = getChartPlugin('bar').buildOption(layeredTable, config) as { grid: { left: number; right: number }; series: Array<{ name: string; endLabel?: unknown; data: Array<{ directLegendLabel?: boolean; label?: { color?: string; fontSize?: number; fontWeight?: number } }> }> }
     const first = option.series.find((series) => series.name === 'first')!, second = option.series.find((series) => series.name === 'second')!
     expect(first.endLabel).toBeUndefined()
     expect(first.data.some((point) => point.directLegendLabel)).toBe(false)
-    expect(second.data[1]).toMatchObject({ directLegendLabel: true, label: { color: '#6956e8', fontSize: 23, fontWeight: 700 } })
+    expect(second.data[1]).toMatchObject({ directLegendLabel: true, label: { color: '#1677a6', fontSize: 23, fontWeight: 700 } })
     expect(option.grid.left).toBeGreaterThan(option.grid.right)
   })
 
@@ -1230,7 +1230,7 @@ describe('chart composition alignment', () => {
     expect(points.map((series) => series.name)).toEqual(['А', 'Б'])
     expect(points.flatMap((series) => series.data).map((point) => point.displayLabel)).toEqual(['Альфа', 'Бета'])
     expect(points[1].data[0].bubbleSize).toBeGreaterThan(points[0].data[0].bubbleSize)
-    expect(option.legend.data).toEqual([{ name: 'А', icon: 'circle', itemStyle: { color: '#6956e8' } }, { name: 'Б', icon: 'circle', itemStyle: { color: '#168a72' } }])
+    expect(option.legend.data).toEqual([{ name: 'А', icon: 'circle', itemStyle: { color: '#1677a6' } }, { name: 'Б', icon: 'circle', itemStyle: { color: '#168a72' } }])
   })
 
   it('applies a complete label override to one scatter point', () => {
@@ -1285,7 +1285,7 @@ describe('chart composition alignment', () => {
     if (scene.plot.kind !== 'xy') throw new Error('Expected native XY scene')
     const first = scene.plot.series.find((series) => series.name === 'А')!, second = scene.plot.series.find((series) => series.name === 'Б')!
     const trends = scene.plot.analyticalLayers.filter((layer) => layer.kind === 'trend')
-    expect(trends.find((trend) => trend.sourceSeriesId === first.id)?.stroke.color).toBe('#6956e8')
+    expect(trends.find((trend) => trend.sourceSeriesId === first.id)?.stroke.color).toBe('#1677a6')
     expect(trends.some((trend) => trend.sourceSeriesId === second.id)).toBe(false)
     expect(trends[0].confidenceBand).toBeTruthy()
   })
@@ -1322,7 +1322,7 @@ describe('chart composition alignment', () => {
       tooltip: { formatter(params: unknown): string }
       series: Array<{ type: string; data: Array<{ value: number[]; bubbleValue?: number }> }>
     }
-    expect(option.legend.data).toEqual([{ name: 'А', icon: 'triangle', itemStyle: { color: '#6956e8' } }])
+    expect(option.legend.data).toEqual([{ name: 'А', icon: 'triangle', itemStyle: { color: '#1677a6' } }])
     const point = option.series.find((series) => series.type === 'scatter')!.data[0]
     expect(option.tooltip.formatter({ seriesName: 'А', value: point.value, data: point })).toContain('population: <b>100</b>')
   })
@@ -1710,7 +1710,7 @@ describe('chart composition alignment', () => {
     expect(chartRegistry.map((plugin) => plugin.id)).toEqual([
       'bar', 'stacked-bar', 'normalized-stacked-bar', 'waterfall', 'horizontal-bar', 'butterfly', 'horizontal-stacked-bar', 'horizontal-normalized-stacked-bar', 'lollipop', 'horizontal-lollipop', 'dumbbell',
       'line', 'spline', 'step-line', 'indexed-line', 'seasonal-line', 'slope', 'moving-average-line', 'moving-average-scatter', 'range-line', 'step-range-line', 'confidence-line',
-      'area', 'stacked-area', 'normalized-stacked-area', 'scatter', 'bubble', 'boxplot', 'violinplot', 'raincloud', 'histogram', 'kde-plot', 'ridgeline', 'beeswarm', 'strip-plot', 'jitter-plot', 'counts-plot', 'barcode-plot', 'heatmap', 'treemap',
+      'area', 'stacked-area', 'normalized-stacked-area', 'scatter', 'bubble', 'boxplot', 'violinplot', 'raincloud', 'histogram', 'kde-plot', 'ridgeline', 'beeswarm', 'strip-plot', 'jitter-plot', 'counts-plot', 'barcode-plot', 'heatmap', 'pie', 'donut', 'treemap',
     ])
     const first = new Date(2024, 0, 1), second = new Date(2025, 0, 1)
     const universalTable: DataTable = { name: 'all-native', columns: ['x', 'value', 'other', 'size', 'sub'], rows: [

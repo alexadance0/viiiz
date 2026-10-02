@@ -110,6 +110,25 @@ describe('native Heatmap compiler, layout, and renderer', () => {
     expect(scaleRail.y + scaleRail.height + resolved.document.composition.plotFooter).toBeLessThanOrEqual(footer.y)
   })
 
+  it('does not inherit horizontal bar geometry from Butterfly', () => {
+    const scene = compileNativeHeatmapScene(table, config({ barOrientation: 'horizontal', categoryAxisInverse: true }))
+    const resolved = resolveNativeHeatmapScene(scene)
+    const option = renderHeatmapScene(resolved) as { xAxis: { type: string; data: string[] }; yAxis: { type: string; data: string[] } }
+    expect(scene.plot.categoryAxis.orientation).toBe('horizontal')
+    expect(resolved.plot.categoryAxis.orientation).toBe('horizontal')
+    expect(option.xAxis).toMatchObject({ type: 'category', data: scene.plot.categories.map((category) => category.coordinate) })
+    expect(option.yAxis).toMatchObject({ type: 'category', data: scene.plot.rows.map((row) => row.name) })
+  })
+
+  it('renders the same automatic rotation that it reserves for long horizontal labels', () => {
+    const countries: DataTable = { name: 'countries', columns: ['country', 'gdp'], rows: ['США', 'Китай', 'Германия', 'Япония', 'Индия', 'Великобритания', 'Франция', 'Италия', 'Канада', 'Бразилия'].map((country, index) => ({ country, gdp: 30 - index })) }
+    const source = config({ xField: 'country', yField: 'gdp', yFields: ['gdp'], xAxisLabelRotate: 'auto' })
+    const resolved = resolveNativeHeatmapScene(compileNativeHeatmapScene(countries, source))
+    const option = renderHeatmapScene(resolved) as { xAxis: { axisLabel: { rotate: number } } }
+    expect(resolved.plot.categoryAxis.labels.rotation).toBe(90)
+    expect(option.xAxis.axisLabel.rotate).toBe(90)
+  })
+
   it('measures formatted scale labels, clips cell text, and exposes editable row labels', () => {
     const source = config({ numberPrefix: 'Очень длинный префикс ', heatmapScalePosition: 'right', categoryLabelOverrides: { y: { north: 'Северный регион' } } })
     const resolved = resolveNativeHeatmapScene(compileNativeHeatmapScene(table, source))

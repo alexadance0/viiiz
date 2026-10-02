@@ -38,7 +38,7 @@ describe('native comparison/stem compiler', () => {
     expect(scene.plot.categories.map((category) => category.label)).toEqual(['C', 'A', 'B'])
     expect(scene.plot.series.map((series) => [series.name, series.role, series.points.length])).toEqual([['before', 'start', 3], ['after', 'end', 3]])
     expect(scene.plot.connectors[0]).toMatchObject({ endpointIds: expect.arrayContaining([scene.plot.series[0].points[0].id, scene.plot.series[1].points[0].id]), change: { visible: true, label: '+113%' } })
-    const edited = plugin.compile(table, { ...source, dumbbellSort: 'start', dumbbellSortDirection: 'asc', seriesStyles: { ...source.seriesStyles, before: { color: '#6956e8' } } })
+    const edited = plugin.compile(table, { ...source, dumbbellSort: 'start', dumbbellSortDirection: 'asc', seriesStyles: { ...source.seriesStyles, before: { color: '#1677a6' } } })
     if (edited.plot.kind !== 'comparison-stem') throw new Error('Expected native comparison/stem scene')
     expect(new Set(edited.plot.series.flatMap((series) => series.points.map((point) => point.id)))).toEqual(new Set(scene.plot.series.flatMap((series) => series.points.map((point) => point.id))))
   })

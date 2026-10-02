@@ -1,9 +1,31 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { detachDecorationText } from './components/decorationGeometry'
+import { AnnotationSettings, type AnnotationTool, type AnnotationPlacement } from './components/AnnotationSettings'
+import { isPieChart } from './core/chartKinds'
+import { PieSettings } from './components/PieSettings'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction, type Ref } from 'react'
 import './App.css'
 import './components/SeriesOrder.css'
 import type { ChartCanvasHandle, ChartSettingsSection } from './components/ChartCanvas'
 import { NumberInput } from './components/NumberInput'
+import { DataReview } from './components/DataReview'
 import { StyleTransferActions } from './components/StyleTransferActions'
+import { MarkerSettings } from './components/MarkerSettings'
+import { SettingsCategoryTabs, type SettingsCategory } from './components/SettingsCategoryTabs'
+import { SettingsCheckbox } from './components/SettingsCheckbox'
+import { BarSelectionControls } from './components/BarSelectionControls'
+import { ValueLabelSelectionControls } from './components/ValueLabelSelectionControls'
+import { TextStyleEditor } from './components/TextStyleEditor'
+import { ColorControl } from './components/PickerControls'
+import { ChartSettingsPanel } from './components/ChartSettingsPanel'
+import { CanvasSettings } from './components/CanvasSettings'
+import { NumberFormatSettings } from './components/NumberFormatSettings'
+import { ScatterSettings } from './components/ScatterSettings'
+import { BubbleSizeLegendSettings } from './components/BubbleSizeLegendSettings'
+import { HeatmapSettings } from './components/HeatmapSettings'
+import { TreemapSettings } from './components/TreemapSettings'
+import { LollipopSettings } from './components/LollipopSettings'
+import { DistributionSettings } from './components/DistributionSettings'
+import { LineVariantSettings } from './components/LineVariantSettings'
 import { prepareChartData } from './core/chartData'
 import { slopePositionKey } from './core/chartScale'
 import { convertColumn, editCell, inferTypes, profileData, renameColumn } from './core/dataProfile'
@@ -16,39 +38,25 @@ import { createDefaultChartConfig } from './entities/chart/model/defaultChartCon
 import { useEditorHistory } from './features/editor/model/useEditorHistory'
 import { EditorHeader } from './features/editor/ui/EditorHeader'
 import { EditorStepper, type EditorStep } from './features/editor/ui/EditorStepper'
+import { MultiplesControls } from './features/editor/ui/MultiplesControls'
+import { MultiplesCanvas } from './features/editor/ui/MultiplesCanvas'
+import { createPanelConfig, resizeMultiples, type Multiples } from './features/editor/model/multiples'
+import { createRespondentGroupsDemoConfig, respondentGroupsDemoTable } from './features/editor/model/respondentGroupsDemo'
+import { ChartTypePicker } from './features/editor/ui/ChartTypePicker'
 import { inferBubbleSizeField } from './features/chart-types/xy/inference'
-import { CircleX, FileUp, History, Minus, Plus, RotateCcw, RotateCw, Sheet, ShieldCheck, SlidersHorizontal } from 'lucide-react'
+import { CircleAlert, CircleX, FileUp, History, Minus, Plus, RotateCcw, RotateCw, Sheet, SlidersHorizontal } from 'lucide-react'
 
 const loadChartCanvas = () => import('./components/ChartCanvas')
-const loadChartTypePicker = () => import('./features/editor/ui/ChartTypePicker')
+const loadChartRegistry = () => import('./core/chartRegistry')
 const preloadChartEditor = () => Promise.all([
   loadChartCanvas(),
-  loadChartTypePicker(),
+  loadChartRegistry(),
   import('./components/echarts/loadEchartsForKind').then(({ preloadAllEcharts }) => preloadAllEcharts()),
 ])
 const ChartCanvas = lazy(() => loadChartCanvas().then(({ ChartCanvas }) => ({ default: ChartCanvas })))
-const DataReview = lazy(() => import('./components/DataReview').then(({ DataReview }) => ({ default: DataReview })))
-const ChartTypePicker = lazy(() => loadChartTypePicker().then(({ ChartTypePicker }) => ({ default: ChartTypePicker })))
 const DateFormatDialog = lazy(() => import('./components/DateFormatDialog').then(({ DateFormatDialog }) => ({ default: DateFormatDialog })))
 const DataTransformDialog = lazy(() => import('./components/DataTransformDialog').then(({ DataTransformDialog }) => ({ default: DataTransformDialog })))
 const ExcelSheetDialog = lazy(() => import('./components/ExcelSheetDialog').then(({ ExcelSheetDialog }) => ({ default: ExcelSheetDialog })))
-const MarkerSettings = lazy(() => import('./components/MarkerSettings').then(({ MarkerSettings }) => ({ default: MarkerSettings })))
-const SettingsQuickNav = lazy(() => import('./components/SettingsQuickNav').then(({ SettingsQuickNav }) => ({ default: SettingsQuickNav })))
-const SettingsCheckbox = lazy(() => import('./components/SettingsCheckbox').then(({ SettingsCheckbox }) => ({ default: SettingsCheckbox })))
-const BarSelectionControls = lazy(() => import('./components/BarSelectionControls').then(({ BarSelectionControls }) => ({ default: BarSelectionControls })))
-const ValueLabelSelectionControls = lazy(() => import('./components/ValueLabelSelectionControls').then(({ ValueLabelSelectionControls }) => ({ default: ValueLabelSelectionControls })))
-const TextStyleEditor = lazy(() => import('./components/TextStyleEditor').then(({ TextStyleEditor }) => ({ default: TextStyleEditor })))
-const ColorControl = lazy(() => import('./components/PickerControls').then(({ ColorControl }) => ({ default: ColorControl })))
-const ChartSettingsPanel = lazy(() => import('./components/ChartSettingsPanel').then(({ ChartSettingsPanel }) => ({ default: ChartSettingsPanel })))
-const CanvasSettings = lazy(() => import('./components/CanvasSettings').then(({ CanvasSettings }) => ({ default: CanvasSettings })))
-const NumberFormatSettings = lazy(() => import('./components/NumberFormatSettings').then(({ NumberFormatSettings }) => ({ default: NumberFormatSettings })))
-const ScatterSettings = lazy(() => import('./components/ScatterSettings').then(({ ScatterSettings }) => ({ default: ScatterSettings })))
-const BubbleSizeLegendSettings = lazy(() => import('./components/BubbleSizeLegendSettings').then(({ BubbleSizeLegendSettings }) => ({ default: BubbleSizeLegendSettings })))
-const HeatmapSettings = lazy(() => import('./components/HeatmapSettings').then(({ HeatmapSettings }) => ({ default: HeatmapSettings })))
-const TreemapSettings = lazy(() => import('./components/TreemapSettings').then(({ TreemapSettings }) => ({ default: TreemapSettings })))
-const LollipopSettings = lazy(() => import('./components/LollipopSettings').then(({ LollipopSettings }) => ({ default: LollipopSettings })))
-const DistributionSettings = lazy(() => import('./components/DistributionSettings').then(({ DistributionSettings }) => ({ default: DistributionSettings })))
-const LineVariantSettings = lazy(() => import('./components/LineVariantSettings').then(({ LineVariantSettings }) => ({ default: LineVariantSettings })))
 
 interface HistorySnapshot { table: DataTable; types: Record<string, ColumnType>; config: ChartConfig; label: string; time: number }
 type CopiedStyle = { kind: 'series'; style: ChartConfig['seriesStyles'][string] } | { kind: 'element'; style: ChartConfig['elementStyles'][string] }
@@ -105,7 +113,20 @@ function App() {
   const [hasData, setHasData] = useState(false)
   const [table, setTable] = useState<DataTable>(demoTable)
   const [types, setTypes] = useState<Record<string, ColumnType>>(inferTypes(demoTable))
-  const [config, setConfig] = useState(createDefaultChartConfig)
+  const [documentConfig, setDocumentConfig] = useState(createDefaultChartConfig)
+  const [wantsMultiples, setMultiplesMode] = useState(false)
+  const multiplesMode = wantsMultiples && !!documentConfig.multiples
+  const [selectedPanel, setSelectedPanel] = useState<number | null>(null)
+  const lastSelectedPanel = useRef<number | null>(null)
+  const activePanel = multiplesMode && (step === 'chart' || step === 'design') && selectedPanel !== null ? documentConfig.multiples?.panels[selectedPanel] : null
+  const config = activePanel?.config ?? documentConfig
+  const editingPanelIndex = activePanel ? selectedPanel : null
+  const setConfig: Dispatch<SetStateAction<ChartConfig>> = useCallback((action) => setDocumentConfig((current) => {
+    const panel = editingPanelIndex !== null ? current.multiples?.panels[editingPanelIndex] : null
+    if (!panel || editingPanelIndex === null || !current.multiples) return typeof action === 'function' ? action(current) : action
+    const next = typeof action === 'function' ? action(panel.config) : action
+    return { ...current, multiples: { ...current.multiples, panels: current.multiples.panels.map((item, index) => index === editingPanelIndex ? { ...panel, config: next } : item) } }
+  }), [editingPanelIndex])
   const [sheetUrl, setSheetUrl] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -116,34 +137,62 @@ function App() {
   const [selectedElement, setSelectedElement] = useState<ChartElementSelection | null>(null)
   const [selectedSeries, setSelectedSeries] = useState<ChartSeriesSelection | null>(null)
   const [selectedAnnotation, setSelectedAnnotation] = useState<string | null>(null)
+  const [decorationLayouts, setDecorationLayouts] = useState<ChartDecoration[]>([])
+  const updateDecorationLayouts = useCallback((layouts: ChartDecoration[]) => setDecorationLayouts((current) => JSON.stringify(current) === JSON.stringify(layouts) ? current : layouts), [])
+  const [pickingDecorationEndpoint, setPickingDecorationEndpoint] = useState<'start' | 'end'>('end')
+  const [pickingDecorationAnchor, setPickingDecorationAnchor] = useState<'text' | 'data' | null>(null)
+  const [annotationTool, setAnnotationTool] = useState<AnnotationTool | null>(null)
+  const [panelCanvasSize, setPanelCanvasSize] = useState({ width: 1000, height: 563 })
+  const updatePanelCanvasSize = useCallback((width: number, height: number) => setPanelCanvasSize((current) => current.width === width && current.height === height ? current : { width, height }), [])
+  const annotationCanvasWidth = activePanel ? panelCanvasSize.width : Math.min(1000, config.canvasWidth ?? 1000)
+  const annotationCanvasHeight = activePanel ? panelCanvasSize.height : Math.min(1000, config.canvasHeight ?? 563)
   const [selectedDecoration, setSelectedDecoration] = useState<string | null>(null)
   const [selectedSettingsSection, setSelectedSettingsSection] = useState<ChartSettingsSection | null>(null)
+  const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>('chart')
+  useEffect(() => { if (settingsCategory !== 'annotations' || step !== 'design') { setAnnotationTool(null); setPickingDecorationAnchor(null) } }, [settingsCategory, step])
+  useEffect(() => {
+    const decoration = config.decorations?.find((item) => item.id === selectedDecoration)
+    if (pickingDecorationAnchor && (!decoration || decoration.hidden || decoration.locked || pickingDecorationAnchor === 'text' && !config.annotations.some((item) => !item.hidden))) setPickingDecorationAnchor(null)
+  }, [config.annotations, config.decorations, selectedDecoration, pickingDecorationAnchor])
   const [copiedStyle, setCopiedStyle] = useState<CopiedStyle | null>(null)
   const [canvasZoom, setCanvasZoom] = useState(1)
+  const [showCanvasHint, setShowCanvasHint] = useState(() => {
+    try { return window.localStorage.getItem('viiiz-canvas-hint-seen') !== '1' } catch { return true }
+  })
   const [chartModule, setChartModule] = useState<typeof import('./core/chartRegistry') | null>(null)
   const dataHistory = useEditorHistory<HistorySnapshot>(20)
   const designHistory = useEditorHistory<ChartConfig>(100)
   const { past, future } = dataHistory
   const { past: designPast, future: designFuture } = designHistory
   const { push: pushDesignHistory, discardFuture: discardDesignFuture } = designHistory
-  const previousDesignConfig = useRef(config)
+  const previousDesignConfig = useRef(documentConfig)
   const skipDesignHistory = useRef(false)
   const lastDesignCommit = useRef(0)
   const lastDesignChange = useRef('')
   const processingController = useRef<AbortController | null>(null)
   const importSequence = useRef(0)
   const chartRef = useRef<ChartCanvasHandle>(null)
+  const multiplesRef = useRef<ChartCanvasHandle>(null)
   const issues = useMemo(() => profileData(table, types), [table, types])
   const numericColumns = useMemo(() => table.columns.filter((column) => types[column] === 'number'), [table.columns, types])
   const chartSeries = useMemo(() => {
     if (step !== 'chart' && step !== 'design') return []
+    if (isPieChart(config.kind)) {
+      const plugin = chartModule?.getChartPlugin(config.kind)
+      if (!plugin?.validate(table, config).ok) return []
+      const plot = plugin.compile(table, config).plot
+      return plot.kind === 'pie' ? plot.slices.map((slice) => ({ name: slice.name, data: [slice.value] })) : []
+    }
     const series = prepareChartData(table, config).series
     if (!config.seriesOrder?.length) return series
     const positions = new Map(config.seriesOrder.map((name, index) => [name, index]))
     return [...series].sort((left, right) => (positions.get(left.name) ?? Number.MAX_SAFE_INTEGER) - (positions.get(right.name) ?? Number.MAX_SAFE_INTEGER))
-  }, [step, table, config])
+  }, [step, table, config, chartModule])
   const chartPlugin = useMemo(() => chartModule?.getChartPlugin(config.kind) ?? null, [chartModule, config.kind])
   const valueLabels = useMemo(() => step === 'chart' || step === 'design' ? chartModule?.chartValueLabelSelections(table, config) ?? [] : [], [step, chartModule, table, config])
+  useEffect(() => { if ((config.kind === 'treemap' || isPieChart(config.kind)) && settingsCategory === 'axes') setSettingsCategory('chart') }, [config.kind, settingsCategory])
+  useEffect(() => { if (selectedSeries || selectedElement) setSettingsCategory('chart') }, [selectedElement, selectedSeries])
+  useEffect(() => { if (selectedAnnotation || selectedDecoration) setSettingsCategory('annotations') }, [selectedAnnotation, selectedDecoration])
   const moveTreemapElement = (source: ChartElementSelection, target: ChartElementSelection, placement: 'before' | 'after') => {
     setConfig((current) => {
       if (source.key.startsWith('treemap-group:')) {
@@ -157,13 +206,18 @@ function App() {
 
   useEffect(() => {
     if (chartModule || step !== 'chart' && step !== 'design') return
-    void import('./core/chartRegistry').then((module) => setChartModule(module))
+    void loadChartRegistry().then((module) => setChartModule(module))
   }, [chartModule, step])
 
   useEffect(() => {
     if (step !== 'data') return
-    const timer = window.setTimeout(() => { void preloadChartEditor() }, 150)
-    return () => window.clearTimeout(timer)
+    let active = true
+    const timer = window.setTimeout(() => {
+      void preloadChartEditor().then(([, module]) => {
+        if (active) setChartModule((current) => current ?? module)
+      })
+    }, 150)
+    return () => { active = false; window.clearTimeout(timer) }
   }, [step])
 
   useEffect(() => {
@@ -178,38 +232,65 @@ function App() {
       chartSeries.forEach(({ name }) => { if (seriesStyles[name]?.lineWidth == null) { seriesStyles[name] = { ...seriesStyles[name], lineWidth: 3 }; changed = true } })
       return changed ? { ...current, seriesStyles } : current
     })
-  }, [chartSeries, config.kind])
+  }, [chartSeries, config.kind, setConfig])
 
   useEffect(() => () => processingController.current?.abort(), [])
 
   useEffect(() => { const update = (event: Event) => setCanvasZoom((event as CustomEvent<number>).detail); window.addEventListener('canvas-view-zoom', update); return () => window.removeEventListener('canvas-view-zoom', update) }, [])
 
   useEffect(() => {
-    if (skipDesignHistory.current) { skipDesignHistory.current = false; previousDesignConfig.current = config; return }
-    if (step !== 'chart' && step !== 'design') { previousDesignConfig.current = config; return }
+    if (skipDesignHistory.current) { skipDesignHistory.current = false; previousDesignConfig.current = documentConfig; return }
+    if (step !== 'chart' && step !== 'design') { previousDesignConfig.current = documentConfig; return }
     const previous = previousDesignConfig.current
-    if (previous === config) return
+    if (previous === documentConfig) return
     const now = Date.now()
-    const change = designChangeKey(previous, config)
+    const change = designChangeKey(previous, documentConfig) + (documentConfig.multiples !== previous.multiples ? `:${selectedPanel}:${JSON.stringify([documentConfig.multiples?.columns, documentConfig.multiples?.rows, documentConfig.multiples?.gap, documentConfig.multiples?.panels.map((panel) => panel?.id)])}:${activePanel && selectedPanel !== null && previous.multiples?.panels[selectedPanel] ? designChangeKey(previous.multiples.panels[selectedPanel]!.config, activePanel.config) : ''}` : '')
     if (change !== lastDesignChange.current || now - lastDesignCommit.current > 350) pushDesignHistory(structuredClone(previous))
     else discardDesignFuture()
     lastDesignCommit.current = now
     lastDesignChange.current = change
-    previousDesignConfig.current = config
-  }, [config, discardDesignFuture, pushDesignHistory, step])
+    previousDesignConfig.current = documentConfig
+  }, [documentConfig, discardDesignFuture, pushDesignHistory, step, selectedPanel, activePanel])
 
   const undoDesign = () => {
-    const previous = designHistory.undo(structuredClone(config)); if (!previous) return
+    const previous = designHistory.undo(structuredClone(documentConfig)); if (!previous) return
     skipDesignHistory.current = true; lastDesignCommit.current = 0; lastDesignChange.current = ''
-    setConfig(previous)
+    setDocumentConfig(previous)
   }
   const redoDesign = () => {
-    const next = designHistory.redo(structuredClone(config)); if (!next) return
+    const next = designHistory.redo(structuredClone(documentConfig)); if (!next) return
     skipDesignHistory.current = true; lastDesignCommit.current = 0; lastDesignChange.current = ''
-    setConfig(next)
+    setDocumentConfig(next)
   }
   const clearCanvasSelection = () => {
+    setAnnotationTool(null); setPickingDecorationAnchor(null)
     setSelectedElement(null); setSelectedSeries(null); setSelectedAnnotation(null); setSelectedDecoration(null); setSelectedSettingsSection(null)
+  }
+  const selectPanel = (index: number | null) => { clearCanvasSelection(); if (index !== null) lastSelectedPanel.current = index; setSelectedPanel(index) }
+  const selectLastPanel = () => {
+    const panels = documentConfig.multiples?.panels ?? []
+    const previous = lastSelectedPanel.current
+    const index = previous !== null && panels[previous] ? previous : panels.findIndex(Boolean)
+    selectPanel(index >= 0 ? index : null)
+  }
+  const updateMultiples: Dispatch<SetStateAction<Multiples>> = (action) => setDocumentConfig((current) => ({ ...current, multiples: typeof action === 'function' ? action(current.multiples!) : action }))
+  const addPanel = (index: number) => {
+    const grid = documentConfig.multiples!
+    const panels = [...grid.panels]
+    const base = { ...documentConfig, multiples: undefined }
+    panels[index] = { id: crypto.randomUUID(), config: createPanelConfig(base, `График ${index + 1}`) }
+    updateMultiples(resizeMultiples({ ...grid, panels }, grid.columns, grid.rows)); selectPanel(index)
+  }
+  const changeCompositionMode = (enabled: boolean) => {
+    clearCanvasSelection(); setSelectedPanel(null); setMultiplesMode(enabled)
+    if (enabled && !documentConfig.multiples) setDocumentConfig((current) => ({ ...current, multiples: { columns: 2, rows: 2, gap: 24, panels: [null, null, null, null] } }))
+  }
+  const modeControls = <div className="composition-mode" role="group" aria-label="Композиция"><button aria-pressed={!multiplesMode} onClick={() => changeCompositionMode(false)}>Один график</button><button aria-pressed={multiplesMode} onClick={() => changeCompositionMode(true)}>Сетка графиков</button></div>
+  const designScopeControls = multiplesMode && <div className="design-scope-switch"><div className="composition-mode" role="group" aria-label="Область настройки"><button aria-pressed={!!activePanel} disabled={!documentConfig.multiples?.panels.some(Boolean)} onClick={selectLastPanel}>Графики</button><button aria-pressed={!activePanel} onClick={() => selectPanel(null)}>Вся композиция</button></div></div>
+  const compositionControls = multiplesMode && documentConfig.multiples ? <MultiplesControls config={documentConfig} selected={activePanel ? selectedPanel : null} scope={step === 'design' ? activePanel ? 'graphs' : 'composition' : 'setup'} onChange={updateMultiples} onSelect={selectPanel} onAdd={addPanel}/> : null
+  const dismissCanvasHint = () => {
+    setShowCanvasHint(false)
+    try { window.localStorage.setItem('viiiz-canvas-hint-seen', '1') } catch { /* Storage may be unavailable in private contexts. */ }
   }
   const changeCanvasZoom = (next: number) => setCanvasZoom(Math.min(5, Math.max(.1, Number(next.toFixed(2)))))
 
@@ -226,6 +307,7 @@ function App() {
 
   const focusSettings = (section: ChartSettingsSection) => {
     if (!chartPlugin) return
+    dismissCanvasHint()
     setSelectedAnnotation(null); setSelectedDecoration(null)
     if (section === 'values') { setSelectedElement(null); setSelectedSeries(null) }
     const sectionCapability: Partial<Record<ChartSettingsSection, ChartPlugin['settings']['sections'][number]>> = {
@@ -233,6 +315,9 @@ function App() {
     }
     const capability = sectionCapability[section]
     if (capability && !chartPlugin.settings.sections.includes(capability)) return
+    setSettingsCategory(section === 'title' || section === 'subtitle' || section === 'note' || section === 'source' ? 'text'
+      : section === 'x-axis-title' || section === 'y-axis-title' || section === 'x-axis-labels' || section === 'y-axis-labels' || section === 'grid' ? 'axes'
+      : 'chart')
     setSelectedSettingsSection(section)
     requestAnimationFrame(() => requestAnimationFrame(() => {
       if (section === 'series' || section === 'element') {
@@ -241,8 +326,8 @@ function App() {
       }
       const targets: Record<Exclude<ChartSettingsSection, 'series' | 'element'>, { group: string; field?: string }> = {
         title: { group: 'Заголовок и подзаголовок', field: 'Заголовок' }, subtitle: { group: 'Заголовок и подзаголовок', field: 'Подзаголовок' },
-        'x-axis-title': { group: 'Оси, шкалы и подписи', field: 'Текст оси X' }, 'y-axis-title': { group: 'Оси, шкалы и подписи', field: 'Текст оси Y' },
-        'x-axis-labels': { group: 'Оси, шкалы и подписи', field: 'Подписи шкалы X' }, 'y-axis-labels': { group: 'Оси, шкалы и подписи', field: 'Подписи шкалы Y' },
+        'x-axis-title': { group: 'Положение и подписи', field: 'Текст оси X' }, 'y-axis-title': { group: 'Положение и подписи', field: 'Текст оси Y' },
+        'x-axis-labels': { group: 'Стиль текста осей', field: 'Подписи шкалы X' }, 'y-axis-labels': { group: 'Стиль текста осей', field: 'Подписи шкалы Y' },
         grid: { group: 'Сетка' }, legend: { group: 'Легенда' }, values: { group: 'Подписи значений' },
         note: { group: 'Комментарий и источник', field: 'Комментарий' }, source: { group: 'Комментарий и источник', field: 'Источник' },
       }
@@ -270,7 +355,7 @@ function App() {
     const snapshot = dataHistory.redo({ table, types, config, label: target.label, time: Date.now() }); if (!snapshot) return
     setTable(snapshot.table); setTypes(snapshot.types); setConfig(snapshot.config)
   }
-  const reconcileChartConfig = (nextTable: DataTable, nextTypes: Record<string, ColumnType>): ChartConfig => {
+  const reconcileChartConfig = (nextTable: DataTable, nextTypes: Record<string, ColumnType>, config: ChartConfig = documentConfig): ChartConfig => {
     const numeric = nextTable.columns.filter((column) => nextTypes[column] === 'number')
     const yFields = config.yFields.filter((column) => numeric.includes(column))
     const selected = yFields.length ? yFields : numeric.slice(0, 1)
@@ -289,6 +374,7 @@ function App() {
     const preferred = config.preferredDataSelection ?? { xField: config.xField, yFields: config.yFields, seriesField: config.seriesField }
     return {
       ...config,
+      multiples: config.multiples ? { ...config.multiples, panels: config.multiples.panels.map((panel) => panel ? { ...panel, config: reconcileChartConfig(nextTable, nextTypes, panel.config) } : null) } : undefined,
       preferredDataSelection: {
         xField: nextTable.columns.includes(preferred.xField) ? preferred.xField : xField,
         yFields: compatibleMeasureSelection(preferred.yFields, numeric, reconciledFields[0] ?? nextTable.columns[0]),
@@ -326,19 +412,25 @@ function App() {
     const normalized = await normalizeInWorker(next, navigator.language || 'ru-RU', setProcessingProgress, controller.signal)
     const nextTypes = inferTypes(normalized)
     const numeric = normalized.columns.find((column) => nextTypes[column] === 'number') ?? normalized.columns[1] ?? normalized.columns[0]
-    setTable(normalized); setTypes(nextTypes); dataHistory.clear(); designHistory.clear(); setHasData(true); setStep('data')
-    setConfig((value) => { const yFields = initialKind && isDistributionKind(initialKind) ? normalized.columns.filter((column) => nextTypes[column] === 'number') : [numeric]; return { ...value, ...(initialKind ? { kind: initialKind, ...chartModeDefaults(initialKind), ...(isDistributionKind(initialKind) ? distributionVisualDefaults(initialKind) : {}), ...(initialKind === 'treemap' ? { treemapSubcategoryField: normalized.columns[1], aggregation: 'sum' as const, title: 'Трудности бизнеса', subtitle: 'Открытый вопрос, до 5 ответов, % от всех опрошенных', note: 'Молодые предприниматели 18–35 лет, 30 апреля — 9 мая 2025 года, n = 923', source: 'Источник: ВЦИОМ, 2025' } : {}) } : {}), preferredDataSelection: { xField: normalized.columns[0], yFields, seriesField: '' }, xField: normalized.columns[0], yField: numeric, yFields, seriesField: '', distributionGroupField: undefined, xAxisTitle: normalized.columns[0], yAxisTitle: numeric } })
+    lastSelectedPanel.current = null
+    setMultiplesMode(false); setSelectedPanel(null); setTable(normalized); setTypes(nextTypes); dataHistory.clear(); designHistory.clear(); setHasData(true); setStep('data')
+    setConfig((value) => { const yFields = initialKind && isDistributionKind(initialKind) ? normalized.columns.filter((column) => nextTypes[column] === 'number') : [numeric]; return { ...value, multiples: undefined, ...(initialKind ? { kind: initialKind, ...chartModeDefaults(initialKind), ...(isDistributionKind(initialKind) ? distributionVisualDefaults(initialKind) : {}), ...(initialKind === 'treemap' ? { treemapSubcategoryField: normalized.columns[1], aggregation: 'sum' as const, title: 'Трудности бизнеса', subtitle: 'Открытый вопрос, до 5 ответов, % от всех опрошенных', note: 'Молодые предприниматели 18–35 лет, 30 апреля — 9 мая 2025 года, n = 923', source: 'Источник: ВЦИОМ, 2025' } : {}) } : {}), preferredDataSelection: { xField: normalized.columns[0], yFields, seriesField: '' }, xField: normalized.columns[0], yField: numeric, yFields, seriesField: '', distributionGroupField: undefined, xAxisTitle: normalized.columns[0], yAxisTitle: numeric } })
     setProcessingProgress(100)
   }
 
-  const run = async (task: () => Promise<DataTable>, initialKind?: ChartKind) => {
+  const run = async (task: () => Promise<DataTable>, initialKind?: ChartKind, initialConfig?: ChartConfig) => {
     const sequence = ++importSequence.current
     processingController.current?.abort()
     setLoading(true); setError('')
     try {
       const next = await task()
+      if (initialConfig) await preloadChartEditor()
       if (sequence !== importSequence.current) return
       await applyTable(next, initialKind)
+      if (initialConfig && sequence === importSequence.current) {
+        skipDesignHistory.current = true
+        clearCanvasSelection(); setDocumentConfig(initialConfig); setMultiplesMode(!!initialConfig.multiples); setSelectedPanel(null); setStep('design')
+      }
     } catch (cause) {
       if (sequence === importSequence.current && !(cause instanceof DOMException && cause.name === 'AbortError')) setError(cause instanceof Error ? cause.message : 'Ошибка импорта')
     } finally {
@@ -394,17 +486,21 @@ function App() {
     if (renamed === table) return
     const clean = newName.trim()
     const nextTypes = { ...types, [clean]: types[oldName] }; delete nextTypes[oldName]
-    const renamesSeries = !config.seriesField && config.yFields.includes(oldName)
-    const seriesStyles = renamesSeries && config.seriesStyles[oldName]
-      ? Object.fromEntries(Object.entries(config.seriesStyles).map(([name, style]) => [name === oldName ? clean : name, style]))
-      : config.seriesStyles
-    const elementStyles = renamesSeries
-      ? Object.fromEntries(Object.entries(config.elementStyles).map(([key, style]) => [key.startsWith(`${oldName}\u001f`) ? `${clean}${key.slice(oldName.length)}` : key, style]))
-      : config.elementStyles
-    const seriesOrder = renamesSeries ? config.seriesOrder?.map((name) => name === oldName ? clean : name) : config.seriesOrder
-    const intervalGroups = config.intervalGroups?.map((group) => ({ ...group, main: group.main === oldName ? clean : group.main, lower: group.lower === oldName ? clean : group.lower, upper: group.upper === oldName ? clean : group.upper }))
-    const preferredDataSelection = config.preferredDataSelection ? { xField: config.preferredDataSelection.xField === oldName ? clean : config.preferredDataSelection.xField, yFields: config.preferredDataSelection.yFields.map((field) => field === oldName ? clean : field), seriesField: config.preferredDataSelection.seriesField === oldName ? clean : config.preferredDataSelection.seriesField } : undefined
-    const nextConfig = { ...config, xField: config.xField === oldName ? clean : config.xField, yField: config.yField === oldName ? clean : config.yField, yFields: config.yFields.map((field) => field === oldName ? clean : field), seriesField: config.seriesField === oldName ? clean : config.seriesField, preferredDataSelection, butterflyLeftFields: config.butterflyLeftFields?.map((field) => field === oldName ? clean : field), butterflyRightFields: config.butterflyRightFields?.map((field) => field === oldName ? clean : field), heatmapYField: config.heatmapYField === oldName ? clean : config.heatmapYField, treemapSubcategoryField: config.treemapSubcategoryField === oldName ? clean : config.treemapSubcategoryField, rangeLowerField: config.rangeLowerField === oldName ? clean : config.rangeLowerField, rangeUpperField: config.rangeUpperField === oldName ? clean : config.rangeUpperField, dumbbellStartField: config.dumbbellStartField === oldName ? clean : config.dumbbellStartField, dumbbellEndField: config.dumbbellEndField === oldName ? clean : config.dumbbellEndField, scatterLabelField: config.scatterLabelField === oldName ? clean : config.scatterLabelField, distributionLabelField: config.distributionLabelField === oldName ? clean : config.distributionLabelField, xAxisTitle: config.xAxisTitle === oldName ? clean : config.xAxisTitle, yAxisTitle: config.yAxisTitle === oldName ? clean : config.yAxisTitle, seriesStyles, elementStyles, seriesOrder, intervalGroups }
+    const renameConfigFields = (config: ChartConfig): ChartConfig => {
+      const renamesSeries = !config.seriesField && config.yFields.includes(oldName)
+      const seriesStyles = renamesSeries && config.seriesStyles[oldName]
+        ? Object.fromEntries(Object.entries(config.seriesStyles).map(([name, style]) => [name === oldName ? clean : name, style]))
+        : config.seriesStyles
+      const elementStyles = renamesSeries
+        ? Object.fromEntries(Object.entries(config.elementStyles).map(([key, style]) => [key.startsWith(`${oldName}\u001f`) ? `${clean}${key.slice(oldName.length)}` : key, style]))
+        : config.elementStyles
+      const seriesOrder = renamesSeries ? config.seriesOrder?.map((name) => name === oldName ? clean : name) : config.seriesOrder
+      const intervalGroups = config.intervalGroups?.map((group) => ({ ...group, main: group.main === oldName ? clean : group.main, lower: group.lower === oldName ? clean : group.lower, upper: group.upper === oldName ? clean : group.upper }))
+      const preferredDataSelection = config.preferredDataSelection ? { xField: config.preferredDataSelection.xField === oldName ? clean : config.preferredDataSelection.xField, yFields: config.preferredDataSelection.yFields.map((field) => field === oldName ? clean : field), seriesField: config.preferredDataSelection.seriesField === oldName ? clean : config.preferredDataSelection.seriesField } : undefined
+      const nextConfig = { ...config, xField: config.xField === oldName ? clean : config.xField, yField: config.yField === oldName ? clean : config.yField, yFields: config.yFields.map((field) => field === oldName ? clean : field), seriesField: config.seriesField === oldName ? clean : config.seriesField, preferredDataSelection, butterflyLeftFields: config.butterflyLeftFields?.map((field) => field === oldName ? clean : field), butterflyRightFields: config.butterflyRightFields?.map((field) => field === oldName ? clean : field), heatmapYField: config.heatmapYField === oldName ? clean : config.heatmapYField, treemapSubcategoryField: config.treemapSubcategoryField === oldName ? clean : config.treemapSubcategoryField, rangeLowerField: config.rangeLowerField === oldName ? clean : config.rangeLowerField, rangeUpperField: config.rangeUpperField === oldName ? clean : config.rangeUpperField, dumbbellStartField: config.dumbbellStartField === oldName ? clean : config.dumbbellStartField, dumbbellEndField: config.dumbbellEndField === oldName ? clean : config.dumbbellEndField, scatterLabelField: config.scatterLabelField === oldName ? clean : config.scatterLabelField, distributionLabelField: config.distributionLabelField === oldName ? clean : config.distributionLabelField, xAxisTitle: config.xAxisTitle === oldName ? clean : config.xAxisTitle, yAxisTitle: config.yAxisTitle === oldName ? clean : config.yAxisTitle, seriesStyles, elementStyles, seriesOrder, intervalGroups }
+      return { ...nextConfig, multiples: config.multiples ? { ...config.multiples, panels: config.multiples.panels.map((panel) => panel ? { ...panel, config: renameConfigFields(panel.config) } : null) } : undefined }
+    }
+    const nextConfig = renameConfigFields(config)
     commitTable(renamed, nextTypes, `Столбец «${oldName}» переименован`, nextConfig)
   }
 
@@ -430,6 +526,8 @@ function App() {
         ? { yFields: [preservedMeasures[0]], yField: preservedMeasures[0], seriesField: '', showLegend: false }
         : kind === 'butterfly'
         ? { yFields: pair, yField: pair[0], butterflyLeftFields: pair.slice(0, 1), butterflyRightFields: pair.slice(1, 2), butterflyCategoryPosition: value.butterflyCategoryPosition ?? 'center' as const, seriesField: '', showLegend: true }
+        : isPieChart(kind)
+        ? { yFields: [preservedMeasures[0]], yField: preservedMeasures[0], seriesField: '', aggregation: 'sum' as const, showValues: true, showLegend: true, showDirectLabels: false }
         : kind === 'treemap'
         ? { yFields: [preservedMeasures[0]], yField: preservedMeasures[0], aggregation: 'sum' as const, showValues: true, showLegend: false, showDirectLabels: false, treemapSubcategoryField: value.treemapSubcategoryField && table.columns.includes(value.treemapSubcategoryField) && value.treemapSubcategoryField !== value.xField ? value.treemapSubcategoryField : undefined }
         : distributionKind
@@ -462,9 +560,7 @@ function App() {
     })
     setSelectedSeries(null); setSelectedElement(null)
   }
-  const openDesign = () => {
-    setStep('design')
-  }
+  const openDesign = () => setStep('design')
   const toggleYField = (field: string) => {
     const selected = config.seriesField ? [field] : config.yFields.includes(field) ? config.yFields.filter((item) => item !== field) : [...config.yFields, field]
     if (!selected.length) return
@@ -482,39 +578,59 @@ function App() {
     const from = names.indexOf(name)
     if (from < 0) return current
     names.splice(from, 1)
-    names.splice(Math.max(0, Math.min(targetIndex, names.length)), 0, name)
+    const to = Math.max(0, Math.min(targetIndex, names.length))
+    if (from === to) return current
+    names.splice(to, 0, name)
     const seriesStyles = { ...current.seriesStyles }
     chartSeries.forEach((series, index) => { seriesStyles[series.name] = { ...seriesStyles[series.name], color: chartModule?.getSeriesColor(current, series.name, index) ?? current.color } })
     return { ...current, seriesOrder: names, seriesStyles }
   })
-  const addAnnotation = () => {
+  const addAnnotation = (placement: AnnotationPlacement) => {
     const id = crypto.randomUUID()
-    const annotation: ChartAnnotation = { id, x: 110, y: 145, width: 240, fontFamily: config.titleText.fontFamily, fontSize: 14, backgroundColor: 'transparent', borderColor: 'transparent', textStrokeColor: config.canvasBackground ?? '#ffffff', textStrokeWidth: 6, textAlign: 'left', html: 'Текст аннотации', fragments: [{ id: crypto.randomUUID(), text: 'Текст аннотации', color: config.titleText.color, bold: false, italic: false }] }
-    setConfig((current) => ({ ...current, annotations: [...current.annotations, annotation] })); setSelectedAnnotation(id); setSelectedDecoration(null); setSelectedElement(null)
+    const annotation: ChartAnnotation = { id, x: Math.min(placement.x, Math.max(0, annotationCanvasWidth - 240)), y: Math.min(placement.y, Math.max(0, annotationCanvasHeight - 60)), width: Math.min(240, annotationCanvasWidth), fontFamily: config.titleText.fontFamily, fontSize: 14, backgroundColor: 'transparent', borderColor: 'transparent', textStrokeColor: config.canvasBackground ?? '#ffffff', textStrokeWidth: 6, textAlign: 'left', html: 'Текст аннотации', fragments: [{ id: crypto.randomUUID(), text: 'Текст аннотации', color: config.titleText.color, bold: false, italic: false }] }
+    setConfig((current) => ({ ...current, annotations: [...current.annotations, annotation] })); setSettingsCategory('annotations'); setSelectedAnnotation(id); setSelectedDecoration(null); setSelectedElement(null)
   }
   const duplicateAnnotation = (source: ChartAnnotation) => {
-    const id = crypto.randomUUID(), canvasWidth = config.canvasWidth ?? 1000, canvasHeight = config.canvasHeight ?? 563
+    const id = crypto.randomUUID(), canvasWidth = annotationCanvasWidth, canvasHeight = annotationCanvasHeight
     const annotation: ChartAnnotation = { ...structuredClone(source), id, x: Math.min(Math.max(0, canvasWidth - source.width), source.x + 20), y: Math.min(Math.max(0, canvasHeight - 50), source.y + 20), fragments: source.fragments.map((fragment) => ({ ...fragment, id: crypto.randomUUID() })) }
     setConfig((current) => ({ ...current, annotations: [...current.annotations, annotation] }))
     setSelectedAnnotation(id)
   }
-  const addDecoration = (type: ChartDecoration['type']) => {
-    const id = crypto.randomUUID(), canvasWidth = config.canvasWidth ?? 1000, canvasHeight = config.canvasHeight ?? 563
-    const common = { id, type, x: Math.round(canvasWidth * .3), y: Math.round(canvasHeight * .35), color: type === 'area' ? '#6956e8' : '#4f4b59', opacity: type === 'area' ? .16 : .9, lineWidth: type === 'area' ? 1 : 2, lineType: 'solid' as const, endArrow: type === 'arrow', arrowPlacement: type === 'arrow' ? 'end' as const : 'none' as const, arrowHead: 'filled' as const }
-    const decoration: ChartDecoration = type === 'area' ? { ...common, width: Math.round(canvasWidth * .3), height: Math.round(canvasHeight * .22), fitToPlot: true, fitToPlotWidth: false }
+  const addDecoration = (type: ChartDecoration['type'], placement: AnnotationPlacement) => {
+    const id = crypto.randomUUID(), canvasWidth = annotationCanvasWidth, canvasHeight = annotationCanvasHeight
+    const common = { id, type, x: placement.x, y: placement.y, color: type === 'area' ? '#1677a6' : '#4f4b59', opacity: type === 'area' ? .16 : .9, lineWidth: type === 'area' ? 1 : 2, lineType: 'solid' as const, endArrow: type === 'arrow', arrowPlacement: type === 'arrow' ? 'end' as const : 'none' as const, arrowHead: 'filled' as const }
+    let decoration: ChartDecoration = type === 'area' ? { ...common, width: Math.round(canvasWidth * .3), height: Math.round(canvasHeight * .22), fitToPlot: false, fitToPlotWidth: false }
       : type === 'horizontal-line' ? { ...common, width: Math.round(canvasWidth * .42), height: 0 }
       : type === 'vertical-line' ? { ...common, width: 0, height: Math.round(canvasHeight * .38) }
       : type === 'curved-line' ? { ...common, width: Math.round(canvasWidth * .18), height: -Math.round(canvasHeight * .12), curvature: .28 }
       : { ...common, width: Math.round(canvasWidth * .15), height: -Math.round(canvasHeight * .12) }
+    if (placement.width !== undefined && placement.height !== undefined) decoration = { ...decoration, width: placement.width, height: placement.height }
+    else decoration = { ...decoration, x: Math.min(placement.x, Math.max(0, canvasWidth - Math.max(0, decoration.width))), y: Math.min(Math.max(-Math.min(0, decoration.height), placement.y), Math.max(0, canvasHeight - Math.max(0, decoration.height))) }
     setConfig((current) => ({ ...current, decorations: [...(current.decorations ?? []), decoration] }))
-    setSelectedDecoration(id); setSelectedAnnotation(null); setSelectedElement(null); setSelectedSeries(null)
+    setSettingsCategory('annotations'); setSelectedDecoration(id); setSelectedAnnotation(null); setSelectedElement(null); setSelectedSeries(null)
   }
   const updateDecoration = (changed: ChartDecoration) => {
     setConfig((current) => ({ ...current, decorations: (current.decorations ?? []).map((item) => item.id === changed.id ? changed : item) }))
-    setSelectedDecoration(changed.id); setSelectedAnnotation(null); setSelectedElement(null); setSelectedSeries(null)
+    setSettingsCategory('annotations'); setSelectedDecoration(changed.id); setSelectedAnnotation(null); setSelectedElement(null); setSelectedSeries(null)
   }
-  const decorationLabels: Record<ChartDecoration['type'], string> = { area: 'Цветная область', line: 'Прямая линия', 'horizontal-line': 'Горизонтальная линия', 'vertical-line': 'Вертикальная линия', arrow: 'Прямая линия', 'curved-line': 'Плавная линия' }
-  const activeDecoration = config.decorations?.find((decoration) => decoration.id === selectedDecoration)
+  const placeAnnotation = (placement: AnnotationPlacement) => {
+    if (!annotationTool) return
+    if (annotationTool === 'text') addAnnotation(placement)
+    else addDecoration(annotationTool, placement)
+    setAnnotationTool(null)
+  }
+  const chooseAnnotation = (kind: 'text' | 'decoration', id: string | null) => {
+    clearCanvasSelection()
+    if (kind === 'text') setSelectedAnnotation(id)
+    else setSelectedDecoration(id)
+  }
+  const connectAnnotation = (annotation: ChartAnnotation) => {
+    const id = crypto.randomUUID()
+    const decoration: ChartDecoration = { id, type: 'curved-line', x: annotation.x + annotation.width + 6, y: annotation.y + 21, width: 80, height: 80, color: annotation.fragments[0]?.color ?? '#4f4b59', opacity: .9, lineWidth: 1.5, lineType: 'solid', arrowPlacement: 'end', arrowHead: 'filled', startAnchor: { annotationId: annotation.id, side: 'auto' }, controlPoints: { first: { x: 50, y: 0 }, second: { x: 0, y: -50 } } }
+    setConfig((current) => ({ ...current, decorations: [...(current.decorations ?? []), decoration] }))
+    chooseAnnotation('decoration', id)
+    if (valueLabels.length && !isPieChart(config.kind) && config.kind !== 'treemap' && config.kind !== 'heatmap') { setPickingDecorationEndpoint('end'); setPickingDecorationAnchor('data') }
+  }
   const pickerSwatches = config.palette?.length ? config.palette : [config.color]
   const zoomPercent = `${Math.round(canvasZoom * 100)}%`
   const selectedElementStyle = selectedElement ? config.elementStyles[selectedElement.key] : undefined
@@ -525,82 +641,75 @@ function App() {
     ?? config.color
   const selectedElementLabelShown = selectedElementStyle?.showLabel ?? (config.kind === 'scatter' || config.kind === 'bubble' ? config.scatterShowLabels ?? config.showValues : isDistributionKind(config.kind) ? config.distributionShowLabels ?? false : config.showValues)
   const selectedElementLabelPosition = selectedElementStyle?.labelPosition ?? (config.kind === 'scatter' || config.kind === 'bubble' ? config.scatterLabelPosition ?? 'right' : isDistributionKind(config.kind) ? config.distributionLabelPosition ?? ((config.distributionOrientation ?? 'horizontal') === 'horizontal' ? 'right' : 'top') : 'top')
+  const chartSelectionActive = settingsCategory === 'chart' && Boolean(selectedElement || selectedSeries)
+
+  const exportCanvas = async (format: 'svg' | 'png', options: import('./features/chart-export/chartExport').ChartExportOptions) => {
+    try {
+      setError('')
+      const handle = multiplesMode ? multiplesRef.current : chartRef.current
+      if (format === 'svg') await handle?.exportSvg(options); else await handle?.exportPng(options)
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Ошибка экспорта') }
+  }
+  const renderCanvas = (panelConfig: ChartConfig, ref: Ref<ChartCanvasHandle>, active: boolean) => <ChartCanvas onDecorationLayout={active ? updateDecorationLayouts : undefined} pickingDecorationText={active && pickingDecorationAnchor === 'text'} onDecorationAnchorRequest={(kind, endpoint) => { setPickingDecorationEndpoint(endpoint ?? (kind === 'text' ? 'start' : 'end')); setPickingDecorationAnchor(kind) }} onDecorationTextPick={(annotationId, position) => { const decoration = decorationLayouts.find((item) => item.id === selectedDecoration); if (decoration) updateDecoration({ ...decoration, type: decoration.type === 'horizontal-line' || decoration.type === 'vertical-line' ? 'line' : decoration.type, [pickingDecorationEndpoint === 'start' ? 'startAnchor' : 'endAnchor']: { annotationId, position, side: 'auto' } }); setPickingDecorationAnchor(null) }} pickingDecorationPoint={active && pickingDecorationAnchor === 'data'} onDecorationPointCancel={() => setPickingDecorationAnchor(null)} onDecorationPointPick={(elementKey) => { const decoration = decorationLayouts.find((item) => item.id === selectedDecoration); if (decoration) updateDecoration({ ...decoration, type: decoration.type === 'horizontal-line' || decoration.type === 'vertical-line' ? 'line' : decoration.type, [pickingDecorationEndpoint === 'start' ? 'startAnchor' : 'endAnchor']: { elementKey } }); setPickingDecorationAnchor(null) }} annotationTool={active ? annotationTool : null} onAnnotationPlace={placeAnnotation} onAnnotationCancel={() => setAnnotationTool(null)} ref={ref} table={table} config={panelConfig} disableViewGestures={multiplesMode} viewZoom={multiplesMode ? 1 : canvasZoom} selectedSettingsSection={active ? selectedSettingsSection : null} onSettingsFocus={focusSettings} onClearSettingsFocus={() => setSelectedSettingsSection(null)} onRichTextChange={(field, html, text) => setConfig((current) => ({ ...current, [field]: text, [`${field}Html`]: html }))} onCategoryLabelChange={(axis, category, text) => setConfig((current) => ({ ...current, categoryLabelOverrides: { ...current.categoryLabelOverrides, [axis]: { ...current.categoryLabelOverrides?.[axis], [category]: text } } }))} onTreemapMove={moveTreemapElement} selectedSeriesName={active ? selectedSeries?.name : undefined} selectedElementKey={active ? selectedElement?.key : undefined} selectedElementTarget={active ? selectedElement?.target : undefined} selectedAnnotationId={active ? selectedAnnotation : null} selectedDecorationId={active ? selectedDecoration : null} onDecorationChange={updateDecoration} onSeriesSelect={(selection) => { dismissCanvasHint(); setSettingsCategory('chart'); setSelectedSeries(selection); setSelectedElement(null); setSelectedAnnotation(null); setSelectedDecoration(null) }} onSelect={(selection) => { dismissCanvasHint(); setSettingsCategory('chart'); const resolved = valueLabels.find((item) => item.key === selection.key); setSelectedElement(resolved ? { ...resolved, target: selection.target } : selection); setSelectedAnnotation(null); setSelectedDecoration(null) }} onAnnotationSelect={(id) => { dismissCanvasHint(); setSettingsCategory('annotations'); setSelectedAnnotation(id); setSelectedSettingsSection(null); setSelectedDecoration(null); setSelectedElement(null); setSelectedSeries(null) }} onAnnotationChange={(changed) => setConfig((current) => ({ ...current, annotations: current.annotations.map((item) => item.id === changed.id ? changed : item) }))} onAnnotationDuplicate={duplicateAnnotation} onAnnotationDelete={(id) => { setConfig((current) => ({ ...current, annotations: current.annotations.filter((item) => item.id !== id), decorations: current.decorations?.map((item) => detachDecorationText(item, id, decorationLayouts.find((layout) => layout.id === item.id))) })); setSelectedAnnotation(null) }}/>
 
   return (
     <div className="app-shell">
-      <EditorHeader projectName={hasData ? table.name : 'Новый проект'} projectMeta={hasData ? `${table.rows.length.toLocaleString('ru-RU')} строк` : 'не сохранён'} canExport={step === 'design'} onExportSvg={(options) => { void chartRef.current?.exportSvg(options) }} onExportPng={(options) => { void chartRef.current?.exportPng(options) }}/>
-      <EditorStepper step={step} canVisit={canVisit} onChange={setStep}/>
+      <EditorHeader projectName={hasData ? table.name : 'Новый проект'} projectMeta={hasData ? `${table.rows.length.toLocaleString('ru-RU')} строк` : 'не сохранён'} canExport={step === 'design' && (!multiplesMode || !!documentConfig.multiples?.panels.some(Boolean))} onExportSvg={(options) => { void exportCanvas('svg', options) }} onExportPng={(options) => { void exportCanvas('png', options) }}/>
+      <EditorStepper step={step} canVisit={canVisit} onChange={(next) => { clearCanvasSelection(); setStep(next) }}/>{error && (step === 'chart' || step === 'design') && <p className="source-error" role="alert">{error}</p>}
 
-      {step === 'source' && <main className="source-step">
+      {step === 'source' && <main className="source-step" aria-busy={loading}>
         <div className="step-heading"><h1>Добавьте данные</h1><p>Загрузите файл или подключите публичную таблицу Google Sheets.</p></div>
         <div className="source-grid">
-          <label className="source-card upload-card"><input type="file" accept=".csv,.xlsx,.parquet" onChange={(event) => { const file = event.target.files?.[0]; if (file) openFile(file); event.target.value = '' }} /><span className="source-icon"><FileUp size={22}/></span><strong>{loading ? 'Читаем данные…' : 'Загрузить файл'}</strong><p>CSV, XLSX или Parquet</p><span className="source-card-action">{loading ? 'Подождите…' : 'Выбрать с компьютера'}</span></label>
-          <div className="source-card sheet-card"><span className="source-icon sheets"><Sheet size={21}/></span><strong>Google Sheets</strong><p>Вставьте ссылку на таблицу с доступом для просмотра</p><div className="source-sheet-form"><input className="text-input" aria-label="Ссылка на Google Sheets" value={sheetUrl} onChange={(event) => setSheetUrl(event.target.value)} placeholder="https://docs.google.com/spreadsheets/…"/><button className="button primary" disabled={!sheetUrl || loading} onClick={openGoogleSheet}>Подключить</button></div></div>
+          <label className="source-card upload-card"><input type="file" accept=".csv,.xlsx,.parquet" disabled={loading} onChange={(event) => { const file = event.target.files?.[0]; if (file) openFile(file); event.target.value = '' }} /><span className="source-icon"><FileUp size={22}/></span><strong>{loading ? 'Читаем данные…' : 'Загрузить файл'}</strong><p>CSV, XLSX или Parquet</p><span className="source-card-action">{loading ? 'Подождите…' : 'Выбрать с компьютера'}</span></label>
+          <div className="source-card sheet-card"><span className="source-icon sheets"><Sheet size={21}/></span><strong>Google Sheets</strong><p>Вставьте ссылку на таблицу с доступом для просмотра</p><div className="source-sheet-form"><input className="text-input" aria-label="Ссылка на Google Sheets" value={sheetUrl} disabled={loading} onChange={(event) => setSheetUrl(event.target.value)} placeholder="https://docs.google.com/spreadsheets/…"/><button className="button primary" disabled={!sheetUrl || loading} onClick={openGoogleSheet}>Подключить</button></div></div>
         </div>
-        {error && <p className="source-error">⚠ {error}</p>}
+        {error && <p className="source-error" role="alert"><CircleAlert size={16}/>{error}</p>}
         {loading && <div className="processing-progress"><div><span>Обработка данных</span><b>{processingProgress}%</b></div><progress max="100" value={processingProgress}/><button onClick={() => processingController.current?.abort()}>Отменить</button></div>}
-        <div className="source-examples"><span>Примеры</span><div className="demo-links"><button className="demo-link" disabled={loading} onClick={() => run(() => Promise.resolve(demoTable))}>Временной ряд</button><button className="demo-link" disabled={loading} onClick={() => run(() => Promise.resolve(categoricalDemoTable))}>Топ стран</button><button className="demo-link" disabled={loading} onClick={() => run(() => Promise.resolve(dumbbellDemoTable))}>До → после</button><button className="demo-link" disabled={loading} onClick={() => run(() => Promise.resolve(distributionDemoTable), 'boxplot')}>Распределения</button><button className="demo-link" disabled={loading} onClick={() => run(() => Promise.resolve(entrepreneurshipDifficultiesDemoTable), 'treemap')}>Трудности бизнеса</button></div></div>
-        <p className="source-privacy"><ShieldCheck size={16}/> Файлы обрабатываются в браузере и не загружаются на сервер</p>
+        <div className="source-examples"><span>Примеры</span><div className="demo-links"><button className="demo-link" disabled={loading} onClick={() => run(() => Promise.resolve(demoTable))}>Временной ряд</button><button className="demo-link" disabled={loading} onClick={() => run(() => Promise.resolve(categoricalDemoTable))}>Топ стран</button><button className="demo-link" disabled={loading} onClick={() => run(() => Promise.resolve(dumbbellDemoTable))}>До → после</button><button className="demo-link" disabled={loading} onClick={() => run(() => Promise.resolve(distributionDemoTable), 'boxplot')}>Распределения</button><button className="demo-link" disabled={loading} onClick={() => run(() => Promise.resolve(entrepreneurshipDifficultiesDemoTable), 'treemap')}>Трудности бизнеса</button><button className="demo-link" disabled={loading} onClick={() => run(() => Promise.resolve(respondentGroupsDemoTable), undefined, createRespondentGroupsDemoConfig())}>Группы респондентов</button></div></div>
       </main>}
 
-      {step === 'data' && <Suspense fallback={<main className="data-step" aria-busy="true">Подготовка таблицы…</main>}><main className="data-step">
+      {step === 'data' && <main className="data-step">
         <div className="data-step-header"><div><h1>Проверьте данные</h1><p>Проверьте типы и значения перед построением графика.</p></div></div>
         <div className="history-toolbar"><div><button aria-label="Отменить" disabled={!past.length} onClick={undo} title="Отменить"><RotateCcw size={15}/></button><button aria-label="Повторить" disabled={!future.length} onClick={redo} title="Повторить"><RotateCw size={15}/></button></div><button className="transform-open" onClick={() => setShowTransformDialog(true)}><SlidersHorizontal size={14}/>Настроить временной ряд</button><details><summary><History size={14}/>История <b>{past.length}</b></summary><div>{past.length ? [...past].reverse().map((entry, index) => <div className="history-entry" key={`${entry.time}-${index}`}><span>{entry.label}</span><time>{new Date(entry.time).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</time></div>) : <p>Изменений пока нет</p>}</div></details>{past.length > 0 && <span className="history-current">{past.at(-1)?.label}</span>}</div>
         <DataReview table={table} types={types} issues={issues} onRename={changeName} onType={changeType} onConfigureDate={setDateFormatColumn} onEditCell={(row, column, value) => commitTable(editCell(table, row, column, value, types[column]), types, `Изменена ячейка ${column}, строка ${row + 1}`)} onRemoveDuplicates={() => commitTable(removeDuplicateRows(table), types, 'Удалены точные дубликаты')} onDeleteRows={(indices) => commitTable(removeRows(table, indices), types, `Удалено строк: ${indices.length}`)} onDeleteColumns={(columns) => { const next = removeColumns(table, columns); const nextTypes = Object.fromEntries(Object.entries(types).filter(([column]) => next.columns.includes(column))); commitTable(next, nextTypes, `Удалено столбцов: ${columns.length}`, reconcileChartConfig(next, nextTypes)) }} onTranspose={() => { const next = transposeTable(table); const nextTypes = inferTypes(next); commitTable(next, nextTypes, 'Таблица транспонирована', reconcileChartConfig(next, nextTypes)) }}/>
         <div className="step-footer"><button className="button" onClick={() => setStep('source')}>← Другой источник</button><button className="button primary" onPointerEnter={() => { void preloadChartEditor() }} onFocus={() => { void preloadChartEditor() }} onClick={() => setStep('chart')}>Выбрать график →</button></div>
-      </main></Suspense>}
-      <Suspense fallback={null}>
+      </main>}
+      <Suspense fallback={<div className="dialog-backdrop" aria-busy="true" aria-label="Подготовка окна"><div className="dialog-skeleton"><span/><span/><span/><span/></div></div>}>
         {dateFormatColumn && <DateFormatDialog table={table} column={dateFormatColumn} onClose={() => setDateFormatColumn(null)} onApply={(next) => { commitTable(next, { ...types, [dateFormatColumn]: 'date' }, `Настроен формат «${dateFormatColumn}»`); setDateFormatColumn(null) }}/>}
         {excelWorkbook && <ExcelSheetDialog fileName={excelWorkbook.fileName} sheets={excelWorkbook.sheets} source={excelWorkbook.source} onClose={() => setExcelWorkbook(null)} onSelect={(selected) => { setExcelWorkbook(null); run(() => Promise.resolve(selected)) }}/>}
         {showTransformDialog && <DataTransformDialog table={table} types={types} onClose={() => setShowTransformDialog(false)} onApply={(next, label) => { const nextTypes = inferTypes(next); commitTable(next, nextTypes, label, reconcileChartConfig(next, nextTypes)); setShowTransformDialog(false) }}/>}
       </Suspense>
 
-      {(step === 'chart' || step === 'design') && !chartPlugin && <main className={`chart-workspace step-${step}`} aria-busy="true">Подготовка редактора графика…</main>}
-      {(step === 'chart' || step === 'design') && chartPlugin && <main className={`chart-workspace step-${step}`}>
-        {step === 'chart' && <Suspense fallback={<aside className="chart-picker" aria-busy="true">Загрузка типов графиков…</aside>}><ChartTypePicker table={table} numericColumns={numericColumns} config={config} onChange={(action) => setConfig((current) => rememberDataSelection(current, typeof action === 'function' ? action(current) : action))} onToggleField={toggleYField} onChooseChart={chooseChart}/></Suspense>}
+      {(step === 'chart' || step === 'design') && !chartPlugin && <main className={`chart-workspace step-${step} editor-workspace-skeleton`} aria-busy="true" aria-label="Подготовка редактора графика"><aside><span/><span/><span/><span/><span/></aside><section className="stage"><div className="paper"><div className="chart-canvas chart-skeleton"><span/><span/><span/><span/></div></div></section></main>}
+      {(step === 'chart' || step === 'design') && chartPlugin && <main className={`chart-workspace step-${step}${multiplesMode ? ' has-multiples' : ''}`}>
+        {step === 'chart' && (multiplesMode ? <div className="multiples-picker-shell">{modeControls}{compositionControls}{activePanel ? <ChartTypePicker table={table} numericColumns={numericColumns} config={config} onChange={(action) => setConfig((current) => rememberDataSelection(current, typeof action === 'function' ? action(current) : action))} onToggleField={toggleYField} onChooseChart={chooseChart}/> : <div className="multiples-instructions"><h2>Соберите композицию</h2><p>Выберите сетку, затем нажмите на свободную ячейку. Для каждого графика можно назначить свои данные и тип.</p><small>Все графики используют загруженную таблицу.</small></div>}</div> : <ChartTypePicker header={modeControls} table={table} numericColumns={numericColumns} config={config} onChange={(action) => setConfig((current) => rememberDataSelection(current, typeof action === 'function' ? action(current) : action))} onToggleField={toggleYField} onChooseChart={chooseChart}/>)}
 
-        <section className="stage"><div className="stage-toolbar"><span>{step === 'chart' ? 'Предпросмотр графика' : `${config.canvasWidth ?? 1000} × ${config.canvasHeight ?? 563} px`}</span></div><div className="canvas-floating-menu" aria-label="Управление холстом"><button type="button" disabled={canvasZoom <= .5} onClick={() => changeCanvasZoom(canvasZoom - .1)} title="Уменьшить масштаб" aria-label="Уменьшить масштаб" data-tip="Уменьшить"><Minus size={14}/></button><span className="canvas-zoom-value">{zoomPercent}</span><button type="button" disabled={canvasZoom >= 2} onClick={() => changeCanvasZoom(canvasZoom + .1)} title="Увеличить масштаб" aria-label="Увеличить масштаб" data-tip="Увеличить"><Plus size={14}/></button><span className="canvas-action-divider"/><button type="button" disabled={!designPast.length} onClick={undoDesign} title="Отменить (Ctrl/⌘ Z)" aria-label="Отменить" data-tip="Отменить"><RotateCcw size={13}/></button><button type="button" disabled={!designFuture.length} onClick={redoDesign} title="Повторить (Ctrl/⌘ Shift Z)" aria-label="Повторить"><RotateCw size={13}/></button><button type="button" className="clear-selection-button" onClick={clearCanvasSelection} title="Снять выделение" aria-label="Снять выделение" data-tip="Снять выделение"><CircleX size={13}/></button></div><div className="paper-frame"><div className="paper canvas-paper"><Suspense fallback={<div className="chart-canvas" aria-busy="true">Подготовка графика…</div>}><ChartCanvas ref={chartRef} table={table} config={config} viewZoom={canvasZoom} selectedSettingsSection={selectedSettingsSection} onSettingsFocus={focusSettings} onClearSettingsFocus={() => setSelectedSettingsSection(null)} onRichTextChange={(field, html, text) => setConfig((current) => ({ ...current, [field]: text, [`${field}Html`]: html }))} onCategoryLabelChange={(axis, category, text) => setConfig((current) => ({ ...current, categoryLabelOverrides: { ...current.categoryLabelOverrides, [axis]: { ...current.categoryLabelOverrides?.[axis], [category]: text } } }))} onTreemapMove={moveTreemapElement} selectedSeriesName={selectedSeries?.name} selectedElementKey={selectedElement?.key} selectedElementTarget={selectedElement?.target} selectedAnnotationId={selectedAnnotation} selectedDecorationId={selectedDecoration} onDecorationChange={updateDecoration} onSeriesSelect={(selection) => { setSelectedSeries(selection); setSelectedElement(null); setSelectedAnnotation(null); setSelectedDecoration(null) }} onSelect={(selection) => { const resolved = valueLabels.find((item) => item.key === selection.key); setSelectedElement(resolved ? { ...resolved, target: selection.target } : selection); setSelectedAnnotation(null); setSelectedDecoration(null) }} onAnnotationSelect={(id) => { setSelectedAnnotation(id); setSelectedSettingsSection(null); setSelectedDecoration(null); setSelectedElement(null); setSelectedSeries(null) }} onAnnotationChange={(changed) => setConfig((current) => ({ ...current, annotations: current.annotations.map((item) => item.id === changed.id ? changed : item) }))} onAnnotationDuplicate={duplicateAnnotation} onAnnotationDelete={(id) => { setConfig((current) => ({ ...current, annotations: current.annotations.filter((item) => item.id !== id) })); setSelectedAnnotation(null) }}/></Suspense></div></div><p className="stage-hint">{config.kind === 'treemap' ? 'Один клик выбирает категорию · повторный клик выбирает блок' : 'Клик по точке или столбцу сразу выбирает элемент'}</p>{step === 'chart' && <div className="chart-preview-actions"><div><small>Выбранный тип</small><strong>{chartPlugin.label}</strong></div><button type="button" className="button primary" onClick={openDesign}>Настроить оформление →</button></div>}</section>
+        <section className="stage"><div className="stage-toolbar"><span>{step === 'chart' ? 'Предпросмотр графика' : `${config.canvasWidth ?? 1000} × ${config.canvasHeight ?? 563} px`}</span></div><div className="canvas-floating-menu" aria-label="Управление холстом"><button type="button" disabled={canvasZoom <= .5} onClick={() => changeCanvasZoom(canvasZoom - .1)} title="Уменьшить масштаб" aria-label="Уменьшить масштаб" data-tip="Уменьшить"><Minus size={14}/></button><span className="canvas-zoom-value">{zoomPercent}</span><button type="button" disabled={canvasZoom >= 2} onClick={() => changeCanvasZoom(canvasZoom + .1)} title="Увеличить масштаб" aria-label="Увеличить масштаб" data-tip="Увеличить"><Plus size={14}/></button><span className="canvas-action-divider"/><button type="button" disabled={!designPast.length} onClick={undoDesign} title="Отменить (Ctrl/⌘ Z)" aria-label="Отменить" data-tip="Отменить"><RotateCcw size={13}/></button><button type="button" disabled={!designFuture.length} onClick={redoDesign} title="Повторить (Ctrl/⌘ Shift Z)" aria-label="Повторить"><RotateCw size={13}/></button><button type="button" className="clear-selection-button" disabled={!selectedElement && !selectedSeries && !selectedAnnotation && !selectedDecoration && !selectedSettingsSection} onClick={clearCanvasSelection} title="Снять выделение" aria-label="Снять выделение" data-tip="Снять выделение"><CircleX size={13}/></button></div><div className="paper-frame"><div className="paper canvas-paper"><Suspense fallback={<div className="chart-canvas chart-skeleton" aria-busy="true" aria-label="Подготовка графика"><span/><span/><span/><span/></div>}>{multiplesMode && documentConfig.multiples ? <MultiplesCanvas selectedText={!activePanel && (selectedSettingsSection === 'title' || selectedSettingsSection === 'subtitle' || selectedSettingsSection === 'note' || selectedSettingsSection === 'source') ? selectedSettingsSection : null} onTextSelect={(field) => { selectPanel(null); setSettingsCategory('text'); setSelectedSettingsSection(field) }} onTextChange={(values) => setDocumentConfig((current) => ({ ...current, ...values }))} onPanelSizeChange={updatePanelCanvasSize} ref={multiplesRef} table={table} config={documentConfig} selected={activePanel ? selectedPanel : null} zoom={canvasZoom} onSelect={selectPanel} onAdd={addPanel} renderPanel={renderCanvas}/> : renderCanvas(config, chartRef, true)}</Suspense></div></div>{step === 'design' && !multiplesMode && showCanvasHint && <p className="stage-hint"><span>{config.kind === 'treemap' ? 'Один клик выбирает категорию · повторный — блок' : 'Нажмите на элемент графика, чтобы настроить его отдельно'}</span><button type="button" onClick={dismissCanvasHint} aria-label="Больше не показывать подсказку">×</button></p>}{step === 'chart' && <div className="chart-preview-actions"><div><small>Выбранный тип</small><strong>{multiplesMode ? `${documentConfig.multiples?.panels.filter(Boolean).length ?? 0} графиков в композиции` : chartPlugin.label}</strong></div><button type="button" className="button primary" disabled={multiplesMode && !documentConfig.multiples?.panels.some(Boolean)} onClick={openDesign}>Настроить оформление →</button></div>}</section>
 
-        {step === 'design' && <Suspense fallback={<aside className="settings-panel" aria-busy="true">Загрузка настроек…</aside>}><aside className="settings-panel"><div className="panel-title"><span className="eyebrow">Шаг 4 из 4</span><h2>Оформление</h2><p>Настройте график и выбранные элементы</p></div><SettingsQuickNav features={chartPlugin.settings.features} showSeries={chartSeries.length > 1}/><section className="form-section visual-settings" onToggle={(event) => { const opened = event.target as HTMLDetailsElement; if (opened.tagName !== 'DETAILS' || !opened.open || opened.parentElement !== event.currentTarget) return; event.currentTarget.querySelectorAll<HTMLDetailsElement>(':scope > details[open]').forEach((details) => { if (details !== opened) details.open = false }) }}>
-          <CanvasSettings config={config} onChange={setConfig}/>
-          <NumberFormatSettings config={config} onChange={setConfig}/>
-          {activeDecoration && <section className="element-editor decoration-editor"><header><div><span>Выбран визуальный акцент</span><strong>{decorationLabels[activeDecoration.type]}</strong><small>Перетащите объект на холсте или задайте точные координаты</small></div><button onClick={() => setSelectedDecoration(null)}>×</button></header><div>
-            <label>Цвет<ColorControl value={activeDecoration.color} swatches={pickerSwatches} onChange={(color) => updateDecoration({ ...activeDecoration, color })}/></label>
-            <div className="fred-grid"><label>X, px<NumberInput disabled={activeDecoration.type === 'area' && activeDecoration.fitToPlotWidth} min="0" max={config.canvasWidth ?? 1000} value={Math.round(activeDecoration.x)} onValueChange={(x) => updateDecoration({ ...activeDecoration, x })}/></label><label>Y, px<NumberInput disabled={activeDecoration.type === 'area' && activeDecoration.fitToPlot} min="0" max={config.canvasHeight ?? 563} value={Math.round(activeDecoration.y)} onValueChange={(y) => updateDecoration({ ...activeDecoration, y })}/></label></div>
-            {activeDecoration.type === 'area' && <SettingsCheckbox isSelected={activeDecoration.fitToPlot ?? false} onChange={(fitToPlot) => updateDecoration({ ...activeDecoration, fitToPlot })}>По высоте области графика</SettingsCheckbox>}
-            {activeDecoration.type === 'area' && <SettingsCheckbox isSelected={activeDecoration.fitToPlotWidth ?? false} onChange={(fitToPlotWidth) => updateDecoration({ ...activeDecoration, fitToPlotWidth })}>По ширине области графика</SettingsCheckbox>}
-            {activeDecoration.type === 'area' && <div className="fred-grid"><label>Ширина, px<NumberInput disabled={activeDecoration.fitToPlotWidth} min="10" max="1000" value={Math.round(activeDecoration.width)} onValueChange={(width) => updateDecoration({ ...activeDecoration, width })}/></label><label>Высота, px<NumberInput disabled={activeDecoration.fitToPlot} min="10" max="1000" value={Math.round(activeDecoration.height)} onValueChange={(height) => updateDecoration({ ...activeDecoration, height })}/></label></div>}
-            {activeDecoration.type === 'horizontal-line' && <label>Длина, px<NumberInput min="10" max="1000" value={Math.round(activeDecoration.width)} onValueChange={(width) => updateDecoration({ ...activeDecoration, width })}/></label>}
-            {activeDecoration.type === 'vertical-line' && <label>Длина, px<NumberInput min="10" max="1000" value={Math.round(activeDecoration.height)} onValueChange={(height) => updateDecoration({ ...activeDecoration, height })}/></label>}
-            {(activeDecoration.type === 'line' || activeDecoration.type === 'arrow' || activeDecoration.type === 'curved-line') && <div className="fred-grid"><label>Смещение X<NumberInput min="-1000" max="1000" value={Math.round(activeDecoration.width)} onValueChange={(width) => updateDecoration({ ...activeDecoration, width })}/></label><label>Смещение Y<NumberInput min="-1000" max="1000" value={Math.round(activeDecoration.height)} onValueChange={(height) => updateDecoration({ ...activeDecoration, height })}/></label></div>}
-            {activeDecoration.type === 'curved-line' && <label>Изгиб линии<NumberInput min="-1" max="1" step="0.05" value={activeDecoration.curvature ?? .28} onValueChange={(curvature) => updateDecoration({ ...activeDecoration, curvature })}/></label>}
-            <label>Прозрачность<NumberInput min="0.05" max="1" step="0.05" value={activeDecoration.opacity} onValueChange={(opacity) => updateDecoration({ ...activeDecoration, opacity })}/></label>
-            <label>{activeDecoration.type === 'area' ? 'Толщина границы, px' : 'Толщина, px'}<NumberInput min="0.5" max="12" step="0.5" value={activeDecoration.lineWidth} onValueChange={(lineWidth) => updateDecoration({ ...activeDecoration, lineWidth })}/></label>
-            <label>Тип линии<select value={activeDecoration.lineType} onChange={(event) => updateDecoration({ ...activeDecoration, lineType: event.target.value as ChartDecoration['lineType'] })}><option value="solid">Сплошная</option><option value="dashed">Пунктирная</option><option value="dotted">Точечная</option></select></label>
-            {activeDecoration.type !== 'area' && <label>Наконечник<select value={activeDecoration.arrowPlacement ?? ((activeDecoration.endArrow || activeDecoration.type === 'arrow') ? 'end' : 'none')} onChange={(event) => { const arrowPlacement = event.target.value as NonNullable<ChartDecoration['arrowPlacement']>; updateDecoration({ ...activeDecoration, arrowPlacement, endArrow: arrowPlacement !== 'none' }) }}><option value="none">Без наконечника</option><option value="start">В начале</option><option value="end">В конце</option><option value="both">С двух сторон</option></select></label>}
-            {activeDecoration.type !== 'area' && (activeDecoration.arrowPlacement ?? ((activeDecoration.endArrow || activeDecoration.type === 'arrow') ? 'end' : 'none')) !== 'none' && <label>Вид наконечника<select value={activeDecoration.arrowHead ?? 'filled'} onChange={(event) => updateDecoration({ ...activeDecoration, arrowHead: event.target.value as NonNullable<ChartDecoration['arrowHead']> })}><option value="open">Открытая стрелка</option><option value="filled">Заполненная стрелка</option><option value="circle">Круг</option><option value="bar">Поперечная засечка</option></select></label>}
-            <button className="delete-decoration" onClick={() => { setConfig((current) => ({ ...current, decorations: (current.decorations ?? []).filter((item) => item.id !== activeDecoration.id) })); setSelectedDecoration(null) }}>Удалить объект</button>
-          </div></section>}
-          {chartPlugin.settings.sections.includes('series') && <>
+        {step === 'design' && <aside className="settings-panel">{designScopeControls}<div className="panel-title"><h2>Оформление</h2><p>{multiplesMode ? activePanel ? `График ${(selectedPanel ?? 0) + 1} · ${config.title}` : 'Вся композиция' : 'Настройте график и выбранные элементы'}</p></div>{compositionControls}{multiplesMode && activePanel && (documentConfig.multiples?.sharedValueScale || documentConfig.multiples?.sharedXScale) && <p className="multiples-inherited-note">Общие шкалы имеют приоритет над индивидуальными границами. Индивидуальные значения сохраняются и снова действуют после отключения общих шкал.</p>}{multiplesMode && !activePanel ? <><CanvasSettings config={documentConfig} onChange={setDocumentConfig}/><ChartSettingsPanel category="text" config={documentConfig} plugin={chartPlugin} seriesNames={[]} valueLabels={[]} xKind="other" onChange={setDocumentConfig}/></> : <SettingsCategoryTabs value={settingsCategory} chartLabel={chartPlugin.label} showAxes={config.kind !== 'treemap' && !isPieChart(config.kind)} onChange={setSettingsCategory}><section className="form-section visual-settings" onToggle={(event) => { const opened = event.target as HTMLDetailsElement; if (opened.tagName !== 'DETAILS' || !opened.open || opened.parentElement !== event.currentTarget) return; event.currentTarget.querySelectorAll<HTMLDetailsElement>(':scope > details[open]').forEach((details) => { if (details !== opened) details.open = false }) }}>
+          {settingsCategory === 'canvas' && <CanvasSettings config={config} onChange={setConfig} sizeLocked={multiplesMode}/>}
+          {settingsCategory === 'axes' && <NumberFormatSettings config={config} onChange={setConfig}/>}
+          {settingsCategory === 'chart' && chartPlugin.settings.sections.includes('series') && <>
           {selectedElement && (selectedElement.target === "value-label" || config.kind === 'treemap') && <ValueLabelSelectionControls config={config} element={selectedElement} color={config.kind === 'treemap' ? selectedElementColor : undefined} swatches={pickerSwatches} canPaste={copiedStyle?.kind === 'element'} onCopy={copyElementStyle} onPaste={pasteElementStyle} onChange={updateElement} onClose={() => setSelectedElement(null)} onReset={config.kind === 'treemap' ? () => setConfig((current) => { const elementStyles = { ...current.elementStyles }; delete elementStyles[selectedElement.key]; return { ...current, elementStyles } }) : undefined}/>}
           {selectedElement && selectedElement.target !== "value-label" && config.kind !== 'treemap' && <section className="element-editor"><header><div><span>Выбран элемент</span><strong>{selectedElement.label || selectedElement.category}</strong><small>{selectedElement.seriesName} · {selectedElement.value}</small></div><button onClick={() => setSelectedElement(null)}>×</button></header><div><label>Цвет элемента<ColorControl value={selectedElementColor} swatches={pickerSwatches} onChange={(color) => updateElement({ color })}/></label>{config.kind === 'line' && <><div className="element-note">Настройки применяются к участку линии, ведущему к выбранной точке.</div><label>Толщина участка, px<NumberInput min="0.5" max="12" step="0.5" value={selectedElementStyle?.lineWidth ?? config.seriesStyles[selectedElement.seriesName]?.lineWidth ?? 2} onValueChange={(value) => updateElement({ lineWidth: value })}/></label><label>Тип участка<select value={selectedElementStyle?.lineType ?? config.seriesStyles[selectedElement.seriesName]?.lineType ?? 'solid'} onChange={(event) => updateElement({ lineType: event.target.value as 'solid' | 'dashed' | 'dotted' })}><option value="solid">Сплошной</option><option value="dashed">Пунктирный</option><option value="dotted">Точечный</option></select></label></>}{(isLineLikeChart(config.kind) || config.kind === 'scatter' || config.kind === 'bubble') && <MarkerSettings individual value={selectedElementStyle ?? {}} lineColor={selectedElementColor} onChange={updateElement}/>}<fieldset><legend>Подпись выбранного элемента</legend><SettingsCheckbox isSelected={selectedElementLabelShown} onChange={(showLabel) => updateElement({ showLabel })}>Показывать подпись</SettingsCheckbox><label>Текст подписи<input className="text-input" value={selectedElementStyle?.label ?? ''} onChange={(event) => updateElement({ label: event.target.value, showLabel: true })} placeholder={selectedElement.label ?? selectedElement.value}/></label>{(config.kind === 'scatter' || config.kind === 'bubble' || isDistributionKind(config.kind)) && <label>Положение<select value={selectedElementLabelPosition} onChange={(event) => updateElement({ labelPosition: event.target.value as NonNullable<ChartConfig['elementStyles'][string]['labelPosition']>, showLabel: true })}><option value="top">Сверху</option><option value="right">Справа</option><option value="bottom">Снизу</option><option value="left">Слева</option></select></label>}<TextStyleEditor label="Стиль этой подписи" value={selectedElementStyle?.valueText ?? config.valueText} customFonts={config.customFonts} onChange={(valueText) => updateElement({ valueText, showLabel: true })} align={!(config.kind === 'scatter' || config.kind === 'bubble' || isDistributionKind(config.kind))}/></fieldset><StyleTransferActions canPaste={copiedStyle?.kind === "element"} onCopy={copyElementStyle} onPaste={pasteElementStyle}/><button className="reset-element" onClick={() => setConfig((current) => { const elementStyles = { ...current.elementStyles }; delete elementStyles[selectedElement.key]; return { ...current, elementStyles } })}>Сбросить настройки элемента</button></div></section>}
           {selectedSeries && !selectedElement && <section className="element-editor series-editor"><header><div><span>Выбран ряд</span><strong>{selectedSeries.name}</strong><small>Повторно нажмите на точку или столбец для выбора элемента</small></div><button onClick={() => setSelectedSeries(null)}>×</button></header><div><label>Цвет всего ряда<ColorControl value={config.seriesStyles[selectedSeries.name]?.color ?? selectedSeries.color} swatches={pickerSwatches} onChange={(color) => updateSeries({ color })}/></label>{isDistributionKind(config.kind) && <><label>{config.distributionSummaryStatistic === 'mean' ? 'Цвет линии среднего' : 'Цвет линии медианы'}<ColorControl value={config.seriesStyles[selectedSeries.name]?.distributionSummaryColor ?? config.seriesStyles[selectedSeries.name]?.color ?? selectedSeries.color} swatches={pickerSwatches} onChange={(distributionSummaryColor) => updateSeries({ distributionSummaryColor })}/></label><div className="settings-pair"><label>Толщина, px<NumberInput min="0.5" max="12" step="0.5" value={config.seriesStyles[selectedSeries.name]?.distributionSummaryWidth ?? config.distributionSummaryWidth ?? 3} onValueChange={(distributionSummaryWidth) => updateSeries({ distributionSummaryWidth })}/></label><label>Длина, %<NumberInput min="20" max="200" step="5" value={config.seriesStyles[selectedSeries.name]?.distributionSummaryLength ?? config.distributionSummaryLength ?? 100} onValueChange={(distributionSummaryLength) => updateSeries({ distributionSummaryLength })}/></label></div></>}{isLineLikeChart(config.kind) && <><label>Толщина линии, px<NumberInput min="0.5" max="12" step="0.5" value={config.seriesStyles[selectedSeries.name]?.lineWidth ?? (config.kind === 'slope' ? 2.5 : 2)} onValueChange={(value) => updateSeries({ lineWidth: value })}/></label><label>Тип линии<select value={config.seriesStyles[selectedSeries.name]?.lineType ?? 'solid'} onChange={(event) => updateSeries({ lineType: event.target.value as 'solid' | 'dashed' | 'dotted' })}><option value="solid">Сплошная</option><option value="dashed">Пунктирная</option><option value="dotted">Точечная</option></select></label></>}{(isLineLikeChart(config.kind) || config.kind === 'scatter' || config.kind === 'bubble') && <MarkerSettings value={config.seriesStyles[selectedSeries.name] ?? {}} lineColor={config.seriesStyles[selectedSeries.name]?.color ?? selectedSeries.color} onChange={updateSeries} alwaysVisible={config.kind === 'slope'} defaultSize={config.kind === 'slope' ? 11 : 8}/>}<StyleTransferActions canPaste={copiedStyle?.kind === "series"} onCopy={copySeriesStyle} onPaste={pasteSeriesStyle}/><button className="reset-element" onClick={() => { setConfig((current) => { const seriesStyles = { ...current.seriesStyles }; delete seriesStyles[selectedSeries.name]; return { ...current, seriesStyles } }); setSelectedSeries(null) }}>Вернуть настройки палитры</button></div></section>}
-          {chartSeries.length > 1 && <details className="settings-group series-settings" open><summary>Ряды данных</summary><div><p className="series-order-hint">Перетаскивайте ряды или используйте стрелки, чтобы изменить порядок.</p><div className="series-style-list ordered-series-list">{chartSeries.map((series, index) => { const color = chartModule?.getSeriesColor(config, series.name, index) ?? config.color; return <div className={selectedSeries?.name === series.name ? 'active' : ''} draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', series.name) }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move' }} onDrop={(event) => { event.preventDefault(); const name = event.dataTransfer.getData('text/plain'); if (name) moveSeries(name, index) }} key={series.name}><span className="series-drag" title="Перетащить">⠿</span><button className="series-name-button" onClick={() => { setSelectedSeries({ name: series.name, color }); setSelectedElement(null); setSelectedAnnotation(null) }}><i style={{ background: color }}/><span>{series.name}</span></button><div className="series-order-buttons"><button disabled={index === 0} onClick={() => moveSeries(series.name, index - 1)} title="Переместить вперёд">↑</button><button disabled={index === chartSeries.length - 1} onClick={() => moveSeries(series.name, index + 1)} title="Переместить назад">↓</button></div><ColorControl compact title={`Цвет ряда ${series.name}`} value={color} swatches={pickerSwatches} onChange={(nextColor) => setConfig((current) => ({ ...current, seriesStyles: { ...current.seriesStyles, [series.name]: { ...current.seriesStyles[series.name], color: nextColor } } }))}/></div> })}</div></div></details>}
+          {!chartSelectionActive && chartSeries.length > 1 && <details className="settings-group series-settings" open><summary>Ряды данных</summary><div><p className="series-order-hint">Перетаскивайте ряды или используйте стрелки, чтобы изменить порядок.</p><div className="series-style-list ordered-series-list">{chartSeries.map((series, index) => { const color = chartModule?.getSeriesColor(config, series.name, index) ?? config.color; return <div className={selectedSeries?.name === series.name ? 'active' : ''} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move' }} onDrop={(event) => { event.preventDefault(); const name = event.dataTransfer.getData('text/plain'); if (name) moveSeries(name, index) }} key={series.name}><span className="series-drag" draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', series.name) }} title="Перетащить">⠿</span><button type="button" className="series-name-button" onClick={() => { setSelectedSeries({ name: series.name, color }); setSelectedElement(null); setSelectedAnnotation(null) }}><i style={{ background: color }}/><span>{series.name}</span></button><div className="series-order-buttons"><button type="button" aria-label={`Переместить ${series.name} выше`} disabled={index === 0} onClick={() => moveSeries(series.name, index - 1)} title="Переместить выше">↑</button><button type="button" aria-label={`Переместить ${series.name} ниже`} disabled={index === chartSeries.length - 1} onClick={() => moveSeries(series.name, index + 1)} title="Переместить ниже">↓</button></div><ColorControl compact title={`Цвет ряда ${series.name}`} value={color} swatches={pickerSwatches} onChange={(nextColor) => setConfig((current) => ({ ...current, seriesStyles: { ...current.seriesStyles, [series.name]: { ...current.seriesStyles[series.name], color: nextColor } } }))}/></div> })}</div></div></details>}
           </>}
-          {chartPlugin.settings.sections.includes('annotations') && <div className="annotation-add-wrap"><div className="annotation-tools"><button onClick={addAnnotation}>＋ Текст</button><button onClick={() => addDecoration('area')}>▧ Фон</button><button onClick={() => addDecoration('line')}>╱ Прямая</button><button onClick={() => addDecoration('horizontal-line')}>— Горизонталь</button><button onClick={() => addDecoration('vertical-line')}>│ Вертикаль</button><button onClick={() => addDecoration('curved-line')}>⌒ Плавная</button></div><small>Текст, фоновые области и линии с настраиваемыми наконечниками</small>{!!config.decorations?.length && <div className="decoration-list">{config.decorations.map((decoration, index) => <button type="button" className={selectedDecoration === decoration.id ? 'active' : ''} key={decoration.id} onClick={() => { setSelectedDecoration(decoration.id); setSelectedAnnotation(null); setSelectedElement(null); setSelectedSeries(null) }}><i style={{ background: decoration.color }}/><span>{decorationLabels[decoration.type]} {index + 1}</span></button>)}</div>}</div>}
-          {chartPlugin.settings.sections.includes('series') && <>
-          {chartSeries.length <= 1 && config.kind !== 'waterfall' && <details className="settings-group" open><summary>Основное</summary><div><label>Цвет ряда<ColorControl value={config.seriesStyles[chartSeries[0]?.name ?? config.yField]?.color ?? config.color} swatches={pickerSwatches} onChange={(color) => setConfig((current) => ({ ...current, color, seriesStyles: { ...current.seriesStyles, [chartSeries[0]?.name ?? current.yField]: { ...current.seriesStyles[chartSeries[0]?.name ?? current.yField], color } } }))}/></label>{(isLineLikeChart(config.kind) || config.kind === 'scatter' || config.kind === 'bubble') && <MarkerSettings value={config.seriesStyles[chartSeries[0]?.name ?? config.yField] ?? {}} lineColor={config.seriesStyles[chartSeries[0]?.name ?? config.yField]?.color ?? config.color} onChange={(values) => setConfig((current) => ({ ...current, seriesStyles: { ...current.seriesStyles, [chartSeries[0]?.name ?? config.yField]: { ...current.seriesStyles[chartSeries[0]?.name ?? config.yField], ...values } } }))} alwaysVisible={config.kind === 'slope'} defaultSize={config.kind === 'slope' ? 11 : 8}/>}</div></details>}
+          {settingsCategory === 'annotations' && chartPlugin.settings.sections.includes('annotations') && <AnnotationSettings resolvedDecorations={decorationLayouts} pointLabels={isPieChart(config.kind) || config.kind === 'treemap' || config.kind === 'heatmap' ? [] : valueLabels} pickingAnchor={pickingDecorationAnchor} onPickAnchor={(kind) => { setPickingDecorationEndpoint(kind === 'text' ? 'start' : 'end'); setPickingDecorationAnchor((current) => current === kind ? null : kind) }} onConnectText={connectAnnotation} canvasWidth={annotationCanvasWidth} canvasHeight={annotationCanvasHeight} config={config} selectedAnnotation={selectedAnnotation} selectedDecoration={selectedDecoration} tool={annotationTool} onTool={(tool) => { clearCanvasSelection(); setAnnotationTool(tool) }} onPlace={placeAnnotation} onSelect={chooseAnnotation} onChange={setConfig}/>}
+          {settingsCategory === 'chart' && chartPlugin.settings.sections.includes('series') && <>
+          {!chartSelectionActive && chartSeries.length <= 1 && config.kind !== 'waterfall' && <details className="settings-group" open><summary>Основное</summary><div><label>Цвет ряда<ColorControl value={config.seriesStyles[chartSeries[0]?.name ?? config.yField]?.color ?? config.color} swatches={pickerSwatches} onChange={(color) => setConfig((current) => ({ ...current, color, seriesStyles: { ...current.seriesStyles, [chartSeries[0]?.name ?? current.yField]: { ...current.seriesStyles[chartSeries[0]?.name ?? current.yField], color } } }))}/></label>{(isLineLikeChart(config.kind) || config.kind === 'scatter' || config.kind === 'bubble') && <MarkerSettings value={config.seriesStyles[chartSeries[0]?.name ?? config.yField] ?? {}} lineColor={config.seriesStyles[chartSeries[0]?.name ?? config.yField]?.color ?? config.color} onChange={(values) => setConfig((current) => ({ ...current, seriesStyles: { ...current.seriesStyles, [chartSeries[0]?.name ?? config.yField]: { ...current.seriesStyles[chartSeries[0]?.name ?? config.yField], ...values } } }))} alwaysVisible={config.kind === 'slope'} defaultSize={config.kind === 'slope' ? 11 : 8}/>}</div></details>}
           </>}
-          {isBarChart(config.kind) && !isLollipopChart(config.kind) && selectedElement?.target !== "value-label" && <BarSelectionControls config={config} element={selectedElement} series={selectedSeries} color={selectedElement ? selectedElementColor : selectedSeries?.color} onElementChange={updateElement} onSeriesChange={updateSeries}/>}
-          {chartPlugin.settings.features.scatterLayout && <ScatterSettings config={config} columns={table.columns} numericColumns={numericColumns} table={table} onChange={setConfig}/>}
-          {config.kind === 'bubble' && <BubbleSizeLegendSettings config={config} onChange={setConfig}/>}
-          {config.kind === 'heatmap' && <HeatmapSettings config={config} onChange={setConfig}/>}
-          {config.kind === 'treemap' && <TreemapSettings config={config} onChange={setConfig}/>}
-          {chartPlugin.settings.features.distributionLayout && <DistributionSettings config={config} table={table} onChange={setConfig}/>}
-          {isLollipopChart(config.kind) && <LollipopSettings config={config} seriesNames={chartSeries.map((series) => series.name)} xKind={types[config.xField] === 'date' ? 'date' : types[config.xField] === 'number' ? 'number' : 'other'} onChange={setConfig}/>}
-          {chartPlugin.settings.features.lineVariant && <LineVariantSettings config={config} numericColumns={numericColumns} table={table} onChange={setConfig}/>}
-          <ChartSettingsPanel config={config} plugin={chartPlugin} seriesNames={chartSeries.map((series) => series.name)} valueLabels={valueLabels} xKind={types[config.xField] === 'date' ? 'date' : types[config.xField] === 'number' ? 'number' : 'other'} frequency={table.timeProfiles?.[config.xField]?.frequency} onChange={setConfig}/>
-        </section><div className="settings-footer"><button className="button" onClick={() => setStep('chart')}>← Тип графика</button><button className="button" onClick={() => setStep('data')}>Данные</button></div></aside></Suspense>}
+          {settingsCategory === 'chart' && isBarChart(config.kind) && !isLollipopChart(config.kind) && selectedElement?.target !== "value-label" && <BarSelectionControls config={config} element={selectedElement} series={selectedSeries} color={selectedElement ? selectedElementColor : selectedSeries?.color} onElementChange={updateElement} onSeriesChange={updateSeries}/>}
+          {!chartSelectionActive && settingsCategory === 'chart' && chartPlugin.settings.features.scatterLayout && <ScatterSettings config={config} columns={table.columns} numericColumns={numericColumns} table={table} onChange={setConfig}/>}
+          {!chartSelectionActive && settingsCategory === 'chart' && config.kind === 'bubble' && <BubbleSizeLegendSettings config={config} onChange={setConfig}/>}
+          {!chartSelectionActive && settingsCategory === 'chart' && config.kind === 'heatmap' && <HeatmapSettings config={config} onChange={setConfig}/>}
+          {!chartSelectionActive && settingsCategory === 'chart' && isPieChart(config.kind) && <PieSettings config={config} onChange={setConfig}/>}
+          {!chartSelectionActive && settingsCategory === 'chart' && config.kind === 'treemap' && <TreemapSettings config={config} onChange={setConfig}/>}
+          {!chartSelectionActive && settingsCategory === 'chart' && chartPlugin.settings.features.distributionLayout && <DistributionSettings config={config} table={table} onChange={setConfig}/>}
+          {!chartSelectionActive && settingsCategory === 'chart' && isLollipopChart(config.kind) && <LollipopSettings config={config} seriesNames={chartSeries.map((series) => series.name)} xKind={types[config.xField] === 'date' ? 'date' : types[config.xField] === 'number' ? 'number' : 'other'} onChange={setConfig}/>}
+          {!chartSelectionActive && settingsCategory === 'chart' && chartPlugin.settings.features.lineVariant && <LineVariantSettings config={config} numericColumns={numericColumns} table={table} onChange={setConfig}/>}
+          {!chartSelectionActive && <ChartSettingsPanel isPanel={Boolean(activePanel)} category={settingsCategory} config={config} plugin={chartPlugin} seriesNames={chartSeries.map((series) => series.name)} valueLabels={valueLabels} xKind={types[config.xField] === 'date' ? 'date' : types[config.xField] === 'number' ? 'number' : 'other'} frequency={table.timeProfiles?.[config.xField]?.frequency} onChange={setConfig}/>}
+        </section></SettingsCategoryTabs>}<div className="settings-footer"><button className="button" onClick={() => setStep('chart')}>← Тип графика</button><button className="button" onClick={() => setStep('data')}>Данные</button></div></aside>}
       </main>}
     </div>
   )

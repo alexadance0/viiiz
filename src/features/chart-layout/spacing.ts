@@ -3,6 +3,7 @@ import { DEFAULT_COMPOSITION_SPACING } from '../../entities/chart/model/defaults
 import type { Insets } from './geometry'
 
 export interface CompositionSpacing {
+  minimumPlotInsets?: Insets
   canvasInsets: Insets
   titleSubtitle: number
   headerLegend: number
@@ -20,6 +21,7 @@ export interface AxisSpacing { tickLabel: number; labelTitle: number }
 export function compositionSpacing(config: Partial<ChartConfig>): CompositionSpacing {
   const defaults = DEFAULT_COMPOSITION_SPACING
   return {
+    ...(config.minimumPlotInsets ? { minimumPlotInsets: config.minimumPlotInsets } : {}),
     canvasInsets: {
       top: config.canvasMarginTop ?? defaults.canvasInsets.top,
       right: config.canvasMarginRight ?? defaults.canvasInsets.right,

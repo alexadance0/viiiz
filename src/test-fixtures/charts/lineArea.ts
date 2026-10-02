@@ -19,7 +19,7 @@ export const lineAreaFixtures: LineAreaFixture[] = [
   fixture('step start', { kind: 'step-line', stepPosition: 'start' }),
   fixture('step end', { kind: 'step-line', stepPosition: 'end' }),
   fixture('markers and values', { showValues: true, seriesStyles: { first: { showMarker: true, markerShape: 'diamond', markerSize: 11 } } }),
-  fixture('element overrides', { missingMode: 'zero', elementStyles: { ['first\u001fstring:Beta']: { showMarker: true, markerShape: 'rect', color: '#6956e8', lineWidth: 5, lineType: 'dashed', showLabel: true, label: 'Edited' } } }),
+  fixture('element overrides', { missingMode: 'zero', elementStyles: { ['first\u001fstring:Beta']: { showMarker: true, markerShape: 'rect', color: '#1677a6', lineWidth: 5, lineType: 'dashed', showLabel: true, label: 'Edited' } } }),
   fixture('direct labels left', { showDirectLabels: true, yAxisPosition: 'right', yFields: ['first', 'second'] }),
   fixture('direct labels right', { showDirectLabels: true, yFields: ['first', 'second'] }),
   fixture('date categories', { dateLabelFormat: 'month-context-ru' }, dates),

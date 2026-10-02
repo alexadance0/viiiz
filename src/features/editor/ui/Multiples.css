@@ -1,0 +1,87 @@
+.multiples-picker-shell{min-height:0;overflow:auto;background:#fff;border-right:1px solid var(--line)}
+.multiples-picker-shell .chart-picker{height:auto;overflow:visible;border:0}
+.composition-mode{display:flex;gap:0;margin:18px;border:1px solid var(--ink)}
+.composition-mode button{flex:1;min-height:40px;padding:8px;background:#fff;color:var(--ink);border:0;font:600 12px/1.3 'Wix Madefor Text',sans-serif}
+.composition-mode button[aria-pressed=true]{background:var(--ink);color:#fff}
+.multiples-controls{border-bottom:1px solid var(--line);padding:0 18px 18px}
+.multiples-overview{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:42px;padding:10px 0;border:0;border-bottom:1px solid var(--line);background:#fff;color:var(--ink);font:650 13px/1.4 'Wix Madefor Text',sans-serif;text-align:left}
+.multiples-overview span{font-size:11px;font-weight:400}
+.multiples-overview.active{border-bottom-color:var(--ink)}
+.multiples-layout{margin-top:14px}
+.multiples-layout summary{padding:4px 0 12px;font-weight:650;font-size:12px;cursor:pointer}
+.multiples-presets{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.multiples-presets button{display:grid;gap:6px;padding:7px 5px;border:1px solid var(--line);background:#fff;color:var(--ink)}
+.multiples-presets button[aria-pressed=true]{border-color:var(--ink);background:var(--ink);color:#fff}
+.multiples-mini-grid{display:grid;gap:2px;height:26px}
+.multiples-mini-grid i{display:block;background:currentColor;opacity:.65;min-height:0}
+.multiples-presets small{font-size:10px;white-space:nowrap}
+.multiples-dimensions{display:grid;grid-template-columns:1fr 1fr 1.3fr;gap:8px;margin-top:12px}
+.multiples-dimensions label{display:grid;gap:6px;color:var(--ink);font-size:11px}
+.multiples-dimensions input{width:100%;min-width:0;height:36px;padding:7px;border:1px solid var(--line);background:#fff;color:var(--ink);font-size:12px}
+.multiples-layout-hint{margin:10px 0 14px;color:#55515e;font-size:11px;line-height:1.5}
+.multiples-shared{border-top:1px solid var(--line);padding-top:10px;margin-bottom:14px}
+.multiples-shared>div{display:grid;gap:12px;padding-bottom:8px}
+.multiples-shared p,.multiples-shared small{margin:0;font-size:11px;line-height:1.5;color:var(--chart-axis)}
+.multiples-shared .multiples-dimensions{margin-top:0}
+.multiples-shared .settings-checkbox{font-size:12px}
+.multiples-shared>div>label{display:grid;gap:6px;color:var(--ink);font-size:11px}
+.multiples-shared select{width:100%;min-height:40px;padding:7px;border:1px solid var(--line);border-radius:0;background:#fff;color:var(--ink);font:inherit}
+.multiples-inherited-note{margin:0;padding:12px 18px;border-bottom:1px solid var(--line);font-size:11px;line-height:1.5;color:var(--chart-axis)}
+.multiples-panel-list>div{display:flex;align-items:center;border-top:1px solid var(--line);min-height:52px}
+.multiples-panel-list>div.selected{background:var(--surface-subtle,#f7f7f7)}
+.multiples-panel-name{display:flex;align-items:center;gap:10px;flex:1;min-width:0;padding:10px 6px;border:0;background:transparent;text-align:left;color:var(--ink)}
+.multiples-panel-name>span:first-child{font-size:10px;font-variant-numeric:tabular-nums}
+.multiples-panel-name>span:last-child{display:grid;gap:3px;min-width:0}
+.multiples-panel-name strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.multiples-panel-name small{color:#55515e;font-size:10px}
+.multiples-panel-actions{display:flex}
+.multiples-panel-actions button{display:grid;place-items:center;width:26px;height:32px;padding:0;border:0;background:transparent;color:var(--ink)}
+.multiples-panel-actions button:disabled{opacity:.4;cursor:default}
+.multiples-panel-actions button:hover:not(:disabled){background:var(--line)}
+.multiples-add{display:flex;justify-content:center;align-items:center;gap:6px;width:100%;margin-top:12px;min-height:38px;font-size:12px}
+.multiples-instructions{padding:24px 18px}
+.multiples-instructions h2{font:700 20px/1.2 'Wix Madefor Display',sans-serif}
+.multiples-instructions p{font-size:13px;line-height:1.65;margin:12px 0}
+.multiples-instructions small{font-size:11px;color:#55515e}
+.multiples-viewport{position:relative;display:flex;flex-direction:column;width:100%;height:100%;min-height:0;overflow:auto;padding:12px;box-sizing:border-box;background:var(--stage-bg,#f5f5f5)}
+.multiples-sized-paper{position:relative;flex:none;margin:auto}
+.multiples-paper{position:absolute;left:0;top:0;transform-origin:top left;isolation:isolate}
+.multiples-text{position:absolute;inset:0;pointer-events:none}
+.multiples-grid{display:grid;position:absolute}
+.multiples-cell{position:relative;min-width:0;min-height:0;outline:1px solid transparent;outline-offset:3px}
+.multiples-cell.selected{outline-color:var(--ink)}
+.multiples-chart{height:100%;width:100%;min-height:0}
+.multiples-chart .chart-canvas-shell.logical-canvas{box-shadow:none}
+.multiples-select{position:absolute;inset:0;border:0;background:transparent;color:var(--ink);cursor:pointer}
+.multiples-select>span{position:absolute;right:2px;top:2px;padding:4px 6px;background:#fff;border:1px solid var(--line);font-size:10px;opacity:0}
+.multiples-select:hover>span,.multiples-select:focus-visible>span,.multiples-select.is-selected>span{opacity:1}
+.multiples-select.is-selected{inset:auto;right:0;top:0;width:30px;height:28px}
+.multiples-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;width:100%;height:100%;padding:12px;border:1px dashed var(--line);background:var(--surface-subtle);color:var(--chart-axis)}
+.multiples-empty:hover{background:#f3f3f3;border-color:var(--ink);color:var(--ink)}
+.multiples-empty strong{font-size:14px;font-weight:500}
+.multiples-empty small{font-size:11px}
+.multiples-size-hint{position:absolute;bottom:0;left:12px;right:12px;margin:0;padding:8px 10px;border:1px solid var(--line);background:#fff;color:var(--ink);font-size:11px;text-align:center}
+.has-multiples.step-design .settings-panel>.settings-group{margin:0}
+.has-multiples .paper-frame{min-height:320px}
+.has-multiples .canvas-floating-menu{z-index:5}
+.multiples-controls :where(button,input,select,summary):focus-visible,.composition-mode button:focus-visible,.multiples-cell button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+@media(max-width:760px){
+  .has-multiples .settings-panel .settings-footer{position:static}
+  .multiples-panel-actions button{width:34px}
+  .multiples-picker-shell{overflow:visible;border-right:0}
+  .multiples-picker-shell .chart-picker{display:block!important}
+  .multiples-dimensions input,.multiples-panel-actions button,.multiples-presets button{min-height:44px}
+  .has-multiples .stage{min-height:540px}
+}
+
+.design-scope-switch{position:sticky;top:0;z-index:2;flex:none;padding:18px;background:var(--paper,#fff);border-bottom:1px solid var(--line)}
+.design-scope-switch .composition-mode{margin:0}
+.composition-mode button:disabled{opacity:.4;cursor:default}
+.settings-panel .composition-mode button[aria-pressed=true]:hover{background:var(--ink);color:#fff}
+
+/* Keep tall inspectors inside the desktop workspace; an auto grid row grows
+   with the content and moves controls while focus scrolls them into view. */
+@media(min-width:761px){
+  .chart-workspace.has-multiples.step-design{grid-template-rows:minmax(0,1fr)}
+  .chart-workspace.has-multiples.step-design>.settings-panel{min-height:0}
+}

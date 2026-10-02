@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import { Toolbar, ToggleButton, ToggleButtonGroup } from '@heroui/react'
 import { AlignCenter, AlignLeft, AlignRight, Bold, Highlighter, Italic, PenLine, Type, Underline } from 'lucide-react'
 import type { ChartConfig, ChartTextStyle } from '../core/types'
@@ -6,6 +7,7 @@ import { textFonts } from '../core/textFonts'
 import { ColorControl } from './PickerControls'
 
 interface Props {
+  anchorRef?: RefObject<HTMLElement | null>
   style: Pick<ChartTextStyle, 'fontFamily' | 'size' | 'color'>
   customFonts?: ChartConfig['customFonts']
   strokeColor?: string
@@ -29,7 +31,28 @@ const fontLabel = (fontFamily: string, ownFonts: string[]) => {
   return own ? `${own} · свой` : fontFamily.replaceAll('"', '').split(',')[0]
 }
 
-export function TextFragmentToolbar({ style, customFonts, strokeColor = '#ffffff', strokeWidth = 6, enableStroke = false, below, edge = 'start', onBeforeAction, onApply, alignment, onAlignmentChange, onStrokeWidthChange, onCommand, children }: Props) {
+export function TextFragmentToolbar({ anchorRef, style, customFonts, strokeColor = '#ffffff', strokeWidth = 6, enableStroke = false, below, edge = 'start', onBeforeAction, onApply, alignment, onAlignmentChange, onStrokeWidthChange, onCommand, children }: Props) {
+  const toolbarRef = useRef<HTMLDivElement>(null)
+  const [position, setPosition] = useState({ left: 0, top: 0 })
+  const updatePosition = () => {
+    if (!anchorRef?.current || !toolbarRef.current) return
+    const anchor = anchorRef.current.getBoundingClientRect(), toolbar = toolbarRef.current.getBoundingClientRect()
+    const above = anchor.top - toolbar.height - 10
+    const top = below || above < 8 ? anchor.bottom + 10 : above
+    const left = edge === 'end' ? anchor.right - toolbar.width : anchor.left
+    const next = { left: Math.max(8, Math.min(left, window.innerWidth - toolbar.width - 8)), top: Math.max(8, Math.min(top, window.innerHeight - toolbar.height - 8)) }
+    setPosition((previous) => previous.left === next.left && previous.top === next.top ? previous : next)
+  }
+  useLayoutEffect(updatePosition)
+  useEffect(() => {
+    if (!anchorRef?.current || !toolbarRef.current) return
+    const observer = new ResizeObserver(updatePosition)
+    observer.observe(anchorRef.current); observer.observe(toolbarRef.current)
+    window.addEventListener('scroll', updatePosition, true); window.addEventListener('resize', updatePosition)
+    return () => { observer.disconnect(); window.removeEventListener('scroll', updatePosition, true); window.removeEventListener('resize', updatePosition) }
+  // Position also updates after every render, including canvas zoom and dragging.
+  // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchorRef, below, edge])
   const ownFonts = [...new Set(customFonts?.map((font) => font.name) ?? [])]
   const [fontFamily, setFontFamily] = useState(style.fontFamily)
   const [textColor, setTextColor] = useState(style.color)
@@ -46,7 +69,7 @@ export function TextFragmentToolbar({ style, customFonts, strokeColor = '#ffffff
     onApply({ fontSize: `${next}px` })
   }
   const currentSize = Number(fontSize) || style.size
-  return <Toolbar aria-label="Форматирование фрагмента" className={`annotation-floating-toolbar text-fragment-toolbar ${below ? 'below' : ''} ${edge === 'end' ? 'align-end' : ''}`} onPointerDownCapture={() => onBeforeAction?.()} onMouseDown={(event) => event.stopPropagation()}>
+  const toolbar = <Toolbar ref={toolbarRef} style={anchorRef ? { position: 'fixed', left: position.left, top: position.top, bottom: 'auto', right: 'auto', maxWidth: 'calc(100vw - 16px)' } : undefined} data-canvas-toolbar="true" aria-label="Форматирование фрагмента" className={`annotation-floating-toolbar text-fragment-toolbar ${below ? 'below' : ''} ${edge === 'end' ? 'align-end' : ''} ${anchorRef ? 'portal-text-toolbar' : ''}`} onPointerDownCapture={() => onBeforeAction?.()} onMouseDown={(event) => event.stopPropagation()}>
     <select title="Шрифт текста" value={fontFamily} aria-label={`Шрифт: ${fontLabel(fontFamily, ownFonts)}`} onChange={(event) => { setFontFamily(event.target.value); onApply({ fontFamily: event.target.value }) }}>{!textFonts.some(([value]) => value === fontFamily) && !ownFonts.some((name) => fontFamily.startsWith(`"${name}"`)) && <option value={fontFamily}>{fontLabel(fontFamily, ownFonts)}</option>}{textFonts.map(([value, label]) => <option value={value} key={value}>{label}</option>)}{ownFonts.map((name) => <option value={`"${name}", sans-serif`} key={name}>{name} · свой</option>)}</select>
     <div className="text-size-field" aria-label="Размер текста">
       <button type="button" aria-label="Уменьшить размер" onClick={() => applySize(currentSize - 1)}>−</button>
@@ -64,4 +87,5 @@ export function TextFragmentToolbar({ style, customFonts, strokeColor = '#ffffff
     {enableStroke && <span className="toolbar-color-control stroke-color-control"><ColorControl compact title="Обводка букв" value={outlineColor} icon={<PenLine size={14} />} popoverContent={<label className="stroke-width-control"><span>Толщина силуэта</span><input type="range" min="1" max="12" step="1" value={strokeWidth} onChange={(event) => onStrokeWidthChange?.(Number(event.target.value))}/><output>{strokeWidth} px</output></label>} onChange={(next) => { setOutlineColor(next); onApply({ textShadow: '', webkitTextStrokeColor: next, webkitTextStrokeWidth: `${strokeWidth}px`, paintOrder: 'stroke fill' }) }}/></span>}
     {children}
   </Toolbar>
+  return anchorRef ? createPortal(toolbar, document.body) : toolbar
 }

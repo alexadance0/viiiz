@@ -25,13 +25,19 @@ describe('native XY compiler', () => {
   })
 
   it('preserves string grouping, color precedence, size encoding and guide coexistence', () => {
-    const scene = compileNativeXYScene(table, config('bubble', { scatterSizeField: 'size', scatterColorField: 'group', scatterSizeMin: 42, scatterSizeMax: 6, showLegend: true, seriesStyles: { 'Без категории': { color: '#36a476' }, '1': { color: '#6956e8' } } }))
+    const scene = compileNativeXYScene(table, config('bubble', { scatterSizeField: 'size', scatterColorField: 'group', scatterSizeMin: 42, scatterSizeMax: 6, showLegend: true, seriesStyles: { 'Без категории': { color: '#36a476' }, '1': { color: '#1677a6' } } }))
     expect(scene.plot.series.map((series) => series.name)).toEqual(['Без категории', '1'])
     expect(scene.plot.series.map((series) => series.points.length)).toEqual([1, 2])
     expect(scene.plot.sizeEncoding).toMatchObject({ scale: 'sqrt-absolute', range: { minimumDiameter: 6, maximumDiameter: 42 } })
     expect(scene.plot.series.flatMap((series) => series.points).map((point) => point.marker.size).sort((a, b) => a - b)).toEqual([6, 24, 42])
     expect(scene.guides.map((guide) => guide.kind)).toEqual(['categorical-legend', 'size-scale'])
     expect(scene.plot.series.every((series) => !series.name.startsWith('__'))).toBe(true)
+  })
+
+  it('uses the manual series order for marks and the legend', () => {
+    const scene = compileNativeXYScene(table, config('scatter', { yFields: ['y', 'other'], seriesOrder: ['other', 'y'], showLegend: true }))
+    expect(scene.plot.series.map((series) => series.name)).toEqual(['other', 'y'])
+    expect(scene.guides.find((guide) => guide.kind === 'categorical-legend')?.items.map((item) => item.label)).toEqual(['other', 'y'])
   })
 
   it('compiles trends, references, diagonal and clipped quadrants as derived layers', () => {

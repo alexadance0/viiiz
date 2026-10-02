@@ -6,7 +6,7 @@ import { aggregateDatumId, markElementId, seriesId, syntheticDatumId, type Chart
 import type { NativeTreemapChartScene, TreemapNodeScene } from '../../../entities/chart/model/ChartScene'
 import { treemapAdaptiveFontSize } from './text'
 
-const paletteFallback = ['#6956e8', '#168a72', '#e56b45', '#d0a52b', '#3f8fba', '#a45ca4', '#6f9d45', '#c64f70']
+const paletteFallback = ['#1677a6', '#168a72', '#e56b45', '#d0a52b', '#3f8fba', '#a45ca4', '#6f9d45', '#c64f70']
 const key = (series: string, category: string) => `${series}\u001fstring:${category}`
 const ordered = <T extends { name: string; value: number }>(nodes: T[], order?: string[]) => {
   const fallback = [...nodes].sort((left, right) => right.value - left.value)

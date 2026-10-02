@@ -14,7 +14,7 @@ const safeDate = (value?: string) => {
 const monthNames = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
 const channelLabels: Record<ColorChannel, string> = { hue: 'H', saturation: 'S', brightness: 'B', lightness: 'L', red: 'R', green: 'G', blue: 'B', alpha: 'A' }
 const channelsBySpace: Record<ColorSpace, ColorChannel[]> = { hsb: ['hue', 'saturation', 'brightness'], hsl: ['hue', 'saturation', 'lightness'], rgb: ['red', 'green', 'blue'] }
-const baseSwatches = ['#202027', '#55515e', '#777580', '#6956e8', '#36a476', '#e4a52c', '#db5a5a', '#ffffff']
+const baseSwatches = ['#202027', '#55515e', '#777580', '#1677a6', '#36a476', '#e4a52c', '#db5a5a', '#ffffff']
 const colorText = (color: ReturnType<typeof parseColor>) => color.getChannelValue('alpha') < 1 ? color.toString('css') : color.toString('hex')
 export const normalizeRecentColor = (value: string) => colorText(safeColor(value).toFormat('hsb')).toLowerCase()
 export const mergeRecentColor = (recent: string[], value: string, limit = 12) => {

@@ -1,4 +1,6 @@
 import type { ChartConfig, ChartTextStyle } from '../core/types'
+import { applyCanvasTheme, canvasThemeColors } from '../core/chartTextStyle'
+import { contrastText } from '../core/color'
 import { usesHorizontalAxes } from '../core/chartKinds'
 import { NumberInput } from './NumberInput'
 import { ColorControl } from './PickerControls'
@@ -6,7 +8,7 @@ import { SettingsCheckbox } from './SettingsCheckbox'
 import './CanvasSettings.css'
 import { DEFAULT_COMPOSITION_SPACING } from '../entities/chart/model/defaults'
 
-interface Props { config: ChartConfig; onChange(config: ChartConfig): void }
+interface Props { config: ChartConfig; onChange(config: ChartConfig): void; sizeLocked?: boolean }
 const formats = [
   { id: 'presentation-standard', label: '4:3', hint: 'Классический слайд', width: 1000, height: 750 },
   { id: 'presentation-wide', label: '16:9', hint: 'Широкий слайд', width: 1000, height: 563 },
@@ -46,7 +48,8 @@ function SpacingControl({ label, value, shortLabel, compact = false, min = 0, ma
   </label>
 }
 
-export function CanvasSettings({ config, onChange }: Props) {
+export function CanvasSettings({ config, onChange, sizeLocked = false }: Props) {
+  const theme = config.canvasTheme ?? (contrastText(config.canvasBackground ?? '#ffffff') === '#ffffff' ? 'dark' : 'light')
   const patch = (values: Partial<ChartConfig>) => onChange({ ...config, ...values })
   const scaledObjects = (width: number, height: number): Partial<ChartConfig> => {
     const scaleX = width / Math.max(1, config.canvasWidth ?? 1000), scaleY = height / Math.max(1, config.canvasHeight ?? 563)
@@ -59,7 +62,7 @@ export function CanvasSettings({ config, onChange }: Props) {
     const values = typeScales[preset].sizes
     const size = (value: number) => Math.max(8, Math.round(value * factor))
     const styles = Object.fromEntries(textKeys.map((key, index) => [key, { ...config[key], size: size(values[index]), lineHeight: index < 2 ? 115 : 125 } satisfies ChartTextStyle]))
-    const footerStyle = { ...config.noteText, size: 18, color: '#666666', lineHeight: 125 }
+    const footerStyle = { ...config.noteText, size: 18, color: canvasThemeColors[theme].muted, lineHeight: 125 }
     return { ...styles, xAxisTitleText: { ...(config.xAxisTitleText ?? config.axisTitleText), size: size(values[2]), lineHeight: 125 }, yAxisTitleText: { ...(config.yAxisTitleText ?? config.axisTitleText), size: size(values[2]), lineHeight: 125 }, xAxisLabelText: { ...(config.xAxisLabelText ?? config.axisLabelText), size: size(values[3]), lineHeight: 125 }, yAxisLabelText: { ...(config.yAxisLabelText ?? config.axisLabelText), size: size(values[3]), lineHeight: 125 }, noteText: footerStyle, sourceText: footerStyle, directLabelText: { ...(config.directLabelText ?? config.legendText), size: size(values[4]), lineHeight: 125 } } as Partial<ChartConfig>
   }
   const applyFormat = (format: typeof formats[number]) => {
@@ -127,12 +130,14 @@ export function CanvasSettings({ config, onChange }: Props) {
     {showPhysicalXAxisTitle && <SpacingControl compact shortLabel="заг." label={config.xAxisPosition === 'bottom' ? `Подписи оси ${physicalXAxis} → заголовок` : `Заголовок оси ${physicalXAxis} → подписи`} value={config[physicalXAxisTitleGap] ?? spacingDefaults[physicalXAxisTitleGap]} max={120} onChange={setSpacing(physicalXAxisTitleGap)}/>}
   </div>
   return <><details className="settings-group canvas-settings"><summary>Холст</summary><div>
-    <div className="canvas-presets">{formats.map((format) => <button type="button" className={config.canvasPreset === format.id ? 'active' : ''} key={format.id} onClick={() => applyFormat(format)}><strong>{format.label}</strong><small>{format.hint}<br/>{format.width} × {format.height}</small></button>)}</div>
+    {sizeLocked ? <small>Размер ячейки определяется сеткой. Размер всей композиции задаётся в разделе «Вся композиция».</small> : <><div className="canvas-presets">{formats.map((format) => <button type="button" className={config.canvasPreset === format.id ? 'active' : ''} key={format.id} onClick={() => applyFormat(format)}><strong>{format.label}</strong><small>{format.hint}<br/>{format.width} × {format.height}</small></button>)}</div>
     <button type="button" className={`canvas-custom-toggle ${config.canvasPreset === 'custom' ? 'active' : ''}`} onClick={() => patch({ canvasPreset: 'custom' })}>Свой размер</button>
     {config.canvasPreset === 'custom' && <div className="canvas-size-grid"><label>Ширина, px<NumberInput min="320" max="1000" step="10" value={Math.min(1000, config.canvasWidth ?? 1000)} onValueChange={(canvasWidth) => applyCustomSize(canvasWidth, config.canvasHeight ?? 563)}/></label><span>×</span><label>Высота, px<NumberInput min="320" max="1000" step="10" value={Math.min(1000, config.canvasHeight ?? 563)} onValueChange={(canvasHeight) => applyCustomSize(config.canvasWidth ?? 1000, canvasHeight)}/></label></div>}
     <SettingsCheckbox isSelected={config.autoFitCanvas ?? true} onChange={(autoFitCanvas) => patch({ autoFitCanvas })}>Вписывать холст в рабочую область</SettingsCheckbox>
     <small>{config.autoFitCanvas ?? true ? 'Масштаб предпросмотра подстраивается под доступное место. Экспортный размер не меняется.' : 'Холст показывается в масштабе 100%; при необходимости используйте прокрутку.'}</small>
-    <label>Фон холста<div className="canvas-background-control"><ColorControl value={config.canvasBackground ?? '#ffffff'} onChange={(canvasBackground) => patch({ canvasBackground })}/><button type="button" className="canvas-background-reset" onClick={() => patch({ canvasBackground: '#ffffff' })}>Сбросить</button></div></label>
+    </>}<SettingsCheckbox isSelected={theme === 'dark'} onChange={(dark) => onChange(applyCanvasTheme(config, dark ? 'dark' : 'light'))}>Тёмная тема холста</SettingsCheckbox>
+    <small>Фон, надписи, оси и сетка меняются вместе. Цвета можно настроить вручную.</small>
+    <label>Фон холста<div className="canvas-background-control"><ColorControl value={config.canvasBackground ?? '#ffffff'} onChange={(canvasBackground) => patch({ canvasBackground })}/><button type="button" className="canvas-background-reset" onClick={() => patch({ canvasBackground: canvasThemeColors[theme].background })}>Сбросить</button></div></label>
   </div></details><details className="settings-group spacing-settings"><summary>Отступы и расстояния</summary><div>
     <div className="spacing-map" aria-label="Схема расстояний на холсте">
       <div className="spacing-margin-panel"><strong>Поля холста</strong><div>

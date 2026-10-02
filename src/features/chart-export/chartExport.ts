@@ -37,7 +37,7 @@ const textWidth = (value: string, run: ExportTextRun, fallback: ChartTextStyle) 
   return context.measureText(value).width
 }
 
-const appendStyledText = (svg: SVGSVGElement, blocks: ExportTextBlock[]) => {
+export const appendStyledText = (svg: SVGSVGElement, blocks: ExportTextBlock[]) => {
   blocks.forEach((block) => {
     const lineHeight = Math.round(block.style.size * block.style.lineHeight / 100)
     const lines: Array<Array<{ text: string; run: ExportTextRun; width: number }>> = [[]]
@@ -114,10 +114,10 @@ const embedLocalFonts = async (svg: SVGSVGElement) => {
 }
 
 const prepareSvg = async (svg: SVGSVGElement, config: Pick<ChartConfig, 'canvasWidth' | 'canvasHeight' | 'customFonts'>, scale = 1, textBlocks: ExportTextBlock[] = []) => {
-  const width = Math.min(1000, Math.round(config.canvasWidth ?? svg.clientWidth))
-  const height = Math.min(1000, Math.round(config.canvasHeight ?? svg.clientHeight))
+  const width = Math.round(svg.viewBox?.baseVal.width || Math.min(1000, config.canvasWidth ?? svg.clientWidth))
+  const height = Math.round(svg.viewBox?.baseVal.height || Math.min(1000, config.canvasHeight ?? svg.clientHeight))
   const exported = svg.cloneNode(true) as SVGSVGElement
-  exported.setAttribute('viewBox', `0 0 ${svg.clientWidth} ${svg.clientHeight}`)
+  exported.setAttribute('viewBox', svg.getAttribute('viewBox') ?? `0 0 ${svg.clientWidth} ${svg.clientHeight}`)
   exported.setAttribute('width', String(width * scale))
   exported.setAttribute('height', String(height * scale))
   appendStyledText(exported, textBlocks)

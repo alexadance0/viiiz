@@ -45,5 +45,5 @@ export function resolveNativeHeatmapScene(scene: NativeHeatmapChartScene): Resol
       ? { x: guide.position === 'left' ? bar.x + bar.width + 8 : bar.x - 8, y: bar.y + bar.height * (1 - tick.offset), value: tick.value, label: tick.label, align: guide.position === 'left' ? 'left' : 'right', verticalAlign: 'middle' }
       : { x: bar.x + bar.width * tick.offset, y: guide.position === 'top' ? bar.y - 8 : bar.y + bar.height + 8, value: tick.value, label: tick.label, align: 'center', verticalAlign: guide.position === 'top' ? 'bottom' : 'top' }) }
   }
-  return { ...scene, plot: { ...scene.plot, rowAxis }, resolvedReservations: base.resolvedReservations, geometry: { ...base.geometry, axes: { ...base.geometry.axes, row: rowRail ?? { x: plot.x, y: plot.y, width: 0, height: plot.height } }, elements: { ...base.geometry.elements, ...cells }, heatmap: { cells, scale } } }
+  return { ...scene, plot: { ...scene.plot, categoryAxis: base.plot.categoryAxis, rowAxis }, resolvedReservations: base.resolvedReservations, geometry: { ...base.geometry, axes: { ...base.geometry.axes, row: rowRail ?? { x: plot.x, y: plot.y, width: 0, height: plot.height } }, elements: { ...base.geometry.elements, ...cells }, heatmap: { cells, scale } } }
 }

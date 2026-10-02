@@ -12,6 +12,7 @@ dist
 dist-ssr
 test-results
 playwright-report
+.vercel
 *.local
 
 # Editor directories and files

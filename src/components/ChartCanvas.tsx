@@ -1,3 +1,7 @@
+import { resolveDecoration, type DecorationTarget } from './decorationGeometry'
+import { appendAnnotationText } from '../features/chart-export/annotationSvg'
+import { AnnotationPlacementOverlay } from './AnnotationPlacementOverlay'
+import type { AnnotationPlacement, AnnotationTool } from './AnnotationSettings'
 import { forwardRef, lazy, Suspense, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import './ChartCanvas.css'
 import * as echarts from 'echarts/core'
@@ -11,12 +15,12 @@ import {
   TooltipComponent,
 } from 'echarts/components'
 import { SVGRenderer } from 'echarts/renderers'
-import { UniversalTransition } from 'echarts/features'
+import { LabelLayout, UniversalTransition } from 'echarts/features'
 import { loadEchartsForKind } from './echarts/loadEchartsForKind'
 import { getChartPlugin, getSeriesColor } from '../core/chartRegistry'
 import { sanitizeAnnotationHtml } from '../core/annotationHtml'
 import type { ChartAnnotation, ChartConfig, ChartDecoration, ChartElementSelection, ChartKind, ChartSeriesSelection, DataTable } from '../core/types'
-import { DecorationOverlay } from './DecorationOverlay'
+import { DecorationAnchorPicker, DecorationTextAnchorPicker, DecorationOverlay } from './DecorationOverlay'
 import { AnnotationDisplay, CanvasTextDisplay } from './ChartCanvasDisplays'
 import { measureTextWidth, wrapMeasuredText } from '../core/textMetrics'
 import { decorationGraphics, type PlotBounds } from './chartDecorations'
@@ -41,6 +45,7 @@ echarts.use([
   MarkLineComponent,
   TitleComponent,
   UniversalTransition,
+  LabelLayout,
   SVGRenderer,
 ])
 
@@ -52,6 +57,7 @@ export const positionYAxisTitleGraphic = <T extends object>(graphic: T, x: numbe
   : { ...graphic, left: undefined, right: undefined, top: undefined, x, y }
 
 export interface ChartCanvasHandle {
+  getSvg(): Promise<SVGSVGElement>
   exportSvg(options?: ChartExportOptions): Promise<void>
   exportPng(options?: ChartExportOptions): Promise<void>
 }
@@ -89,6 +95,42 @@ export function enableCustomSeriesTransitions(option: Record<string, unknown>, e
     const renderItem = item.renderItem
     item.renderItem = (...args) => animateCustomElement(renderItem(...args)) ?? null
   })
+}
+
+// oxlint-disable-next-line react/only-export-components -- exported for the export regression test
+export function disableChartAnimations(option: Record<string, unknown>) {
+  option.animation = false
+  option.animationDuration = 0
+  option.animationDurationUpdate = 0
+  option.animationDelay = 0
+  option.animationDelayUpdate = 0
+  const series = option.series as Array<Record<string, unknown>> | undefined
+  series?.forEach((item) => {
+    item.animation = false
+    item.animationDuration = 0
+    item.animationDurationUpdate = 0
+    item.animationDelay = 0
+    item.animationDelayUpdate = 0
+    item.progressive = 0
+    delete item.universalTransition
+  })
+}
+
+async function withExportSvg(option: Record<string, unknown>, width: number, height: number, exportFile: (svg: SVGSVGElement) => Promise<void>) {
+  const host = document.createElement('div')
+  host.style.cssText = `position:fixed;left:-10000px;top:0;width:${width}px;height:${height}px;visibility:hidden;pointer-events:none`
+  document.body.append(host)
+  const instance = echarts.init(host, undefined, { renderer: 'svg', width, height })
+  try {
+    instance.setOption(option, true)
+    instance.getZr().flush()
+    const svg = host.querySelector('svg')
+    if (!svg) throw new Error('Не удалось подготовить график к экспорту')
+    await exportFile(svg)
+  } finally {
+    instance.dispose()
+    host.remove()
+  }
 }
 
 function fadePreviousPlot(container: HTMLElement, bounds: PlotBounds, duration: number) {
@@ -131,13 +173,24 @@ interface Props {
   onAnnotationChange?(annotation: ChartAnnotation): void
   onAnnotationDuplicate?(annotation: ChartAnnotation): void
   onAnnotationDelete?(id: string): void
+  annotationTool?: AnnotationTool | null
+  onAnnotationPlace?(value: AnnotationPlacement): void
+  onAnnotationCancel?(): void
   selectedAnnotationId?: string | null
+  pickingDecorationText?: boolean
+  onDecorationTextPick?(id: string, position: { x: number; y: number }): void
+  onDecorationAnchorRequest?(kind: 'text' | 'data', endpoint?: 'start' | 'end'): void
+  pickingDecorationPoint?: boolean
+  onDecorationPointPick?(key: string): void
+  onDecorationPointCancel?(): void
+  onDecorationLayout?(decorations: ChartDecoration[]): void
   selectedDecorationId?: string | null
   onDecorationSelect?(id: string): void
   onDecorationChange?(decoration: ChartDecoration): void
   onRichTextChange?(field: 'title' | 'subtitle' | 'note' | 'source', html: string, text: string): void
   onCategoryLabelChange?(axis: 'x' | 'y', category: string, text: string): void
   onTextStyleChange?(field: 'title' | 'subtitle' | 'note' | 'source', style: Partial<ChartConfig['titleText']>): void
+  disableViewGestures?: boolean
   viewZoom?: number
 }
 
@@ -163,7 +216,7 @@ function annotationRuns(annotation: ChartAnnotation, defaults: Omit<AnnotationRu
     node.childNodes.forEach((child) => walk(child, next))
     if (['DIV', 'P'].includes(node.tagName)) runs.push({ ...next, text: '\n' })
   }
-  root.childNodes.forEach((node) => walk(node, defaults))
+  root.childNodes.forEach((node) => walk(node, { ...defaults, color: annotation.fragments[0]?.color ?? defaults.color }))
   while (runs.at(-1)?.text === '\n') runs.pop()
   const merged = runs.reduce<AnnotationRun[]>((result, run) => {
     const previous = result.at(-1)
@@ -218,6 +271,15 @@ export function applySeriesVisualState(option: Record<string, unknown>, config: 
     return name && !name.startsWith('__') ? [name] : []
   }) ?? [])]
   series?.forEach((item) => {
+    if (item.type === 'pie') {
+      const selectedSlice = item.data?.find((point) => point?.elementKey === selectedElementKey)
+      const activeName = hoveredSeriesName ?? selectedSeriesName ?? (typeof selectedSlice?.sourceSeriesName === 'string' ? selectedSlice.sourceSeriesName : undefined)
+      item.data?.forEach((point) => {
+        if (!point) return
+        point.itemStyle = applyStyleOpacity(point.itemStyle as Record<string, unknown> | undefined, activeName && point.sourceSeriesName !== activeName ? .22 : 1)
+      })
+      return
+    }
     if (item.emphasis) delete item.emphasis.focus
     delete item.blur
     const rawName = item.name ?? ''
@@ -275,7 +337,7 @@ export function applySeriesVisualState(option: Record<string, unknown>, config: 
   })
 }
 export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
-  ({ table, config, onSelect, onTreemapMove, onSeriesSelect, onSettingsFocus, onClearSettingsFocus, selectedSettingsSection, selectedSeriesName, selectedElementKey, selectedElementTarget, selectedCategoryLabel: requestedCategoryLabel, onAnnotationSelect, onAnnotationChange, onAnnotationDuplicate, onAnnotationDelete, selectedAnnotationId, selectedDecorationId, onDecorationSelect, onDecorationChange, onRichTextChange, onCategoryLabelChange, onTextStyleChange, viewZoom = 1 }, ref) => {
+  ({ pickingDecorationText, onDecorationTextPick, onDecorationAnchorRequest, pickingDecorationPoint, onDecorationPointPick, onDecorationPointCancel, annotationTool, onAnnotationPlace, onAnnotationCancel, table, config, onSelect, onTreemapMove, onSeriesSelect, onSettingsFocus, onClearSettingsFocus, selectedSettingsSection, selectedSeriesName, selectedElementKey, selectedElementTarget, selectedCategoryLabel: requestedCategoryLabel, onAnnotationSelect, onAnnotationChange, onAnnotationDuplicate, onAnnotationDelete, selectedAnnotationId, selectedDecorationId, onDecorationLayout, onDecorationSelect, onDecorationChange, onRichTextChange, onCategoryLabelChange, onTextStyleChange, viewZoom = 1, disableViewGestures = false }, ref) => {
     const container = useRef<HTMLDivElement>(null)
     const viewport = useRef<HTMLDivElement>(null)
     const [canvasScale, setCanvasScale] = useState(1)
@@ -294,6 +356,10 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     fontRequest.current = { families: requestedFontFamilies, customFonts: config.customFonts }
     const [readyFontSignature, setReadyFontSignature] = useState('')
     const [plotBounds, setPlotBounds] = useState<PlotBounds | null>(null)
+    const [textAnchorHeights, setTextAnchorHeights] = useState<Record<string, number>>({})
+    const [decorationTargets, setDecorationTargets] = useState<DecorationTarget[]>([])
+    const [resolvedDecorations, setResolvedDecorations] = useState<ChartDecoration[]>([])
+    const decorationTargetsRef = useRef<DecorationTarget[]>([])
     const [richLayouts, setRichLayouts] = useState<Partial<Record<'title' | 'subtitle' | 'note' | 'source', RichLayout>>>({})
     const [categoryLabelLayout, setCategoryLabelLayout] = useState<CategoryLabelLayout | null>(null)
     const chart = useRef<echarts.ECharts | null>(null)
@@ -359,7 +425,9 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     }, [fontSignature])
 
     useEffect(() => {
-      if (!container.current) return
+      if (!container.current || readyKind !== config.kind) return
+      // ECharts captures registered layouts when the instance is created.
+      // Recreate after loading a new chart kind so its layout is available.
       const instance = echarts.init(container.current, undefined, { renderer: 'svg' })
       chart.current = instance
       let resizeFrame = 0
@@ -371,7 +439,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       observer.observe(container.current)
       window.addEventListener('resize', resize)
       return () => { observer.disconnect(); window.removeEventListener('resize', resize); cancelAnimationFrame(resizeFrame); if (!instance.isDisposed()) instance.dispose(); if (chart.current === instance) chart.current = null }
-    }, [])
+    }, [readyKind, config.kind])
 
     useEffect(() => {
       const target = viewport.current
@@ -395,6 +463,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     useEffect(() => {
       const target = viewport.current
       if (!target) return
+      if (disableViewGestures) return
       const typing = (value: EventTarget | null) => value instanceof HTMLElement && (value.matches('input, textarea, select') || value.isContentEditable)
       const publishZoom = (zoom: number) => window.dispatchEvent(new CustomEvent('canvas-view-zoom', { detail: zoom }))
       const wheel = (event: WheelEvent) => {
@@ -418,7 +487,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const reset = (event: MouseEvent) => { if (!(event.target as Element).closest('.category-label-editor, .chart-rich-editor')) { gestureZoomRef.current = 1; setGestureZoom(1); setViewPan({ x: 0, y: 0 }); publishZoom(1) } }
       target.addEventListener('wheel', wheel, { passive: false, capture: true }); target.addEventListener('pointerdown', pointerDown); target.addEventListener('pointermove', pointerMove); target.addEventListener('pointerup', pointerUp); target.addEventListener('pointercancel', pointerUp); target.addEventListener('auxclick', auxiliary); target.addEventListener('dblclick', reset); window.addEventListener('keydown', keyDown); window.addEventListener('keyup', keyUp)
       return () => { target.removeEventListener('wheel', wheel, true); target.removeEventListener('pointerdown', pointerDown); target.removeEventListener('pointermove', pointerMove); target.removeEventListener('pointerup', pointerUp); target.removeEventListener('pointercancel', pointerUp); target.removeEventListener('auxclick', auxiliary); target.removeEventListener('dblclick', reset); window.removeEventListener('keydown', keyDown); window.removeEventListener('keyup', keyUp) }
-    }, [])
+    }, [disableViewGestures])
 
     useEffect(() => {
       const instance = chart.current
@@ -480,8 +549,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       option.animationDurationUpdate = reducedMotion ? 0 : 240
       option.animationEasing ??= 'quarticOut'
       option.animationEasingUpdate ??= 'quarticOut'
-      enableCustomSeriesTransitions(option, !reducedMotion)
-      const selectionStyle = { backgroundColor: 'rgba(0,0,0,0)', borderColor: '#6956e8', borderWidth: 1, borderRadius: 5, padding: [2, 4] }
+      const selectionStyle = { backgroundColor: 'rgba(0,0,0,0)', borderColor: '#1677a6', borderWidth: 1, borderRadius: 5, padding: [2, 4] }
       const labelSelectionStyle = { ...selectionStyle, padding: 0 }
       const availableWidth = Math.max(120, (config.canvasWidth ?? container.current?.clientWidth ?? 1000) - marginLeft - marginRight)
       let headerScale = 1, wrappedTitle = { text: '', lines: 0 }, wrappedSubtitle = { text: '', lines: 0 }, titleHeight = 0, subtitleHeight = 0
@@ -542,6 +610,8 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const showEditorialX = editorialAxes && (isHorizontalBar(config) ? config.showYAxisTitle : config.showXAxisTitle) && Boolean(editorialXText)
       const showEditorialY = editorialAxes && (isHorizontalBar(config) ? config.showXAxisTitle : config.showYAxisTitle) && Boolean(editorialYText)
       const cleanOption = cloneChartOption(option)
+      disableChartAnimations(cleanOption)
+      enableCustomSeriesTransitions(option, !reducedMotion)
       applySeriesVisualState(option, config, selectedSeriesName, selectedElementKey, hoveredSeriesName)
       for (const axisKey of ['xAxis', 'yAxis'] as const) {
         const axis = option[axisKey] as { nameTextStyle?: object; axisLabel?: object } | undefined
@@ -624,7 +694,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         visibleTitle && { id: 'chart-title-hit', type: 'text', x: textAnchor(config.titleText.align), top: marginTop, z: 20, cursor: 'pointer', style: { text: titleRich?.text ?? wrappedTitle.text, width: availableWidth, fontFamily: config.titleText.fontFamily, fontSize: renderedTitleSize, fontWeight: config.titleText.weight, fontStyle: config.titleText.italic ? 'italic' : 'normal', lineHeight: Math.round(renderedTitleSize * config.titleText.lineHeight / 100), fill: config.titleText.color, align: config.titleText.align, textAlign: config.titleText.align, rich: titleRich?.rich, opacity: config.titleHtml || selectedSettingsSection === 'title' ? 0 : 1, ...(selectedSettingsSection === 'title' ? selectionStyle : {}) }, onclick: () => onSettingsFocus?.('title') },
         visibleSubtitle && { id: 'chart-subtitle-hit', type: 'text', x: textAnchor(config.subtitleText.align), top: subtitleTop, z: 20, cursor: 'pointer', style: { text: subtitleRich?.text ?? wrappedSubtitle.text, width: availableWidth, fontFamily: config.subtitleText.fontFamily, fontSize: renderedSubtitleSize, fontWeight: config.subtitleText.weight, fontStyle: config.subtitleText.italic ? 'italic' : 'normal', lineHeight: Math.round(renderedSubtitleSize * config.subtitleText.lineHeight / 100), fill: config.subtitleText.color, align: config.subtitleText.align, textAlign: config.subtitleText.align, rich: subtitleRich?.rich, opacity: config.subtitleHtml || selectedSettingsSection === 'subtitle' ? 0 : 1, ...(selectedSettingsSection === 'subtitle' ? selectionStyle : {}) }, onclick: () => onSettingsFocus?.('subtitle') },
       ].filter(Boolean)
-      const annotations = config.annotations.map((annotation) => {
+      const annotations = config.annotations.filter((annotation) => !annotation.hidden).map((annotation) => {
         const runs = annotationRuns(annotation)
         return {
         id: `annotation-${annotation.id}`,
@@ -638,9 +708,9 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           text: runs.map((fragment, index) => `{fragment${index}|${fragment.text.replaceAll('{', '\\{').replaceAll('}', '\\}')}}`).join(''),
           width: Math.max(20, annotation.width - 24),
           overflow: 'break',
-          backgroundColor: 'transparent',
+          backgroundColor: annotation.backgroundColor || 'transparent',
           borderWidth: 0,
-          padding: 0,
+          padding: [9, 11],
           opacity: 0,
           fontFamily: annotation.fontFamily,
           fontSize: annotation.fontSize,
@@ -651,7 +721,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
             return [`fragment${index}`, { fontFamily: fragment.fontFamily || annotation.fontFamily, fontSize: fragment.fontSize || annotation.fontSize, fill: fragment.color, fontWeight: fragment.bold ? 700 : 400, fontStyle: fragment.italic ? 'italic' : 'normal', textDecoration: fragment.underline ? 'underline' : 'none', backgroundColor: fragment.backgroundColor, textBorderColor: strokeColor, textBorderWidth: strokeColor ? annotation.textStrokeWidth ?? (Number.parseFloat(fragment.textStrokeWidth ?? '6') || 6) : 0, padding: 0, lineHeight: Math.round((fragment.fontSize || annotation.fontSize) * 1.35) }]
           })),
         },
-        onclick: () => onAnnotationSelect?.(annotation.id),
+        silent: annotation.locked, onclick: () => { if (!annotation.locked) onAnnotationSelect?.(annotation.id) },
         }
       })
       const chartLabels = existing.map((graphic) => {
@@ -662,7 +732,11 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         if (item.id === 'chart-source') return { ...item, left: undefined, right: undefined, x: textAnchor(config.sourceText.align), bottom: marginBottom, cursor: 'pointer', style: { ...(item as { style?: object }).style, text: sourceRich?.text ?? wrappedSource.text, width: availableWidth, align: config.sourceText.align, textAlign: config.sourceText.align, overflow: undefined, ...(sourceRich ?? {}), opacity: config.sourceHtml || selectedSettingsSection === 'source' ? 0 : 1, ...(selectedSettingsSection === 'source' ? selectionStyle : {}) }, onclick: () => onSettingsFocus?.('source') }
         return graphic
       })
-      const displayDecorations = decorationGraphics(config.decorations ?? [], undefined, selectDecoration)
+      const annotationHeights: Record<string, number> = {}
+      container.current?.parentElement?.querySelectorAll<HTMLElement>('[data-annotation-id]').forEach((element) => { annotationHeights[element.dataset.annotationId!] = element.offsetHeight })
+      setTextAnchorHeights((current) => JSON.stringify(current) === JSON.stringify(annotationHeights) ? current : annotationHeights)
+      const resolveDecorations = (targets: DecorationTarget[]) => (config.decorations ?? []).map((decoration) => resolveDecoration(decoration, config.annotations, targets, annotationHeights))
+      const displayDecorations = decorationGraphics(resolveDecorations(decorationTargetsRef.current), undefined, selectDecoration)
       option.graphic = [...chartLabels, ...displayDecorations, ...titleHits, ...annotations]
       const cleanTitleHits = titleHits.map((graphic) => {
         if (!graphic || typeof graphic !== 'object') return graphic
@@ -678,17 +752,21 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         if (item.id === 'chart-source') return { ...item, left: undefined, right: undefined, x: textAnchor(config.sourceText.align), bottom: marginBottom, style: { ...item.style, text: sourceRich?.text ?? wrappedSource.text, width: availableWidth, align: config.sourceText.align, textAlign: config.sourceText.align, overflow: undefined, ...(sourceRich ?? {}), opacity: config.sourceHtml ? 0 : 1 } }
         return item
       })
-      cleanOption.graphic = [...cleanLabels, ...decorationGraphics(config.decorations ?? []), ...cleanTitleHits, ...annotations.map((annotation) => ({ ...annotation, style: { ...annotation.style, opacity: 1 } }))]
+      cleanOption.graphic = [...cleanLabels, ...decorationGraphics(resolveDecorations(decorationTargetsRef.current)), ...cleanTitleHits]
       setRenderLifecycle((current) => advanceChartRender(current, revision, 'rendering'))
       {
         const series = option.series as Array<Record<string, unknown>> | undefined
-        series?.forEach((item) => {
-          if (item.id != null) item.id = `${chartTransitionFamily(config.kind)}:${String(item.id)}`
+        series?.forEach((item, index) => {
+          const identity = item.id ?? item.name ?? item.type ?? 'series'
+          // ECharts keeps the old component index when stable ids are supplied in
+          // a different array order. Include the render position so reordering a
+          // series also updates grouped-bar placement and stacking order.
+          item.id = `${chartTransitionFamily(config.kind)}:${index}:${String(identity)}`
           if (transitionMode === 'morph' && item.silent !== true) item.universalTransition = { enabled: true, divideShape: 'clone' }
         })
       }
       if (transitionMode === 'fade' && plotBounds && container.current) fadePreviousPlot(container.current, plotBounds, 200)
-      instance.setOption(option, { notMerge: false, replaceMerge: ['series', 'xAxis', 'yAxis', 'graphic'] })
+      instance.setOption(option, { notMerge: false, replaceMerge: ['series', 'legend', 'xAxis', 'yAxis', 'graphic'] })
       renderedKind.current = config.kind
       setRenderedChartKind(config.kind)
       setRenderedPlotKind(plotKind)
@@ -731,8 +809,32 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         const id = String((graphic as { id?: string }).id ?? '')
         return !id.startsWith('decoration-') && !id.startsWith('bar-vertical-grid-') && !id.startsWith('value-label-hit-') && !id.startsWith('waterfall-hit-') && !id.startsWith('selection-')
       })
-      const exactDisplayDecorations = decorationGraphics(config.decorations ?? [], exactBounds ?? undefined, selectDecoration)
-      const exactCleanDecorations = decorationGraphics(config.decorations ?? [], exactBounds ?? undefined)
+      const points = new Map<string, DecorationTarget>()
+      nativeSelectionHits.filter((hit) => !hit.info.selectionTarget || hit.info.selectionTarget === 'element').forEach(({ rect, info }) => {
+        const horizontal = usesHorizontalAxes(config)
+        const negative = /^[-−]/.test(info.displayValue)
+        points.set(info.elementKey, { key: info.elementKey, label: `${info.sourceSeriesName} · ${info.displayCategory}`, x: horizontal && plotKind !== 'distribution' ? rect.x + (negative ? 0 : rect.width) : rect.x + rect.width / 2, y: horizontal || plotKind === 'distribution' ? rect.y + rect.height / 2 : rect.y + (negative ? rect.height : 0) })
+      })
+      const series = (option.series ?? []) as Array<{ type?: string; data?: Array<{ elementKey?: string; value?: number | number[] | null; sourceSeriesName?: string; displayCategory?: string }>; interactionLayer?: string }>
+      series.forEach((item, seriesIndex) => {
+        if (item.type !== 'line' && item.type !== 'scatter' && item.type !== 'bar') return
+        const data = (instance as unknown as { getModel(): { getSeriesByIndex(index: number): { getData(): { getLayout(key: string): ArrayLike<number> | undefined; getItemLayout(index: number): number[] | { x: number; y: number; width: number; height: number } | undefined } } } }).getModel().getSeriesByIndex(seriesIndex).getData()
+        item.data?.forEach((datum, index) => {
+          if (!datum?.elementKey || datum.value == null || points.has(datum.elementKey)) return
+          const value = Array.isArray(datum.value) ? datum.value : [index, datum.value]
+          const linePoints = item.type === 'line' ? data.getLayout('points') : undefined
+          const layout = linePoints ? [linePoints[index * 2], linePoints[index * 2 + 1]] : data.getItemLayout(index)
+          const pixel = Array.isArray(layout) ? layout : layout ? usesHorizontalAxes(config) ? [layout.x + layout.width, layout.y + layout.height / 2] : [layout.x + layout.width / 2, layout.y + layout.height] : instance.convertToPixel({ seriesIndex }, value) as number[]
+          if (Array.isArray(pixel) && pixel.every(Number.isFinite)) points.set(datum.elementKey, { key: datum.elementKey, x: pixel[0], y: pixel[1], label: `${datum.sourceSeriesName ?? ''} · ${datum.displayCategory ?? index}` })
+        })
+      })
+      const targets = [...points.values()]
+      decorationTargetsRef.current = targets
+      setDecorationTargets((current) => JSON.stringify(current) === JSON.stringify(targets) ? current : targets)
+      const decorations = resolveDecorations(targets)
+      setResolvedDecorations((current) => JSON.stringify(current) === JSON.stringify(decorations) ? current : decorations)
+      const exactDisplayDecorations = decorationGraphics(decorations, exactBounds ?? undefined, selectDecoration)
+      const exactCleanDecorations = decorationGraphics(decorations, exactBounds ?? undefined)
       const barGrid: unknown[] = []
       if (exactBounds) {
         const exactMiddleY = (exactBounds.top + exactBounds.bottom) / 2
@@ -809,7 +911,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       }
       let refreshGraphics = Boolean(exactBounds || barGrid.length || exactDisplayDecorations.length)
       if (nativeSelectionHits.length) {
-        const hits = nativeSelectionHits.map((hit, index) => ({ id: `native-selection-hit-${index}`, type: 'rect', z: 140, cursor: 'pointer', shape: hit.rect, style: hit.info.elementKey === selectedElementKey && hit.info.selectionTarget === selectedElementTarget ? { fill: 'rgba(0,0,0,0)', stroke: '#6956e8', lineWidth: 1 } : { fill: 'rgba(0,0,0,0)' }, onmousedown: (event: { offsetX?: number; offsetY?: number }) => {
+        const hits = nativeSelectionHits.map((hit, index) => ({ id: `native-selection-hit-${index}`, type: 'rect', z: 140, cursor: 'pointer', shape: hit.rect, style: hit.info.elementKey === selectedElementKey && hit.info.selectionTarget === selectedElementTarget ? { fill: 'rgba(0,0,0,0)', stroke: '#1677a6', lineWidth: 1 } : { fill: 'rgba(0,0,0,0)' }, onmousedown: (event: { offsetX?: number; offsetY?: number }) => {
           const point = hit.info, seriesName = point.sourceSeriesName
           if (plotKind !== 'treemap') return
           const group = { key: `treemap-group:${seriesName}`, seriesName, category: seriesName, value: '', label: seriesName } satisfies ChartElementSelection
@@ -1049,58 +1151,55 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     }, [activeCategoryLabel?.axis, activeCategoryLabel?.category, config, onAnnotationSelect, onClearSettingsFocus, onSelect, onSeriesSelect, onSettingsFocus, onTreemapMove, readyKind, renderedPlotKind, selectedElementKey, selectedSeriesName, selectedSettingsSection, selectedTreemapSeriesName, table])
 
     useImperativeHandle(ref, () => ({
-      async exportSvg(options) {
-        const instance = chart.current
-        if (!instance || !exportOption.current) return
-        const revision = beginRenderCycle('post-processing')
+      async getSvg() {
+        if (!exportOption.current || renderLifecycle.status !== 'settled') throw new Error('График ещё не готов к экспорту. Дождитесь завершения отрисовки.')
         await waitForChartFonts(requestedFontFamilies, config.customFonts)
-        instance.setOption(exportOption.current, true)
-        instance.getZr().flush()
-        try {
-          const svg = container.current?.querySelector('svg')
-          if (!svg) return
-          const textBlocks = (['title', 'subtitle', 'note', 'source'] as const).flatMap((field) => {
-            const html = config[`${field}Html` as const], layout = richLayouts[field], style = config[`${field}Text` as const]
+        let result: SVGSVGElement | undefined
+        await withExportSvg(exportOption.current, canvasWidth, canvasHeight, async (svg) => {
+          result = svg.cloneNode(true) as SVGSVGElement
+          appendAnnotationText(result, config.annotations)
+          const { appendStyledText } = await import('../features/chart-export/chartExport')
+          appendStyledText(result, (['title', 'subtitle', 'note', 'source'] as const).flatMap((field) => {
+            const html = config[`${field}Html`], layout = richLayouts[field], style = config[`${field}Text`]
             const visible = field === 'title' ? config.showTitle !== false : field === 'subtitle' ? config.showSubtitle !== false : field === 'note' ? config.showNote !== false : config.showSource !== false
             return html && layout && visible ? [exportRichBlock(html, config[field], style, layout)] : []
-          })
+          }))
+        })
+        return result!
+      },
+      async exportSvg(options) {
+        if (!exportOption.current) return
+        await waitForChartFonts(requestedFontFamilies, config.customFonts)
+        const textBlocks = (['title', 'subtitle', 'note', 'source'] as const).flatMap((field) => {
+          const html = config[`${field}Html` as const], layout = richLayouts[field], style = config[`${field}Text` as const]
+          const visible = field === 'title' ? config.showTitle !== false : field === 'subtitle' ? config.showSubtitle !== false : field === 'note' ? config.showNote !== false : config.showSource !== false
+          return html && layout && visible ? [exportRichBlock(html, config[field], style, layout)] : []
+        })
+        await withExportSvg(exportOption.current, canvasWidth, canvasHeight, async (svg) => {
+          appendAnnotationText(svg, config.annotations)
           const { exportChartAsSvg } = await import('../features/chart-export/chartExport')
           await exportChartAsSvg(svg, { canvasWidth: config.canvasWidth, canvasHeight: config.canvasHeight, customFonts: config.customFonts }, options, textBlocks)
-        } finally {
-          if (displayOption.current) { instance.setOption(displayOption.current, true); instance.getZr().flush() }
-          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-          if (!instance.isDisposed() && chart.current === instance && revision === renderRevision.current) setRenderLifecycle((current) => settleChartRender(current, revision))
-        }
+        })
       },
       async exportPng(options) {
-        const instance = chart.current
-        if (!instance || !exportOption.current) return
-        const revision = beginRenderCycle('post-processing')
+        if (!exportOption.current) return
         await waitForChartFonts(requestedFontFamilies, config.customFonts)
-        instance.setOption(exportOption.current, true)
-        instance.getZr().flush()
-        try {
-          const svg = container.current?.querySelector('svg')
-          if (!svg) return
-          const textBlocks = (['title', 'subtitle', 'note', 'source'] as const).flatMap((field) => {
-            const html = config[`${field}Html` as const], layout = richLayouts[field], style = config[`${field}Text` as const]
-            const visible = field === 'title' ? config.showTitle !== false : field === 'subtitle' ? config.showSubtitle !== false : field === 'note' ? config.showNote !== false : config.showSource !== false
-            return html && layout && visible ? [exportRichBlock(html, config[field], style, layout)] : []
-          })
+        const textBlocks = (['title', 'subtitle', 'note', 'source'] as const).flatMap((field) => {
+          const html = config[`${field}Html` as const], layout = richLayouts[field], style = config[`${field}Text` as const]
+          const visible = field === 'title' ? config.showTitle !== false : field === 'subtitle' ? config.showSubtitle !== false : field === 'note' ? config.showNote !== false : config.showSource !== false
+          return html && layout && visible ? [exportRichBlock(html, config[field], style, layout)] : []
+        })
+        await withExportSvg(exportOption.current, canvasWidth, canvasHeight, async (svg) => {
+          appendAnnotationText(svg, config.annotations)
           const { exportChartAsPng } = await import('../features/chart-export/chartExport')
           await exportChartAsPng(svg, { canvasWidth: config.canvasWidth, canvasHeight: config.canvasHeight, customFonts: config.customFonts }, options, textBlocks)
-        } finally {
-          if (displayOption.current) { instance.setOption(displayOption.current, true); instance.getZr().flush() }
-          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-          if (!instance.isDisposed() && chart.current === instance && revision === renderRevision.current) setRenderLifecycle((current) => settleChartRender(current, revision))
-        }
+        })
       },
-    }), [config, requestedFontFamilies, richLayouts, selectedElementKey])
+    }), [config, requestedFontFamilies, richLayouts, selectedElementKey, renderLifecycle.status])
 
-    const selected = config.annotations.find((annotation) => annotation.id === selectedAnnotationId)
-    const selectedDecoration = config.decorations?.find((decoration) => decoration.id === selectedDecorationId)
+    const selected = config.annotations.find((annotation) => annotation.id === selectedAnnotationId && !annotation.hidden && !annotation.locked)
+    useEffect(() => { onDecorationLayout?.(resolvedDecorations) }, [resolvedDecorations, onDecorationLayout])
+    const selectedDecoration = resolvedDecorations.find((decoration) => decoration.id === selectedDecorationId && !decoration.hidden && !decoration.locked)
     const canvasWidth = Math.min(1000, config.canvasWidth ?? 1000), canvasHeight = Math.min(1000, config.canvasHeight ?? 563)
     const richCandidate = selectedSettingsSection === 'title' || selectedSettingsSection === 'subtitle' || selectedSettingsSection === 'note' || selectedSettingsSection === 'source' ? selectedSettingsSection : null
     const richField = richCandidate && (richCandidate === 'title' ? config.showTitle !== false : richCandidate === 'subtitle' ? config.showSubtitle !== false : richCandidate === 'note' ? config.showNote !== false : config.showSource !== false) ? richCandidate : null
@@ -1114,7 +1213,8 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       return html && layout && visible && field !== richField ? [{ field, html, layout, style }] : []
     })
     const safeZoom = Math.min(5, Math.max(.1, gestureZoom))
-    const canvasTransform = config.autoFitCanvas === false ? `translate(${viewPan.x}px, ${viewPan.y}px) scale(${safeZoom})` : `translate(calc(-50% + ${viewPan.x}px), calc(-50% + ${viewPan.y}px)) scale(${canvasScale * safeZoom})`
+    const previewZoom = config.autoFitCanvas === false ? safeZoom : safeZoom * .9
+    const canvasTransform = config.autoFitCanvas === false ? `translate(${viewPan.x}px, ${viewPan.y}px) scale(${previewZoom})` : `translate(calc(-50% + ${viewPan.x}px), calc(-50% + ${viewPan.y}px)) scale(${canvasScale * previewZoom})`
     return (
       <div className={`chart-canvas-viewport ${config.autoFitCanvas === false ? 'native-size' : ''}`} ref={viewport}>
         <div
@@ -1132,10 +1232,13 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           style={{ width: canvasWidth, height: canvasHeight, transform: canvasTransform }}
         >
           <div className="chart-canvas" ref={container}/>
+          {annotationTool && onAnnotationPlace && <AnnotationPlacementOverlay key={annotationTool} tool={annotationTool} width={canvasWidth} height={canvasHeight} onPlace={onAnnotationPlace} onCancel={() => onAnnotationCancel?.()}/>}
+          {pickingDecorationText && onDecorationTextPick && <DecorationTextAnchorPicker annotations={config.annotations} heights={textAnchorHeights} width={canvasWidth} height={canvasHeight} onSelect={onDecorationTextPick} onCancel={() => onDecorationPointCancel?.()}/>}
+          {pickingDecorationPoint && onDecorationPointPick && <DecorationAnchorPicker points={decorationTargets} width={canvasWidth} height={canvasHeight} onSelect={onDecorationPointPick} onCancel={() => onDecorationPointCancel?.()}/>}
           {renderError && <div className="chart-render-error" role="alert"><strong>Не удалось отрисовать график</strong><span>{renderError}</span></div>}
           {richDisplays.map(({ field, html, layout, style }) => <CanvasTextDisplay key={field} html={html} style={{ ...style, size: layout.baseSize }} left={layout.left} top={layout.top} width={layout.width} onSelect={() => { onAnnotationSelect?.(''); onSettingsFocus?.(field) }}/>)}
-          {selectedDecoration && onDecorationChange && <DecorationOverlay decoration={selectedDecoration} canvasWidth={canvasWidth} canvasHeight={canvasHeight} plotTop={plotBounds?.top} plotBottom={plotBounds?.bottom} plotLeft={plotBounds?.left} plotRight={plotBounds?.right} onChange={onDecorationChange}/>}
-          {config.annotations.filter((annotation) => annotation.id !== selectedAnnotationId).map((annotation) => <AnnotationDisplay key={annotation.id} annotation={annotation} canvasBackground={config.canvasBackground} onSelect={() => onAnnotationSelect?.(annotation.id)}/>)}
+          {selectedDecoration && onDecorationChange && <DecorationOverlay annotations={config.annotations} targets={decorationTargets} annotationHeights={textAnchorHeights} onPickAnchor={onDecorationAnchorRequest} decoration={selectedDecoration} canvasWidth={canvasWidth} canvasHeight={canvasHeight} plotTop={plotBounds?.top} plotBottom={plotBounds?.bottom} plotLeft={plotBounds?.left} plotRight={plotBounds?.right} onChange={onDecorationChange}/>}
+          {config.annotations.filter((annotation) => !annotation.hidden && annotation.id !== selected?.id).map((annotation) => <AnnotationDisplay key={annotation.id} annotation={annotation} canvasBackground={config.canvasBackground} onSelect={() => { if (!annotation.locked) onAnnotationSelect?.(annotation.id) }}/>)}
           <Suspense fallback={null}>
             {categoryLabelLayout && selectedCategoryLabel && <CanvasTextOverlay id={`category-${categoryLabelLayout.axis}-${categoryLabelLayout.category}`} text={config.categoryLabelOverrides?.[categoryLabelLayout.axis]?.[categoryLabelLayout.category] ?? categoryLabelLayout.category} style={categoryLabelLayout.style} left={categoryLabelLayout.left} top={categoryLabelLayout.top} width={categoryLabelLayout.width} rotation={categoryLabelLayout.rotation} policy={{ richText: false, multiline: true, explicitNewlines: true, styleToolbar: false }} customFonts={config.customFonts} canvasBackground={config.canvasBackground} onChange={(_html, text) => onCategoryLabelChange?.(categoryLabelLayout.axis, categoryLabelLayout.category, text)}/>}
             {richField && richLayout && richStyle && <CanvasTextOverlay id={richField} text={richText} html={richHtml} style={{ ...richStyle, size: richLayout.baseSize }} left={richLayout.left} top={richLayout.top} width={richLayout.width} customFonts={config.customFonts} canvasBackground={config.canvasBackground} onChange={(html, text) => onRichTextChange?.(richField, html, text)} onStyleChange={(style) => { const key = `${richField}Text` as 'titleText' | 'subtitleText' | 'noteText' | 'sourceText'; (config as unknown as Record<typeof key, ChartConfig['titleText']>)[key] = { ...config[key], ...style }; onTextStyleChange?.(richField, style) }}/>}

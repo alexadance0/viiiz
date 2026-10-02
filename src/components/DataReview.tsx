@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Pagination } from '@heroui/react'
-import { ArrowRightLeft, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowRightLeft, ChevronLeft, ChevronRight, TriangleAlert } from 'lucide-react'
 import type { ColumnType, DataIssue, DataTable } from '../core/types'
 import { findDuplicateRowIndices } from '../core/dataQuality'
 import { SettingsCheckbox } from './SettingsCheckbox'
@@ -32,7 +32,6 @@ export function DataReview({ table, types, issues, onRename, onType, onConfigure
   const activeColumn = table.columns.includes(selectedColumn) ? selectedColumn : table.columns[0]
   const datasetIssues = issues.filter((issue) => !issue.column)
   const duplicateRows = useMemo(() => new Set(findDuplicateRowIndices(table)), [table])
-  const columnIssues = issues.filter((issue) => issue.column === activeColumn)
   const normalization = table.normalizations?.[activeColumn]
   const timeProfile = table.timeProfiles?.[activeColumn]
   const values = useMemo(() => table.rows.map((row) => row[activeColumn]), [activeColumn, table.rows])
@@ -60,6 +59,8 @@ export function DataReview({ table, types, issues, onRename, onType, onConfigure
       onRename(activeColumn, clean); setSelectedColumn(clean)
     }
   }
+  const activeSeverity = severityFor(activeColumn)
+  const activeSeverityLabel = activeSeverity === 'clean' ? 'Проблем не обнаружено' : activeSeverity === 'warning' ? 'Требует проверки' : 'Обнаружена критическая проблема'
 
   return (
     <div className="review-card">
@@ -68,7 +69,7 @@ export function DataReview({ table, types, issues, onRename, onType, onConfigure
         <div><strong>{table.columns.length}</strong><span>столбцов</span></div>
         <div className={`review-status ${criticalIssues ? 'critical' : issues.length ? 'warning' : 'clean'}`}><i/>{criticalIssues ? `${criticalIssues} критич.` : issues.length ? `${issues.length} требуют проверки` : 'Проблем нет'}</div>
       </div>
-      {datasetIssues.length > 0 && <div className="dataset-warnings">{datasetIssues.map((issue, index) => <div className={`file-warning ${issue.kind ?? ''}`} key={index}><strong>⚠ {issue.kind === 'duplicate' ? 'Найдены дубликаты' : 'Набор требует внимания'}</strong><span>{issue.message}{issue.examples?.length ? ` · ${issue.examples.join(', ')}` : ''}</span>{issue.kind === 'duplicate' && <button onClick={onRemoveDuplicates}>Удалить дубликаты</button>}</div>)}</div>}
+      {datasetIssues.length > 0 && <div className="dataset-warnings">{datasetIssues.map((issue, index) => <div className={`file-warning ${issue.kind ?? ''}`} key={index}><strong><TriangleAlert size={15}/>{issue.kind === 'duplicate' ? 'Найдены дубликаты' : 'Набор требует внимания'}</strong><span>{issue.message}{issue.examples?.length ? ` · ${issue.examples.join(', ')}` : ''}</span>{issue.kind === 'duplicate' && <button onClick={onRemoveDuplicates}>Удалить дубликаты</button>}</div>)}</div>}
 
       <div className="review-layout">
         <div className="review-table-wrap">
@@ -86,7 +87,7 @@ export function DataReview({ table, types, issues, onRename, onType, onConfigure
               const isEditing = editing?.row === rowIndex && editing.column === column
               const imputed = table.imputedCells?.[column]?.[rowIndex]
               const source = table.rawRows?.[rowIndex]?.[column] ?? row[column]
-              return <td title={imputed ? `Восстановлено методом: ${imputed.method}` : undefined} className={`${empty ? 'missing-cell' : ''} ${activeColumn === column ? 'selected-cell' : ''} ${isEditing ? 'editing-cell' : ''} ${imputed ? 'imputed-cell' : ''}`} onClick={() => setSelectedColumn(column)} onDoubleClick={() => setEditing({ row: rowIndex, column, value: String(source ?? '') })} key={column}>{isEditing ? <input autoFocus value={editing.value} onChange={(event) => setEditing({ ...editing, value: event.target.value })} onBlur={(event) => { if (event.currentTarget.dataset.cancelled !== 'true') onEditCell(rowIndex, column, editing.value); setEditing(null) }} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') { event.currentTarget.dataset.cancelled = 'true'; event.currentTarget.blur() } }}/> : <>{imputed && <i className="imputed-mark">∿</i>}{empty ? <span>пропуск</span> : row[column] instanceof Date ? row[column].toLocaleDateString('ru-RU') : String(row[column])}</>}</td>
+              return <td title={imputed ? `Восстановлено методом: ${imputed.method}` : undefined} className={`${types[column] === 'number' ? 'numeric-cell' : ''} ${empty ? 'missing-cell' : ''} ${activeColumn === column ? 'selected-cell' : ''} ${isEditing ? 'editing-cell' : ''} ${imputed ? 'imputed-cell' : ''}`} onClick={() => setSelectedColumn(column)} onDoubleClick={() => setEditing({ row: rowIndex, column, value: String(source ?? '') })} key={column}>{isEditing ? <input autoFocus value={editing.value} onChange={(event) => setEditing({ ...editing, value: event.target.value })} onBlur={(event) => { if (event.currentTarget.dataset.cancelled !== 'true') onEditCell(rowIndex, column, editing.value); setEditing(null) }} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') { event.currentTarget.dataset.cancelled = 'true'; event.currentTarget.blur() } }}/> : <>{imputed && <i className="imputed-mark">∿</i>}{empty ? <span>пропуск</span> : row[column] instanceof Date ? row[column].toLocaleDateString('ru-RU') : String(row[column])}</>}</td>
             })}</tr>})}</tbody>
           </table>
           <Pagination className="table-pagination" size="sm">
@@ -104,12 +105,12 @@ export function DataReview({ table, types, issues, onRename, onType, onConfigure
         </div>
 
         <aside className="column-inspector">
-          <div className="inspector-heading"><div><h3>{activeColumn}</h3><span>{typeLabels[types[activeColumn]]}</span></div><span className={`inspector-status ${severityFor(activeColumn)}`}>{severityFor(activeColumn) === 'clean' ? '✓' : '!'}</span></div>
+          <div className="inspector-heading"><div><h3>{activeColumn}</h3><span>{typeLabels[types[activeColumn]]}</span></div><span className={`inspector-status ${activeSeverity}`} role="img" aria-label={activeSeverityLabel} title={activeSeverityLabel}>{activeSeverity === 'clean' ? '✓' : '!'}</span></div>
           <div className="inspector-section"><label>Название<input defaultValue={activeColumn} key={activeColumn} onBlur={(event) => rename(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && event.currentTarget.blur()}/></label><label>Тип данных<select value={types[activeColumn]} onChange={(event) => onType(activeColumn, event.target.value as ColumnType)}>{Object.entries(typeLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label></div>
 
           {types[activeColumn] === 'date' && <div className="inspector-section date-settings"><div className="inspector-section-title"><span>Временные данные</span>{timeProfile && <b>{timeProfile.confidence}%</b>}</div>{timeProfile && <div className="frequency-card"><span>◷</span><div><strong>{timeProfile.label}</strong><small>Периодичность ряда</small></div></div>}<button className="date-format-button" onClick={() => onConfigureDate(activeColumn)}><span>⌘</span><div><strong>Формат даты</strong><small>{table.dateRules?.[activeColumn]?.format ?? normalization?.format ?? 'Определён автоматически'}</small></div><b>Настроить →</b></button></div>}
 
-          <div className="inspector-section"><div className="inspector-section-title"><span>Качество данных</span></div><div className="column-stats"><div><strong>{table.rows.length - missingCount}</strong><small>заполнено</small></div><div className={missingCount ? 'has-missing' : ''}><strong>{missingCount}</strong><small>пропусков</small></div><div><strong>{uniqueCount}</strong><small>уникальных</small></div></div>{columnIssues.length ? <div className="inspector-issues">{columnIssues.map((issue, index) => <div className={issue.severity} key={index}><span>!</span><p>{issue.message}{issue.examples?.length ? <small>{issue.examples.join(' · ')}</small> : null}</p></div>)}</div> : <div className="all-good">✓ Проблем не обнаружено</div>}</div>
+          <div className="inspector-section"><div className="inspector-section-title"><span>Качество данных</span></div><div className="column-stats"><div><strong>{table.rows.length - missingCount}</strong><small>заполнено</small></div><div className={missingCount ? 'has-missing' : ''}><strong>{missingCount}</strong><small>пропусков</small></div><div><strong>{uniqueCount}</strong><small>уникальных</small></div></div></div>
 
           {normalization && <div className="inspector-section auto-rule"><div className="inspector-section-title"><span>Обработка</span></div><p>Формат <b>{normalization.format}</b></p><div><span>Преобразовано</span><b>{normalization.converted}</b></div><div><span>Уверенность</span><b>{normalization.confidence}%</b></div></div>}
         </aside>

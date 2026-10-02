@@ -37,8 +37,8 @@
 .chart-gallery-card {
   margin: 0;
   overflow: hidden;
-  border: 1px solid #e5e3eb;
-  border-radius: 12px;
+  border: 1px solid #d4d4d4;
+  border-radius:0;
   background: #fff;
   transition: border-color 180ms ease, box-shadow 180ms ease;
 }
@@ -47,7 +47,7 @@
   position: relative;
   height: 190px;
   padding: 24px 20px 12px;
-  background: #f5f4f8;
+  background: #f7f7f7;
 }
 
 .chart-gallery-art svg { display: block; width: 100%; height: 100%; overflow: visible; }
@@ -62,7 +62,7 @@
 .chart-gallery-art .boxplot { fill: color-mix(in srgb, var(--chart-color) 16%, #fff); stroke: var(--chart-color); stroke-width: 2; }
 
 .chart-gallery-card figcaption { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; }
-.chart-gallery-card strong { font: 700 13px Manrope, sans-serif; }
+.chart-gallery-card strong { font: 700 13px Wix Madefor Display, sans-serif; }
 .chart-gallery-card span { color: #777580; font-size: 10px; text-align: right; }
 .chart-gallery-card:hover { position: relative; z-index: 3; border-color: var(--chart-color); box-shadow: inset 0 0 0 1px var(--chart-color); }
 
@@ -77,11 +77,10 @@
   pointer-events: none;
 }
 
-.chart-gallery-copy h2 { margin: 0; font: 700 clamp(48px, 6vw, 78px)/1.03 Manrope, sans-serif; letter-spacing: -.04em; text-wrap: balance; }
+.chart-gallery-copy h2 { margin: 0; font: 700 clamp(48px, 6vw, 78px)/1.03 Wix Madefor Display, sans-serif; letter-spacing: -.04em; text-wrap: balance; }
 .chart-gallery-title-line { position: relative; display: inline-block; isolation: isolate; }
-.chart-gallery-copy p { position: relative; isolation: isolate; max-width: 620px; margin: 30px auto 0; color: #777580; font-size: 16px; line-height: 1.65; text-wrap: pretty; }
-.chart-gallery-title-line::before,
-.chart-gallery-copy p::before {
+.chart-gallery-cta { margin-top: 32px; pointer-events: auto; }
+.chart-gallery-title-line::before {
   content: attr(data-mask);
   position: absolute;
   z-index: -1;
@@ -103,9 +102,7 @@
   .chart-gallery-card figcaption { display: block; padding: 12px; }
   .chart-gallery-card span { display: block; margin-top: 4px; text-align: left; }
   .chart-gallery-copy h2 { font-size: 43px; }
-  .chart-gallery-copy p { max-width: 330px; font-size: 14px; }
-  .chart-gallery-title-line::before,
-  .chart-gallery-copy p::before { -webkit-text-stroke-width: 26px; filter: blur(12px); }
+  .chart-gallery-title-line::before { -webkit-text-stroke-width: 26px; filter: blur(12px); }
   .chart-marquee-group { gap: 10px; padding-bottom: 10px; }
 }
 

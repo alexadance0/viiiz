@@ -1,7 +1,7 @@
 import type { ChartConfig, DataTable, DataValue } from '../core/types'
 import { slopePositionKey } from '../core/chartScale'
 import { repeatedChartCategories } from '../core/chartData'
-import { isDistributionChart } from '../core/chartKinds'
+import { isDistributionChart, isPieChart } from '../core/chartKinds'
 import { SettingsCheckbox } from './SettingsCheckbox'
 
 interface Props {
@@ -119,6 +119,8 @@ export function ChartDataMapping({ table, numericColumns, config, onChange, onTo
       <div><strong>Один показатель по годам</strong><small>Каждый календарный год станет отдельной линией с месяцами по оси X.</small></div>
       {select('Показатель', config.yFields[0] ?? config.yField, (yField) => patch({ yField, yFields: [yField] }))}
     </div>
+  } else if (isPieChart(config.kind)) {
+    measures = <div className="chart-role-fields"><div><strong>Размер секторов</strong><small>Один показатель, каждая категория — доля от общей суммы.</small></div>{select('Значение', config.yField, (yField) => patch({ yField, yFields: [yField], seriesField: '' }))}</div>
   } else if (config.kind === 'treemap') {
     measures = <div className="chart-role-fields">
       <div><strong>Размер блоков</strong><small>Площадь каждого блока пропорциональна выбранному положительному значению.</small></div>
@@ -148,7 +150,7 @@ export function ChartDataMapping({ table, numericColumns, config, onChange, onTo
 
   return <section className="chart-data-section">
     <div><strong>Данные графика</strong><small>Назначьте столбцам понятные роли</small></div>
-    {!isDistributionChart(config.kind) && <label>{config.kind === 'treemap' ? 'Категория' : config.kind === 'dumbbell' ? 'Категории' : 'Период / ось X'}<select value={config.xField} onChange={(event) => { const xField = event.target.value; const positions = slopePositions(table, xField); patch({ xField, ...(config.kind === 'treemap' ? { treemapHiddenCategories: [] } : {}), ...(config.kind === 'slope' ? { slopeXValues: positions.length > 1 ? [positions[0][0], positions.at(-1)![0]] : positions.map(([key]) => key) } : {}), ...(config.kind === 'indexed-line' ? { indexBaseXValue: positions[0]?.[0] } : {}), xAxisTitle: config.xAxisTitle === config.xField ? xField : config.xAxisTitle }) }}>{table.columns.map((column) => <option key={column}>{column}</option>)}</select></label>}
+    {!isDistributionChart(config.kind) && <label>{config.kind === 'treemap' || isPieChart(config.kind) ? 'Категория' : config.kind === 'dumbbell' ? 'Категории' : 'Период / ось X'}<select value={config.xField} onChange={(event) => { const xField = event.target.value; const positions = slopePositions(table, xField); patch({ xField, ...(config.kind === 'treemap' ? { treemapHiddenCategories: [] } : {}), ...(config.kind === 'slope' ? { slopeXValues: positions.length > 1 ? [positions[0][0], positions.at(-1)![0]] : positions.map(([key]) => key) } : {}), ...(config.kind === 'indexed-line' ? { indexBaseXValue: positions[0]?.[0] } : {}), xAxisTitle: config.xAxisTitle === config.xField ? xField : config.xAxisTitle }) }}>{table.columns.map((column) => <option key={column}>{column}</option>)}</select></label>}
     {config.kind === 'treemap' && !!treemapCategories.length && <div className="chart-data-field" role="group" aria-label="Категории Treemap">
       <span className="chart-data-field-label">Какие категории показывать · {visibleTreemapCategories.length} из {treemapCategories.length}</span>
       <div className="y-field-list">{treemapCategories.map((category) => {

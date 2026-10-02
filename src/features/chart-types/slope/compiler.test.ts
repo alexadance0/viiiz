@@ -71,10 +71,10 @@ describe('native Slope compiler', () => {
   it('preserves formatting, renamed series identity, and dedicated Slope styles', () => {
     const config = slopeConfig({
       yFields: ['actual'], numberLocale: 'en-US', numberDecimals: 1, numberPrefix: '$', numberSuffix: 'm',
-      seriesStyles: { actual: { color: '#6956e8', legendLabel: 'Actual result', lineWidth: 5, lineType: 'dashed', markerShape: 'diamond', markerSize: 15, markerFill: '#ffffff', markerBorder: '#6956e8', markerBorderWidth: 3 } },
+      seriesStyles: { actual: { color: '#1677a6', legendLabel: 'Actual result', lineWidth: 5, lineType: 'dashed', markerShape: 'diamond', markerSize: 15, markerFill: '#ffffff', markerBorder: '#1677a6', markerBorderWidth: 3 } },
     })
     const scene = compileNativeSlopeScene(slopeTable, config), series = scene.plot.series[0]
-    expect(series).toMatchObject({ color: '#6956e8', stroke: { color: '#6956e8', width: 5, type: 'dashed' }, marker: { shape: 'diamond', size: 15, fill: '#ffffff', stroke: '#6956e8', strokeWidth: 3 } })
+    expect(series).toMatchObject({ color: '#1677a6', stroke: { color: '#1677a6', width: 5, type: 'dashed' }, marker: { shape: 'diamond', size: 15, fill: '#ffffff', stroke: '#1677a6', strokeWidth: 3 } })
     expect(scene.plot.endpointLabels.items.map((item) => [item.valueText, item.seriesText])).toEqual([['$12.0m', undefined], ['$24.0m', 'Actual result']])
   })
 
@@ -184,12 +184,12 @@ describe('native Slope compiler', () => {
   })
 
   it('loads old optional-field configs with change encoding disabled and stored series colors intact', () => {
-    const config = slopeConfig({ yFields: ['actual'], seriesStyles: { actual: { color: '#6956e8' } } })
+    const config = slopeConfig({ yFields: ['actual'], seriesStyles: { actual: { color: '#1677a6' } } })
     delete config.slopeShowChange
     delete config.slopeColorByChange
     delete config.slopeChangeFormat
     const series = compileNativeSlopeScene(slopeTable, config).plot.series[0]
-    expect(series).toMatchObject({ color: '#6956e8', stroke: { color: '#6956e8' }, change: { showLabel: false, colorByDirection: false, resolvedColor: '#6956e8' } })
+    expect(series).toMatchObject({ color: '#1677a6', stroke: { color: '#1677a6' }, change: { showLabel: false, colorByDirection: false, resolvedColor: '#1677a6' } })
   })
 
   it.each(['start', 'middle', 'end'] as const)('places %s change labels along the rendered segment inside plot bounds', (position) => {

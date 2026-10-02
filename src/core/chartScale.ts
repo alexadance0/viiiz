@@ -1,4 +1,4 @@
-import { prepareChartData } from './chartData'
+import { chartDataValueKey, prepareChartData } from './chartData'
 import type { ChartConfig, DataTable, DataValue } from './types'
 import { isBarChart, isNormalizedStackedChart } from './chartKinds'
 
@@ -67,7 +67,12 @@ const sortBarCategories = (prepared: ReturnType<typeof prepareChartData>, config
 
 export const prepareVisibleChartData = (table: DataTable, config: ChartConfig) => {
   const source = prepareChartData(table, isNormalizedStackedChart(config.kind) ? { ...config, valueMode: 'absolute' } : config)
-  const prepared = sortBarCategories(applyCategoryRange(source, config), config)
+  let prepared = sortBarCategories(applyCategoryRange(source, config), config)
+  if (config.categoryOrder?.length) {
+    const order = new Map(config.categoryOrder.map((key, index) => [key, index]))
+    const indices = prepared.categories.map((_, index) => index).sort((a, b) => (order.get(chartDataValueKey(prepared.categories[a])) ?? Infinity) - (order.get(chartDataValueKey(prepared.categories[b])) ?? Infinity))
+    prepared = { categories: indices.map((index) => prepared.categories[index]), series: prepared.series.map((series) => ({ ...series, data: indices.map((index) => series.data[index]) })) }
+  }
   if (isNormalizedStackedChart(config.kind)) {
     prepared.categories.forEach((_, categoryIndex) => {
       const positive = prepared.series.reduce((sum, series) => sum + Math.max(0, series.data[categoryIndex] ?? 0), 0)

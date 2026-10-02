@@ -147,7 +147,7 @@ export function CanvasTextOverlay({ id, text, html, style, left, top, width, cus
   }
   return <div className="canvas-rich-text" style={blockStyle({ ...style, align: blockAlign }, left, top, width, rotation)}>
     {editing.styleToolbar && (
-      <TextFragmentToolbar style={toolbarStyle} customFonts={customFonts} strokeColor={canvasBackground} below={top < 70} onBeforeAction={remember} onApply={apply} alignment={blockAlign} onAlignmentChange={setAlignment} onCommand={command}/>
+      <TextFragmentToolbar anchorRef={editor} style={toolbarStyle} customFonts={customFonts} strokeColor={canvasBackground} below={top < 70} onBeforeAction={remember} onApply={apply} alignment={blockAlign} onAlignmentChange={setAlignment} onCommand={command}/>
     )}
     <div ref={editor} className="canvas-rich-text-content" style={editing.multiline ? { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } : { whiteSpace: 'pre', overflowWrap: 'normal' }} contentEditable suppressContentEditableWarning onInput={save} onMouseUp={remember} onKeyUp={remember} onKeyDown={(event) => { if (event.key === 'Enter' && !editing.explicitNewlines) event.preventDefault() }} onPaste={(event) => { event.preventDefault(); document.execCommand('insertText', false, event.clipboardData.getData('text/plain')); save() }}/>
   </div>

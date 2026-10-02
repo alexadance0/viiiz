@@ -32,3 +32,5 @@ export const isStackedAreaChart = (kind: ChartKind) => kind === 'stacked-area' |
 export const isStackedChart = (kind: ChartKind) => isStackedBarChart(kind) || isStackedAreaChart(kind)
 export const isNormalizedStackedChart = (kind: ChartKind) => kind === 'normalized-stacked-bar' || kind === 'horizontal-normalized-stacked-bar' || kind === 'normalized-stacked-area'
 export const chartUsesAggregation = (kind: ChartKind) => kind !== 'scatter' && kind !== 'bubble' && !isDistributionChart(kind)
+
+export const isPieChart = (kind: ChartKind): kind is 'pie' | 'donut' => kind === 'pie' || kind === 'donut'

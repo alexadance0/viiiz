@@ -1,176 +1,172 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { SYMBOL_GRID } from './symbolGrid'
 
-type StreamNode = {
-  progress: number
-  x: number
-  y: number
-  symbol: string
-  scale: number
-  tile: boolean
+const { cellWidth: CELL_WIDTH, cellHeight: CELL_HEIGHT } = SYMBOL_GRID
+const SYMBOLS = '1110120100100#1200102=410110010101#932-34_+$.010'
+const BINARY = '00000111001001101'
+
+const fade = (distance: number) => {
+  const weight = Math.max(0, 1 - distance / 220)
+  return weight * weight * (3 - 2 * weight)
 }
 
-const VIEWBOX_WIDTH = 1_200
-const VIEWBOX_HEIGHT = 4_000
-const SYMBOLS = ['0', '1', '@', '=', '-', '%', '$', '#', '+', '/', '*', '<', '>']
-const STAGE_COLORS = [
-  [24, 174, 218],
-  [224, 51, 171],
-  [132, 91, 232],
-  [69, 104, 225],
-] as const
-
-const PATH = 'M 1200 570 L 934 570 Q 844 570 844 660 L 844 1541 Q 844 1631 754 1631 L 446 1631 Q 356 1631 356 1721 L 356 2334 Q 356 2424 446 2424 L 754 2424 Q 844 2424 844 2514 L 844 3127 Q 844 3217 754 3217 L 446 3217 Q 356 3217 356 3307 L 356 3500'
-const LANE_OFFSETS = [-40, -20, 0, 20, 40]
-
-const hash = (value: number) => {
-  const result = Math.sin(value * 127.1) * 43_758.5453
-  return result - Math.floor(result)
-}
-
-const clamp = (value: number) => Math.max(0, Math.min(1, value))
-const mix = (a: number, b: number, amount: number) => a + (b - a) * amount
-
-function colorAt(progress: number) {
-  const position = clamp(progress) * (STAGE_COLORS.length - 1)
-  const index = Math.min(STAGE_COLORS.length - 2, Math.floor(position))
-  const amount = position - index
-  const from = STAGE_COLORS[index]
-  const to = STAGE_COLORS[index + 1]
-  return [mix(from[0], to[0], amount), mix(from[1], to[1], amount), mix(from[2], to[2], amount)]
-}
+type Cell = { x: number; y: number; height: number; symbol: string; color: string; background: string; source: boolean }
+type Layout = { width: number; height: number; cells: Cell[] }
 
 export function ProcessStream() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const pathRef = useRef<SVGPathElement>(null)
+  const hostRef = useRef<HTMLDivElement>(null)
+  const [layout, setLayout] = useState<Layout>({ width: 0, height: 0, cells: [] })
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    const path = pathRef.current
-    const section = canvas?.closest<HTMLElement>('.process-section')
-    const context = canvas?.getContext('2d')
-    if (!canvas || !path || !section || !context) return
+    const section = hostRef.current?.closest<HTMLElement>('.process-section')
+    if (!section) return
+    const stages = [...section.querySelectorAll<HTMLElement>('[data-process-stage]')]
+    const previews = stages.map((stage) => stage.querySelector<HTMLElement>('.process-preview')!)
+    let mounted = true
 
-    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
-    const nodes: StreamNode[] = []
-    const length = path.getTotalLength()
-    let frame = 0
-    let viewportHeight = innerHeight
-
-    for (let step = 0; step < 260; step += 1) {
-      const progress = (step + 0.5) / 260
-      const point = path.getPointAtLength(progress * length)
-      const before = path.getPointAtLength(Math.max(0, progress * length - 2))
-      const after = path.getPointAtLength(Math.min(length, progress * length + 2))
-      const tangentLength = Math.hypot(after.x - before.x, after.y - before.y) || 1
-      const normalX = -(after.y - before.y) / tangentLength
-      const normalY = (after.x - before.x) / tangentLength
-
-      for (let lane = 0; lane < LANE_OFFSETS.length; lane += 1) {
-        const offset = LANE_OFFSETS[lane]
-        const seed = step * 11 + lane * 41
-        nodes.push({
-          progress,
-          x: point.x + normalX * offset,
-          y: point.y + normalY * offset,
-          symbol: SYMBOLS[Math.floor(hash(seed + 40) * SYMBOLS.length)],
-          scale: 0.98 + hash(seed + 70) * 0.04,
-          tile: hash(seed + 80) > 0.91,
-        })
-      }
-    }
-
-    const resize = () => {
-      const ratio = Math.min(devicePixelRatio || 1, 1)
-      viewportHeight = innerHeight
-      canvas.width = Math.round(section.clientWidth * ratio)
-      canvas.height = Math.round(section.clientHeight * ratio)
-      canvas.style.width = `${section.clientWidth}px`
-      canvas.style.height = `${section.clientHeight}px`
-      context.setTransform(ratio, 0, 0, ratio, 0, 0)
-      draw()
-    }
-
-    const draw = () => {
-      frame = 0
-      const rect = section.getBoundingClientRect()
-      const intro = section.querySelector<HTMLElement>('.process-intro')
-      const stages = section.querySelectorAll<HTMLElement>('[data-process-stage]')
-      const introRect = intro?.getBoundingClientRect()
-      const lastStageRect = stages[stages.length - 1]?.getBoundingClientRect()
-      const start = introRect ? introRect.top + introRect.height / 2 - rect.top : 0
-      const end = lastStageRect ? lastStageRect.top + lastStageRect.height / 2 - rect.top : rect.height
-      // The whole path completes while scrolling from the intro to the last stage.
-      const headProgress = clamp((viewportHeight / 2 - rect.top - start) / Math.max(1, end - start))
-
-      const visibleTop = Math.max(0, -rect.top)
-      context.clearRect(0, Math.max(0, visibleTop - 40), section.clientWidth, viewportHeight + 80)
-      context.textAlign = 'center'
-      context.textBaseline = 'middle'
-
-      for (const node of nodes) {
-        const x = node.x / VIEWBOX_WIDTH * rect.width
-        const y = node.y / VIEWBOX_HEIGHT * rect.height
-        const screenY = y + rect.top
-        if (screenY < -30 || screenY > viewportHeight + 30) continue
-
-        const distanceBehind = headProgress - node.progress
-        let alpha = 0
-        if (reducedMotion) alpha = 0.18
-        else if (distanceBehind >= 0 && distanceBehind < 0.12) alpha = 0.96 - distanceBehind * 2.4
-        else if (distanceBehind >= 0.12 && distanceBehind < 0.32) alpha = (0.32 - distanceBehind) / 0.2 * 0.34
-        else if (distanceBehind < 0 && distanceBehind > -0.045) alpha = (1 + distanceBehind / 0.045) * 0.12
-        const entranceAlpha = node.progress < 0.12 ? (1 - node.progress / 0.12) * 0.32 : 0
-        alpha = Math.max(alpha, entranceAlpha)
-        if (alpha < 0.025) continue
-
-        const [red, green, blue] = colorAt(node.progress)
-        const inHead = Math.abs(distanceBehind) < 0.1
-        const scale = node.scale * (inHead ? 1.03 : 1)
-        context.font = `500 ${14 * scale}px ui-monospace, SFMono-Regular, Menlo, monospace`
-
-        if (node.tile && inHead && alpha > 0.34) {
-          context.fillStyle = `rgba(${red}, ${green}, ${blue}, ${Math.min(0.2, alpha * 0.2)})`
-          context.beginPath()
-          context.roundRect(x - 8, y - 10, 16, 20, 4)
-          context.fill()
+    const measure = () => {
+      const sectionBox = section.getBoundingClientRect()
+      const titleRange = document.createRange()
+      titleRange.selectNodeContents(section.querySelector<HTMLElement>('#process-title')!)
+      const titleBox = titleRange.getBoundingClientRect()
+      const introBox = section.querySelector<HTMLElement>('.process-intro')!.getBoundingClientRect()
+      const safeZones = [...section.querySelectorAll<HTMLElement>('.process-copy, .process-intro h2')].map((copy) => {
+        const box = copy.getBoundingClientRect()
+        return { left: box.left - sectionBox.left, right: box.right - sectionBox.left, top: box.top - sectionBox.top, bottom: box.bottom - sectionBox.top }
+      })
+      const cards = previews.map((preview, index) => {
+        const box = preview.getBoundingClientRect()
+        return {
+          column: Math.round((box.left + box.width / 2 - sectionBox.left) / CELL_WIDTH),
+          top: box.top - sectionBox.top,
+          bottom: box.bottom - sectionBox.top,
+          color: getComputedStyle(stages[index]).getPropertyValue('--stage-color').trim(),
         }
-
-        context.fillStyle = `rgba(${red}, ${green}, ${blue}, ${alpha})`
-        context.fillText(node.symbol, x, y)
-      }
-
-      for (const stage of stages) {
-        const stageRect = stage.getBoundingClientRect()
-        const activity = reducedMotion ? 1 : clamp(1 - Math.abs(stageRect.top + stageRect.height / 2 - viewportHeight / 2) / (viewportHeight * 0.72))
-        stage.style.setProperty('--stage-activity', activity.toFixed(3))
-        stage.style.setProperty('--stage-shift', `${((1 - activity) * 8).toFixed(2)}px`)
-        stage.style.setProperty('--stage-scale', (1 + activity * 0.012).toFixed(4))
-        stage.style.setProperty('--stage-border-opacity', (0.08 + activity * 0.35).toFixed(3))
-        stage.style.setProperty('--stage-number-opacity', (0.35 + activity * 0.65).toFixed(3))
-      }
+      })
+      const cells: Cell[] = []
+      cards.forEach((card, index) => {
+        const previous = cards[index - 1]
+        const rows = previous ? Math.max(1, Math.floor((card.top - previous.bottom) / CELL_HEIGHT)) : Math.max(1, Math.floor((card.top - (titleBox.bottom - sectionBox.top)) / CELL_HEIGHT))
+        const top = card.top - rows * CELL_HEIGHT
+        const rowHeight = CELL_HEIGHT
+        const last = rows - 1
+        const bend = Math.floor(last / 2)
+        const from = previous?.column ?? card.column
+        const direction = Math.sign(card.column - from)
+        const grid = new Map<string, Cell>()
+        const add = (column: number, row: number, horizontal = false) => {
+          const x = column * CELL_WIDTH
+          const y = top + (row + 0.5) * rowHeight
+          if (safeZones.some((zone) => x > zone.left - CELL_WIDTH && x < zone.right + CELL_WIDTH && y > zone.top - CELL_HEIGHT / 2 && y < zone.bottom + CELL_HEIGHT / 2)) return
+          // Both materials use one continuous color field, including at elbows.
+          const arrival = fade(Math.hypot(x - card.column * CELL_WIDTH, card.top - y))
+          const departure = previous ? fade(Math.hypot(x - from * CELL_WIDTH, y - previous.bottom)) : 0
+          const weights = arrival + departure
+          const accent = previous && weights > 0
+            ? `color-mix(in srgb, ${card.color} ${arrival / weights * 100}%, ${previous.color})`
+            : card.color
+          const color = `color-mix(in srgb, ${accent} ${Math.max(arrival, departure) * 100}%, #202027)`
+          const background = `color-mix(in srgb, ${accent} ${Math.max(arrival, departure) * 42}%, transparent)`
+          const alphabet = horizontal ? SYMBOLS : BINARY
+          const seed = ((column * 5 + row * 11 + index * 3) % alphabet.length + alphabet.length) % alphabet.length
+          grid.set(`${column}:${row}`, { x, y, height: rowHeight, symbol: alphabet[seed], color, background, source: !previous && row < 3 })
+        }
+        const vertical = (column: number, start: number, end: number, arriving: boolean) => {
+          for (let row = start; row <= end; row++) {
+            // Only the row touching the card widens to five glyphs.
+            const radius = (arriving ? last - row : row) === 0 || (previous && row === 0) ? 2 : 1
+            for (let lane = -radius; lane <= radius; lane++) add(column + lane, row)
+          }
+        }
+        if (!previous) {
+          const stacked = sectionBox.width <= 900
+          const trunk = stacked ? Math.floor((sectionBox.width - CELL_WIDTH / 2) / CELL_WIDTH) : card.column
+          const join = Math.min(last - 4, Math.floor((introBox.bottom - sectionBox.top - top) / CELL_HEIGHT) - 2)
+          const roots = ['#e033ab', '#e4a52c', '#4568e1']
+          const collector = Math.round((titleBox.left - sectionBox.left + titleBox.width * 0.64) / CELL_WIDTH)
+          const rootCell = (column: number, row: number, strength = 1) => {
+            const x = column * CELL_WIDTH
+            const y = top + (row + 0.5) * CELL_HEIGHT
+            const position = (x - titleBox.left + sectionBox.left) / titleBox.width
+            const stop = position <= 0.46 ? 0 : 1
+            const amount = Math.max(0, Math.min(1, stop === 0 ? (position - 0.16) / 0.3 : (position - 0.46) / 0.32))
+            const hue = `color-mix(in srgb, ${roots[stop + 1]} ${amount * 100}%, ${roots[stop]})`
+            const blend = row >= join && column >= collector ? 1 : fade(Math.hypot((column - collector) * CELL_WIDTH, (row - join) * CELL_HEIGHT))
+            const accent = `color-mix(in srgb, ${card.color} ${blend * 100}%, ${hue})`
+            const seed = ((column * 5 + row * 11) % SYMBOLS.length + SYMBOLS.length) % SYMBOLS.length
+            grid.set(`${column}:${row}`, {
+              x, y, height: CELL_HEIGHT, symbol: SYMBOLS[seed], source: true,
+              color: `color-mix(in srgb, ${accent} ${strength * 100}%, #202027)`,
+              background: `color-mix(in srgb, ${accent} ${strength * 28}%, transparent)`,
+            })
+          }
+          roots.forEach((_, index) => {
+            const anchor = Math.round((titleBox.left - sectionBox.left + titleBox.width * [0.16, 0.46, 0.78][index]) / CELL_WIDTH)
+            const elbow = Math.max(2, join - (2 - index) * 2)
+            for (let row = 0; row <= elbow; row++) rootCell(anchor, row)
+            const step = Math.sign(collector - anchor) || 1
+            for (let column = anchor; column !== collector + step; column += step) rootCell(column, elbow)
+            // Fine rootlets feed the larger branches without adding another frame.
+            rootCell(anchor - step, 1, 0.8)
+            rootCell(anchor - step * 2, 1, 0.55)
+            rootCell(anchor - step * 2, 0, 0.4)
+          })
+          for (let row = Math.max(0, join - 4); row <= join; row++) rootCell(collector, row)
+          const stemDirection = Math.sign(trunk - collector) || 1
+          for (let column = collector; column !== trunk + stemDirection; column += stemDirection) rootCell(column, join)
+          const turn = stacked ? last - 3 : last
+          if (!stacked) {
+            for (const offset of [2, 3]) {
+              rootCell(trunk - offset, join + 1)
+              grid.get(`${trunk - offset}:${join + 1}`)!.symbol = offset === 2 ? '1' : '0'
+            }
+          }
+          for (let row = Math.max(0, join); row <= turn; row++) {
+            const radius = stacked ? 0 : row >= last - 1 ? 2 : row > join ? 1 : 0
+            for (let lane = -radius; lane <= radius; lane++) {
+              rootCell(trunk + lane, row)
+            }
+          }
+          if (stacked) {
+            for (let column = card.column; column <= trunk; column++) rootCell(column, turn)
+            for (let row = turn + 1; row <= last; row++) {
+              for (let lane = -(row === last ? 2 : 1); lane <= (row === last ? 2 : 1); lane++) rootCell(card.column + lane, row)
+            }
+          }
+        } else if (!direction) vertical(card.column, 0, last, true)
+        else {
+          vertical(from, 0, bend - 1, false)
+          // The diagonal cut follows the turn: its outer edge meets the vertical stem.
+          for (let lane = 0; lane < 3; lane++) {
+            const shift = (lane - 1) * direction
+            for (let column = from + shift; column !== card.column + shift + direction; column += direction) add(column, bend + lane, true)
+          }
+          vertical(card.column, bend + 3, last, true)
+        }
+        // Rectangles share edges, producing a continuous highlight instead of scattered tiles.
+        cells.push(...grid.values())
+      })
+      setLayout({ width: sectionBox.width, height: sectionBox.height, cells })
     }
 
-    const scheduleDraw = () => {
-      if (!frame) frame = requestAnimationFrame(draw)
-    }
-
-    addEventListener('scroll', scheduleDraw, { passive: true })
-    addEventListener('resize', resize)
-    resize()
-
-    return () => {
-      removeEventListener('scroll', scheduleDraw)
-      removeEventListener('resize', resize)
-      cancelAnimationFrame(frame)
-    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(section)
+    for (const preview of previews) observer.observe(preview)
+    measure()
+    void document.fonts.ready.then(() => { if (mounted) measure() })
+    return () => { mounted = false; observer.disconnect() }
   }, [])
 
   return (
-    <div className="process-stream" aria-hidden="true">
-      <svg className="process-stream-path" viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`} preserveAspectRatio="none">
-        <path ref={pathRef} d={PATH} />
+    <div ref={hostRef} className="process-stream" aria-hidden="true">
+      <svg className="process-stream-symbols" width={layout.width} height={layout.height} style={{ font: SYMBOL_GRID.font }}>
+        {layout.cells.map((cell, index) => (
+          <g key={index} className={cell.source ? 'process-stream-source' : undefined}>
+            <rect x={cell.x - CELL_WIDTH / 2} y={cell.y - cell.height / 2} width={CELL_WIDTH} height={cell.height} fill={cell.background} />
+            <text x={cell.x} y={cell.y + SYMBOL_GRID.baselineOffset} fill={cell.color}>{cell.symbol}</text>
+          </g>
+        ))}
       </svg>
-      <canvas ref={canvasRef} className="process-stream-canvas" />
     </div>
   )
 }

@@ -21,7 +21,7 @@ export const isNativeLineKind = (kind: ChartKind): kind is NativeLineKind => (NA
 export const isNativeAreaKind = (kind: ChartKind): kind is NativeAreaKind => (NATIVE_AREA_KINDS as readonly ChartKind[]).includes(kind)
 export const isNativePointKind = (kind: ChartKind): kind is NativePointKind => isNativeLineKind(kind) || isNativeAreaKind(kind)
 
-const paletteFallback = ['#6956e8', '#168a72', '#e56b45', '#d0a52b', '#3f8fba', '#a45ca4', '#6f9d45', '#c64f70']
+const paletteFallback = ['#1677a6', '#168a72', '#e56b45', '#d0a52b', '#3f8fba', '#a45ca4', '#6f9d45', '#c64f70']
 const seriesColor = (config: ChartConfig, name: string, index: number) => config.seriesStyles[name]?.color ?? (config.palette?.length ? config.palette : [config.color, ...paletteFallback.slice(1)])[index % Math.max(1, config.palette?.length ?? paletteFallback.length)]
 const typed = (value: DataValue) => value instanceof Date ? `date:${value.toISOString()}` : `${typeof value}:${String(value ?? '')}`
 export const legacyPointElementKey = (series: string, category: DataValue) => `${series}\u001f${category instanceof Date ? category.toISOString() : typed(category)}`

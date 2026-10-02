@@ -68,7 +68,7 @@ describe('editor startup', () => {
 
   it('groups only repeated edits of the same design property', () => {
     const initial = createDefaultChartConfig()
-    const color = { ...initial, elementStyles: { block: { color: '#6956e8' } } }
+    const color = { ...initial, elementStyles: { block: { color: '#1677a6' } } }
     const nextColor = { ...color, elementStyles: { block: { color: '#8b7cf0' } } }
     const label = { ...nextColor, elementStyles: { block: { ...nextColor.elementStyles.block, showLabel: false } } }
     expect(designChangeKey(initial, color)).toBe('elementStyles:block:color')

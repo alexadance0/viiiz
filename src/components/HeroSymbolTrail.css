@@ -6,10 +6,7 @@
   place-items: center;
   overflow: hidden;
   padding: 90px 28px 110px;
-  background:
-    radial-gradient(circle at 14% 44%, rgb(238 74 189 / 7%), transparent 28%),
-    radial-gradient(circle at 84% 38%, rgb(34 174 220 / 7%), transparent 30%),
-    #fff;
+  background: #fff;
 }
 
 .symbol-trail-canvas {
@@ -25,24 +22,26 @@
 }
 
 .hero-copy h1 {
-  margin: 0;
+  width: min(460px, 78vw);
+  margin: 0 auto;
   color: #202027;
-  font: 700 clamp(72px, 12vw, 96px) / 0.94 Manrope, sans-serif;
-  letter-spacing: -0.04em;
-  text-wrap: balance;
+  line-height: 0;
 }
 
-.hero-statement {
-  margin: 24px 0 0;
-  color: #202027;
-  font: 600 clamp(25px, 3vw, 38px) / 1.15 Manrope, sans-serif;
-  letter-spacing: -0.035em;
+.hero-wordmark .brand-logo {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
 }
 
-.hero-statement mark {
-  color: inherit;
-  background: #ece8ff;
-  padding: 0 0.1em;
+.hero-wordmark-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .hero-lead {
@@ -64,8 +63,6 @@
 
 @media (max-width: 600px) {
   .hero-section { min-height: 670px; padding: 75px 20px 95px; }
-  .hero-copy h1 { font-size: clamp(64px, 24vw, 88px); }
-  .hero-statement { font-size: 27px; }
   .hero-actions { flex-direction: column; gap: 18px; }
 }
 

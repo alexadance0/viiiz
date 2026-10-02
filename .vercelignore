@@ -1,0 +1,13 @@
+.git
+.agents
+.codex
+.aws
+.impeccable
+node_modules
+dist
+output
+test-results
+playwright-report
+e2e
+scripts
+.env*

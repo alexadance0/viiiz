@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { Link } from 'react-router-dom'
 import './ChartGallerySection.css'
 
 type PreviewKind = 'bar' | 'line' | 'area' | 'scatter' | 'lollipop' | 'heatmap' | 'bubble' | 'slope' | 'boxplot'
@@ -7,26 +8,28 @@ type Preview = { title: string; note: string; kind: PreviewKind; color: string; 
 const columns: Preview[][] = [
   [
     { title: 'Столбчатый', note: 'Сравнение категорий', kind: 'bar', color: '#18aeda', image: '/chart-gallery/01.png' },
-    { title: 'Линейный', note: 'Динамика во времени', kind: 'line', color: '#6956e8', image: '/chart-gallery/02.png' },
+    { title: 'Линейный', note: 'Динамика во времени', kind: 'line', color: '#1677a6', image: '/chart-gallery/02.png' },
     { title: 'Точечный', note: 'Связь показателей', kind: 'scatter', color: '#e033ab', image: '/chart-gallery/03.png' },
     { title: 'Lollipop', note: 'Компактное сравнение', kind: 'lollipop', color: '#4568e1', image: '/chart-gallery/04.png' },
-    { title: 'Тепловая карта', note: 'Плотность значений', kind: 'heatmap', color: '#845be8', image: '/chart-gallery/05.png' },
+    { title: 'Тепловая карта', note: 'Плотность значений', kind: 'heatmap', color: '#e4a52c', image: '/chart-gallery/05.png' },
   ],
   [
     { title: 'Областной', note: 'Изменение объёма', kind: 'area', color: '#e033ab', image: '/chart-gallery/06.png' },
     { title: 'Пузырьковый', note: 'Три измерения', kind: 'bubble', color: '#18aeda', image: '/chart-gallery/07.png' },
     { title: 'Slope chart', note: 'Изменение между точками', kind: 'slope', color: '#4568e1', image: '/chart-gallery/08.png' },
-    { title: 'Box plot', note: 'Распределение данных', kind: 'boxplot', color: '#845be8', image: '/chart-gallery/09.png' },
-    { title: 'С накоплением', note: 'Структура целого', kind: 'bar', color: '#6956e8', image: '/chart-gallery/10.png' },
+    { title: 'Box plot', note: 'Распределение данных', kind: 'boxplot', color: '#e4a52c', image: '/chart-gallery/09.png' },
+    { title: 'С накоплением', note: 'Структура целого', kind: 'bar', color: '#1677a6', image: '/chart-gallery/10.png' },
   ],
   [
-    { title: 'Bubble chart', note: 'Масштаб и положение', kind: 'bubble', color: '#845be8', image: '/chart-gallery/11.png' },
+    { title: 'Bubble chart', note: 'Масштаб и положение', kind: 'bubble', color: '#e4a52c', image: '/chart-gallery/11.png' },
     { title: 'Диапазоны', note: 'Минимум и максимум', kind: 'area', color: '#18aeda', image: '/chart-gallery/12.png' },
     { title: 'Beeswarm', note: 'Каждое наблюдение', kind: 'scatter', color: '#4568e1', image: '/chart-gallery/13.png' },
     { title: 'Ступенчатый', note: 'Дискретные изменения', kind: 'line', color: '#e033ab', image: '/chart-gallery/14.png' },
-    { title: 'Горизонтальный', note: 'Длинные подписи', kind: 'lollipop', color: '#6956e8', image: '/chart-gallery/15.png' },
+    { title: 'Горизонтальный', note: 'Длинные подписи', kind: 'lollipop', color: '#1677a6', image: '/chart-gallery/15.png' },
   ],
 ]
+
+export const galleryPreviews = columns.flat()
 
 export function ChartGallerySection() {
   return (
@@ -46,16 +49,16 @@ export function ChartGallerySection() {
       </div>
       <div className="chart-gallery-copy">
         <h2 id="chart-gallery-title">
-          <span className="chart-gallery-title-line" data-mask="Найдётся график">Найдётся график</span><br/>
+          <span className="chart-gallery-title-line" data-mask="Найдется график">Найдется график</span><br/>
           <span className="chart-gallery-title-line" data-mask="для любой истории">для любой истории</span>
         </h2>
-        <p data-mask="От точного сравнения до сложного распределения — выберите форму, которая лучше всего раскрывает ваши данные.">От точного сравнения до сложного распределения — выберите форму, которая лучше всего раскрывает ваши данные.</p>
+        <Link className="site-button dark chart-gallery-cta" to="/editor">Создай свой график</Link>
       </div>
     </section>
   )
 }
 
-function ChartPreview({ title, note, kind, color, image }: Preview) {
+export function ChartPreview({ title, note, kind, color, image }: Preview) {
   return (
     <figure className="chart-gallery-card" style={{ '--chart-color': color } as CSSProperties}>
       <div className="chart-gallery-art">

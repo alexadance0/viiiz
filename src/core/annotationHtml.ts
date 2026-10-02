@@ -27,13 +27,16 @@ export function sanitizeAnnotationHtml(html: string): string {
   return root.innerHTML
 }
 
-export function clearInlineFontFamily(html: string | undefined): string | undefined {
+export function clearInlineStyle(html: string | undefined, property: string): string | undefined {
   if (!html) return html
   const root = document.createElement('template')
   root.innerHTML = sanitizeAnnotationHtml(html)
   root.content.querySelectorAll<HTMLElement>('*').forEach((element) => {
-    element.style.removeProperty('font-family')
+    element.style.removeProperty(property)
     if (!element.getAttribute('style')?.trim()) element.removeAttribute('style')
   })
   return root.innerHTML
 }
+
+export const clearInlineFontFamily = (html: string | undefined) => clearInlineStyle(html, 'font-family')
+export const clearInlineTextColor = (html: string | undefined) => clearInlineStyle(html, 'color')

@@ -29,7 +29,7 @@ function normalizedDomain(values: number[], config: ChartConfig) {
 
 export function compileNativeHeatmapScene(table: DataTable, sourceConfig: ChartConfig): NativeHeatmapChartScene {
   if (sourceConfig.kind !== 'heatmap') throw new Error(`Native heatmap compiler cannot compile ${sourceConfig.kind}.`)
-  const base = compileNativeBarScene(table, { ...sourceConfig, kind: 'bar', seriesField: '', showLegend: false, showDirectLabels: false })
+  const base = compileNativeBarScene(table, { ...sourceConfig, kind: 'bar', barOrientation: 'vertical', seriesField: '', showLegend: false, showDirectLabels: false })
   const values = base.plot.categories.map((item) => item.value)
   const planned = categoryLabelPlan(values, planCategoryDateLabels(values, table, sourceConfig), sourceConfig).labels
   const categories = base.plot.categories.map((category, index) => ({ ...category, label: planned[index] ?? category.label }))

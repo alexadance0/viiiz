@@ -1,0 +1,11 @@
+.brand-logo-source-mark{display:none}
+.brand-logo-edge,.brand-logo-letter,.brand-logo-added-stem{transform-box:fill-box;transform-origin:center}
+.brand-logo--compact .brand-logo-added-stem{display:none}
+.brand-logo--mark .brand-logo-edge,.brand-logo--mark .brand-logo-added-stem{display:none}
+.brand-logo--compact .brand-logo-edge-start{transform:translateX(150px)}
+.brand-logo--compact .brand-logo-edge-end{transform:translateX(-155px)}
+.brand-logo--expanded .brand-logo-edge-start{transform:translateX(-2220px)}
+.brand-logo--expanded .brand-logo-edge-end{transform:translateX(2300px)}
+.brand-logo--expanded .brand-logo-letter-1{transform:translateX(-275px)}
+.brand-logo--expanded .brand-logo-letter-3{transform:translateX(275px)}
+.brand-logo--expanded .brand-logo-added-stem{transform:scaleY(1)}

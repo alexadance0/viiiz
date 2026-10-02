@@ -79,6 +79,7 @@ export function compileNativeXYScene(table: DataTable, config: ChartConfig): Nat
   const groups = config.scatterColorField ? [...new Set(rows.map(({ row }) => String(row[config.scatterColorField!] ?? 'Без категории')))] : ['']
   const labelField = config.scatterLabelField || inferScatterLabelField(table, config.xField, yFields, sizeField, config.scatterColorField)
   const globalLabelVisible = config.scatterShowLabels ?? config.showValues
+  const seriesOrder = new Map((config.seriesOrder ?? []).map((name, index) => [name, index]))
   const series: XYSeriesScene[] = yFields.flatMap((yField, fieldIndex) => groups.map((group, groupIndex) => {
     const name = config.scatterColorField ? yFields.length === 1 ? group : `${yField} · ${group}` : yField
     const style = config.seriesStyles[name]
@@ -108,7 +109,7 @@ export function compileNativeXYScene(table: DataTable, config: ChartConfig): Nat
       }]
     })
     return { id, name, yField, colorGroup: config.scatterColorField ? group : undefined, color, visible: true, points }
-  }))
+  })).sort((left, right) => (seriesOrder.get(left.name) ?? Number.MAX_SAFE_INTEGER) - (seriesOrder.get(right.name) ?? Number.MAX_SAFE_INTEGER))
   const yValues = series.flatMap((item) => item.points.map((point) => point.y))
   const automaticY = niceNumericScale(yValues)
   const positives = yValues.filter((value) => value > 0)

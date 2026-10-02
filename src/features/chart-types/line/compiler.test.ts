@@ -41,7 +41,7 @@ describe('native line and area compilers', () => {
     const normalized = compileNativeAreaScene(lineAreaFixtures[14].table, lineAreaFixtures[14].config)
     expect(spline.plot.series[0]).toMatchObject({ interpolation: 'spline', missing: 'gap', segments: [] })
     expect(step.plot.series[0].interpolation).toBe('step-start')
-    expect(edited.plot.series[0].segments[0]?.stroke).toMatchObject({ color: '#6956e8', width: 5, type: 'dashed' })
+    expect(edited.plot.series[0].segments[0]?.stroke).toMatchObject({ color: '#1677a6', width: 5, type: 'dashed' })
     expect(normalized.plot.valueDomain).toMatchObject({ min: -100, max: 100, step: 20 })
   })
 

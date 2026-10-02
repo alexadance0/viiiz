@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import './HeroSymbolTrail.css'
+import { SYMBOL_GRID } from './symbolGrid'
 
 type TrailPoint = {
   x: number
@@ -22,9 +23,7 @@ type GridImpulse = {
 }
 
 const SYMBOL_TRAIL_CONFIG = {
-  cellWidth: 25,
-  cellHeight: 27,
-  fontSize: 17,
+  ...SYMBOL_GRID,
   trailLength: 56,
   smoothing: 0.24,
   minPointDistance: 5,
@@ -40,9 +39,9 @@ const SYMBOL_TRAIL_CONFIG = {
   maxImpulses: 4,
   textColors: {
     left: [224, 51, 171],
-    center: [111, 82, 232],
+    center: [22, 119, 166],
     right: [17, 157, 211],
-    bottom: [180, 55, 210],
+    bottom: [228, 165, 44],
   },
 } as const
 
@@ -96,7 +95,7 @@ export function HeroSymbolTrail() {
     let height = 0
     let mounted = true
     let safeZones: SafeZone[] = []
-    const textElements = [...host.querySelectorAll<HTMLElement>('.hero-statement, .hero-lead')]
+    const textElements = [...host.querySelectorAll<HTMLElement>('.hero-lead')]
 
     const resize = () => {
       const rect = host.getBoundingClientRect()
@@ -155,7 +154,7 @@ export function HeroSymbolTrail() {
       const lastColumn = Math.min(Math.ceil(width / config.cellWidth), Math.ceil(maxX / config.cellWidth))
       const firstRow = Math.max(0, Math.floor(minY / config.cellHeight))
       const lastRow = Math.min(Math.ceil(height / config.cellHeight), Math.ceil(maxY / config.cellHeight))
-      context.font = `500 ${config.fontSize}px ui-monospace, SFMono-Regular, Menlo, monospace`
+      context.font = config.font
       context.textAlign = 'center'
       context.textBaseline = 'middle'
 
@@ -223,25 +222,14 @@ export function HeroSymbolTrail() {
 
           if (backgroundAlpha > 0.015) {
             context.fillStyle = `rgba(${red}, ${green}, ${blue}, ${backgroundAlpha})`
-            context.beginPath()
-            context.roundRect(x - 9, y - 11, 18, 22, 4)
-            context.fill()
+            context.fillRect(column * config.cellWidth, row * config.cellHeight, config.cellWidth, config.cellHeight)
           }
 
           let symbol = symbolFor(seed, intensity)
           if (impulseIntensity > 0.08) symbol = recodeSymbol(symbol)
           if (centerIntensity > 0) symbol = seed > 0.5 ? '@' : '1'
           context.fillStyle = `rgba(${red}, ${green}, ${blue}, ${textAlpha})`
-          if (centerIntensity > 0) {
-            context.save()
-            context.translate(x, y)
-            const scale = 1 + centerIntensity * 0.08
-            context.scale(scale, scale)
-            context.fillText(symbol, 0, 0.5)
-            context.restore()
-          } else {
-            context.fillText(symbol, x, y + 0.5)
-          }
+          context.fillText(symbol, x, y + config.baselineOffset)
         }
       }
 

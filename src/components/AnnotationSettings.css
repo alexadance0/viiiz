@@ -1,0 +1,55 @@
+.annotation-settings{color:var(--ink);font:400 12px/1.45 'Wix Madefor Text',sans-serif}
+.settings-panel:has(.annotation-settings){overflow-anchor:none}
+.annotation-settings h3{margin:0;font:700 13px/1.3 'Wix Madefor Text',sans-serif}
+.annotation-create,.annotation-objects{padding:18px;border-bottom:1px solid var(--line)}
+.annotation-tool-grid{display:flex;margin-top:12px;border:1px solid var(--line)}
+.annotation-tool-grid button{display:flex;flex:1;min-width:0;flex-direction:column;align-items:center;gap:7px;padding:12px 3px;border:0;background:#fff;color:var(--ink);font:600 11px/1.3 'Wix Madefor Text',sans-serif;cursor:pointer}
+.annotation-tool-grid button+button{border-left:1px solid var(--line)}
+.settings-panel .annotation-tool-grid button[aria-pressed=true]{background:var(--ink);color:#fff}
+.settings-panel .annotation-tool-grid button[aria-pressed=true]:hover{background:var(--ink);color:#fff}
+.annotation-placement-hint{display:grid;grid-template-columns:16px 1fr 28px;align-items:start;gap:8px;margin-top:12px;padding:12px;background:var(--surface-subtle,#f7f7f7)}
+.annotation-placement-hint p{margin:0;font-size:12px}
+.annotation-placement-hint button,.annotation-objects li>button,.annotation-properties header button{display:flex;align-items:center;justify-content:center;min-width:28px;min-height:32px;padding:4px;border:0;background:transparent;color:var(--ink);cursor:pointer}
+.annotation-placement-hint .annotation-place-center{grid-column:2/4;justify-self:start;min-height:30px;padding:4px 8px;border:1px solid var(--line);background:#fff;font-size:11px}
+.annotation-objects header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.annotation-objects header>span{font-size:11px;color:#55515e}
+.annotation-empty{margin:12px 0 0;color:#55515e;font-size:12px}
+.annotation-objects ul{list-style:none;padding:0;margin:12px 0 0}
+.annotation-objects li{display:flex;align-items:center;min-width:0;border-top:1px solid var(--line)}
+.annotation-objects li:last-child{border-bottom:1px solid var(--line)}
+.annotation-objects li.selected{background:var(--surface-subtle,#f7f7f7)}
+.annotation-objects li>.annotation-object-select{flex:1;justify-content:flex-start;gap:9px;min-width:0;min-height:44px;padding:8px 6px;text-align:left;font:500 12px/1.4 'Wix Madefor Text',sans-serif}
+.annotation-object-select svg{flex:none}.annotation-object-select span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.annotation-objects li>button[aria-pressed=true]{color:var(--ink)}
+.annotation-properties{padding:18px}
+.annotation-properties>header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.annotation-properties>header>div{display:flex;gap:4px}
+.annotation-properties fieldset{display:flex;flex-direction:column;gap:14px;border:0;padding:0;margin:0;min-width:0}
+.annotation-properties label{display:flex;flex-direction:column;gap:6px;font:600 11px/1.4 'Wix Madefor Text',sans-serif;color:var(--ink)}
+.annotation-properties input:not([type=color]),.annotation-properties select,.annotation-sidebar-text{width:100%;min-width:0;min-height:36px;border:1px solid var(--line);background:#fff;border-radius:0;padding:8px;color:var(--ink);font:400 12px/1.4 'Wix Madefor Text',sans-serif}
+.annotation-sidebar-text{min-height:76px;max-height:200px;overflow:auto;white-space:pre-wrap;font-weight:400;cursor:text}
+.annotation-field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;min-width:0}
+.annotation-position{border-top:1px solid var(--line);padding-top:12px}
+.annotation-position summary{cursor:pointer;font-size:12px;font-weight:600}
+.annotation-position>div{display:flex;flex-direction:column;gap:12px;padding-top:12px}
+.annotation-state-note,.annotation-editor-note,.annotation-select-hint{font:400 11px/1.5 'Wix Madefor Text',sans-serif;color:#55515e;margin:0}
+.annotation-state-note{padding:10px;background:var(--surface-subtle,#f7f7f7);margin-bottom:12px}
+.annotation-select-hint{display:flex;align-items:center;gap:8px;padding:18px}
+.annotation-settings :is(button,input,select,[contenteditable],summary):focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.annotation-settings :disabled{cursor:default;opacity:.5}
+.annotation-attachment-fields{display:flex;flex-direction:column;gap:12px;border-bottom:1px solid var(--line);padding-bottom:14px}
+.annotation-pick-point{min-height:36px;border:1px solid var(--line);background:#fff;color:var(--ink);font:600 11px 'Wix Madefor Text',sans-serif}
+.annotation-placement-overlay{position:absolute;inset:0;width:100%;height:100%;z-index:150;cursor:crosshair;touch-action:none;background:#ffffff03}
+.annotation-anchor-field{display:flex;flex-direction:column;gap:8px;min-width:0}
+.annotation-anchor-field>strong{font-size:11px;font-weight:600}
+.annotation-pick-point{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px;cursor:pointer}
+.settings-panel .annotation-pick-point[aria-pressed=true],.settings-panel .annotation-pick-point[aria-pressed=true]:hover{border-color:var(--ink);background:var(--ink);color:#fff}
+.annotation-anchor-value{display:flex;align-items:center;gap:8px;min-width:0;color:#55515e;font-size:11px}
+.annotation-anchor-value>span{flex:1;min-width:0;overflow-wrap:anywhere}
+.annotation-anchor-value>button{display:grid;place-items:center;flex:none;width:28px;height:28px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+.annotation-anchor-outline{fill:none;stroke:#1677a6;stroke-width:1;stroke-dasharray:4 4;pointer-events:none}
+.annotation-anchor-target,.decoration-attached-anchor{cursor:pointer;outline:none;pointer-events:auto}
+.annotation-anchor-target:is(:hover,:focus-visible) .annotation-anchor-dot{fill:#1677a6;stroke:#fff;stroke-width:2.5}
+.decoration-attached-anchor:is(:hover,:focus-visible) circle:last-child{r:6;stroke:#1677a6;fill:#fff;stroke-width:2}
+
+.settings-panel .annotation-pick-point:not([aria-pressed=true]):hover:not(:disabled){background:#f7f7f7;color:var(--ink)}

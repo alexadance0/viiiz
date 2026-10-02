@@ -1,3 +1,4 @@
+import { AnnotationHalo, syncAnnotationHaloScroll } from './AnnotationHalo'
 import { useEffect, useRef, useState } from 'react'
 import { ToggleButton, ToggleButtonGroup } from '@heroui/react'
 import { AlignCenter, AlignLeft, AlignRight, Copy, GripVertical, Trash2 } from 'lucide-react'
@@ -7,24 +8,23 @@ import { TextFragmentToolbar } from './TextFragmentToolbar'
 
 interface Props { annotation: ChartAnnotation; customFonts?: ChartConfig['customFonts']; canvasBackground?: string; onChange(value: ChartAnnotation): void; onDuplicate(): void; onDelete(): void; onClose(): void }
 
-const annotationStyle = (annotation: ChartAnnotation, canvasBackground = '#ffffff'): React.CSSProperties => {
-  const sameAsCanvas = annotation.backgroundColor?.toLowerCase() === canvasBackground.toLowerCase()
-  const hasBackground = annotation.backgroundColor && annotation.backgroundColor !== 'transparent' && !sameAsCanvas
+const annotationStyle = (annotation: ChartAnnotation, _canvasBackground = '#ffffff'): React.CSSProperties => {
+  const hasBackground = annotation.backgroundColor && annotation.backgroundColor !== 'transparent'
   const maskColor = hasBackground ? annotation.backgroundColor : 'transparent'
-  return { left: annotation.x, top: annotation.y, width: annotation.width, maxWidth: `calc(100% - ${Math.max(0, annotation.x)}px)`, height: annotation.height, boxSizing: 'border-box', fontFamily: annotation.fontFamily, fontSize: annotation.fontSize, lineHeight: `${Math.round(annotation.fontSize * 1.35)}px`, textAlign: annotation.textAlign ?? 'left', background: maskColor, borderColor: annotation.borderColor }
+  return { left: annotation.x, top: annotation.y, width: annotation.width, maxWidth: `calc(100% - ${Math.max(0, annotation.x)}px)`, height: annotation.height, boxSizing: 'border-box', fontFamily: annotation.fontFamily, fontSize: annotation.fontSize, color: annotation.fragments[0]?.color ?? '#292929', lineHeight: '1.35', textAlign: annotation.textAlign ?? 'left', background: maskColor, borderColor: annotation.borderColor }
 }
 
-const annotationTextStyle = (annotation: ChartAnnotation): React.CSSProperties => annotation.textStrokeColor
-  ? { WebkitTextStrokeColor: annotation.textStrokeColor, WebkitTextStrokeWidth: `${annotation.textStrokeWidth ?? 6}px`, paintOrder: 'stroke fill' }
-  : {}
+const annotationTextStyle = (annotation: ChartAnnotation): React.CSSProperties => ({ color: annotation.fragments[0]?.color ?? '#292929', ...(annotation.textStrokeColor ? { WebkitTextStrokeColor: annotation.textStrokeColor, WebkitTextStrokeWidth: `${annotation.textStrokeWidth ?? 6}px`, paintOrder: 'stroke fill' } : {}) })
 
 export function AnnotationDisplay({ annotation, canvasBackground, onSelect }: { annotation: ChartAnnotation; canvasBackground?: string; onSelect(): void }) {
   const html = sanitizeAnnotationHtml(annotation.html ?? annotationTextHtml(annotation.fragments.map((item) => item.text).join('')))
-  return <div className="canvas-annotation annotation-display" style={annotationStyle(annotation, canvasBackground)} onClick={(event) => { event.stopPropagation(); onSelect() }}><div className="annotation-content" style={annotationTextStyle(annotation)} dangerouslySetInnerHTML={{ __html: html }}/></div>
+  return <div data-annotation-id={annotation.id} className="canvas-annotation annotation-display" style={annotationStyle(annotation, canvasBackground)} onClick={(event) => { event.stopPropagation(); onSelect() }}><AnnotationHalo annotation={annotation}/><div className="annotation-content annotation-foreground" onScroll={syncAnnotationHaloScroll} style={annotationTextStyle(annotation)} dangerouslySetInnerHTML={{ __html: html }}/></div>
 }
 
 export function AnnotationOverlay({ annotation, customFonts, canvasBackground = '#ffffff', onChange, onDuplicate, onDelete, onClose }: Props) {
   const editor = useRef<HTMLDivElement>(null)
+  const [editing, setEditing] = useState(false)
+  useEffect(() => { setEditing(false) }, [annotation.id])
   const range = useRef<Range | null>(null)
   const [toolbarEdge, setToolbarEdge] = useState<'start' | 'end'>('start')
   const [toolbarStyle, setToolbarStyle] = useState({ fontFamily: annotation.fontFamily, size: annotation.fontSize, color: annotation.fragments[0]?.color ?? '#292929' })
@@ -34,9 +34,13 @@ export function AnnotationOverlay({ annotation, customFonts, canvasBackground = 
     const computed = window.getComputedStyle(target)
     setToolbarStyle({ fontFamily: computed.fontFamily || annotation.fontFamily, size: Math.round(Number.parseFloat(computed.fontSize)) || annotation.fontSize, color: computed.color || annotation.fragments[0]?.color || '#292929' })
   }
-  // Инициализируем HTML только при выборе другого блока, иначе React сбросит выделение во время ввода.
+  // Keep the caret during canvas edits; sync only when the sidebar changes the HTML.
+  useEffect(() => {
+    const html = sanitizeAnnotationHtml(annotation.html ?? annotationTextHtml(annotation.fragments.map((item) => item.text).join('')))
+    if (editor.current && editor.current.innerHTML !== html) editor.current.innerHTML = html
+    requestAnimationFrame(syncToolbarStyle)
   // oxlint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (editor.current) editor.current.innerHTML = sanitizeAnnotationHtml(annotation.html ?? annotationTextHtml(annotation.fragments.map((item) => item.text).join(''))); requestAnimationFrame(syncToolbarStyle) }, [annotation.id])
+  }, [annotation.id, annotation.html, annotation.fontFamily, annotation.fontSize, annotation.fragments])
   useEffect(() => {
     const shell = editor.current?.closest('.chart-canvas-shell')
     setToolbarEdge(shell && annotation.x + 430 > shell.clientWidth ? 'end' : 'start')
@@ -122,8 +126,8 @@ export function AnnotationOverlay({ annotation, customFonts, canvasBackground = 
     const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end) }
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', end)
   }
-  return <div className="canvas-annotation selected" style={annotationStyle(annotation, canvasBackground)} onKeyDown={(event) => event.key === 'Escape' && onClose()}>
-    <TextFragmentToolbar style={toolbarStyle} customFonts={customFonts} strokeColor={(annotation.textStrokeColor ?? annotation.backgroundColor) || canvasBackground} strokeWidth={annotation.textStrokeWidth ?? 6} enableStroke below={annotation.y < 75} edge={toolbarEdge} onBeforeAction={rememberSelection} onApply={apply} onStrokeWidthChange={(textStrokeWidth) => {
+  return <div data-annotation-id={annotation.id} className="canvas-annotation selected" style={annotationStyle(annotation, canvasBackground)} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); if (editing) setEditing(false); else onClose() } }}>
+    {editing && <TextFragmentToolbar anchorRef={editor} style={toolbarStyle} customFonts={customFonts} strokeColor={(annotation.textStrokeColor ?? annotation.backgroundColor) || canvasBackground} strokeWidth={annotation.textStrokeWidth ?? 6} enableStroke below={annotation.y < 75} edge={toolbarEdge} onBeforeAction={rememberSelection} onApply={apply} onStrokeWidthChange={(textStrokeWidth) => {
       editor.current?.querySelectorAll<HTMLElement>('[style*="text-stroke"]').forEach((element) => { element.style.webkitTextStrokeWidth = `${textStrokeWidth}px`; element.style.paintOrder = 'stroke fill' })
       onChange({ ...annotation, textStrokeWidth, html: editor.current ? sanitizeAnnotationHtml(editor.current.innerHTML) : annotation.html })
     }} onCommand={toggle}>
@@ -134,9 +138,9 @@ export function AnnotationOverlay({ annotation, customFonts, canvasBackground = 
       </ToggleButtonGroup>
       <button type="button" title="Дублировать аннотацию" onMouseDown={(event) => event.preventDefault()} onClick={onDuplicate}><Copy size={14} /></button>
       <button type="button" className="annotation-delete" title="Удалить аннотацию" onMouseDown={(event) => event.preventDefault()} onClick={onDelete}><Trash2 size={14} /></button>
-    </TextFragmentToolbar>
+    </TextFragmentToolbar>}
     <div className="annotation-drag-handle" onPointerDown={drag}><span><GripVertical size={13} /></span><b>Переместить</b></div>
-    <div ref={editor} className="annotation-content" style={annotationTextStyle(annotation)} contentEditable suppressContentEditableWarning onMouseUp={rememberSelection} onKeyUp={rememberSelection} onPaste={pasteText} onInput={save}/>
+    <AnnotationHalo annotation={annotation}/><div ref={editor} className="annotation-content annotation-foreground" onScroll={syncAnnotationHaloScroll} style={annotationTextStyle(annotation)} contentEditable={editing} suppressContentEditableWarning tabIndex={0} role="textbox" aria-label="Аннотация на холсте" title="Двойной клик — редактировать текст" onDoubleClick={() => { setEditing(true); requestAnimationFrame(() => editor.current?.focus()) }} onKeyDown={(event) => { if (event.key === 'Enter' && !editing) { event.preventDefault(); setEditing(true) } }} onMouseUp={rememberSelection} onKeyUp={rememberSelection} onPaste={pasteText} onInput={save}/>
     <i className="annotation-resize nw" onPointerDown={(event) => resize(event, 'left', 'top')}/><i className="annotation-resize ne" onPointerDown={(event) => resize(event, 'right', 'top')}/><i className="annotation-resize sw" onPointerDown={(event) => resize(event, 'left', 'bottom')}/><i className="annotation-resize se" onPointerDown={(event) => resize(event, 'right', 'bottom')}/>
   </div>
 }

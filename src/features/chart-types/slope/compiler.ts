@@ -11,7 +11,7 @@ import type { CartesianPointScene, CartesianSlopePlotScene, NativeSlopeChartScen
 import type { AxisSpec } from '../../chart-layout/axisLayout'
 import { legacyPointElementKey } from '../line/compiler'
 
-const paletteFallback = ['#6956e8', '#168a72', '#e56b45', '#d0a52b', '#3f8fba', '#a45ca4', '#6f9d45', '#c64f70']
+const paletteFallback = ['#1677a6', '#168a72', '#e56b45', '#d0a52b', '#3f8fba', '#a45ca4', '#6f9d45', '#c64f70']
 const seriesColor = (config: ChartConfig, name: string, index: number) => config.seriesStyles[name]?.color ?? (config.palette?.length ? config.palette : [config.color, ...paletteFallback.slice(1)])[index % Math.max(1, config.palette?.length ?? paletteFallback.length)]
 const coordinate = (value: DataValue, index: number) => value instanceof Date ? value.toISOString() : `${index}:${String(value ?? '')}`
 

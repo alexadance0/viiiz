@@ -17,7 +17,7 @@ export const isNativeBarKind = (kind: ChartKind): kind is NativeBarKind => (NATI
 const typed = (value: DataValue) => value instanceof Date ? `date:${value.toISOString()}` : `${typeof value}:${String(value ?? '')}`
 export const legacyBarElementKey = (series: string, category: DataValue) => `${series}\u001f${category instanceof Date ? category.toISOString() : typed(category)}`
 const coordinate = (value: DataValue, index: number) => value instanceof Date ? value.toISOString() : `${index}:${String(value ?? '')}`
-const paletteFallback = ['#6956e8', '#168a72', '#e56b45', '#d0a52b', '#3f8fba', '#a45ca4', '#6f9d45', '#c64f70']
+const paletteFallback = ['#1677a6', '#168a72', '#e56b45', '#d0a52b', '#3f8fba', '#a45ca4', '#6f9d45', '#c64f70']
 export const nativeBarSeriesColor = (config: ChartConfig, name: string, index: number) => config.seriesStyles[name]?.color ?? config.barFillColor ?? (config.palette?.length ? config.palette : [config.color, ...paletteFallback.slice(1)])[index % Math.max(1, config.palette?.length ?? paletteFallback.length)]
 
 const stacking = (kind: NativeBarKind) => kind.includes('normalized') ? 'normalized' : kind.includes('stacked') ? 'stacked' : 'none'

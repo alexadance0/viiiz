@@ -15,5 +15,6 @@ export interface HeatmapSpec extends SpecBase { family: 'heatmap'; scale: 'seque
 export interface TreemapSpec extends SpecBase { family: 'treemap'; subcategoryField?: string; groupGap: number; leafGap: number }
 export interface DistributionSpec extends SpecBase { family: 'distribution'; orientation: 'vertical' | 'horizontal'; layout: 'measures' | 'categories' }
 export interface AreaSpec extends SpecBase { family: 'area'; stacking: 'none' | 'stacked' | 'normalized'; fillOpacity: number }
+export interface PieSpec extends SpecBase { family: 'pie'; innerRadius: number }
 export interface CustomSpec extends SpecBase { family: 'custom' }
-export type ChartSpec = BarSpec | LollipopSpec | WaterfallSpec | ButterflySpec | DumbbellSpec | LineSpec | SlopeSpec | IntervalSpec | SmoothingSpec | ScatterSpec | HeatmapSpec | TreemapSpec | DistributionSpec | AreaSpec | CustomSpec
+export type ChartSpec = BarSpec | LollipopSpec | WaterfallSpec | ButterflySpec | DumbbellSpec | LineSpec | SlopeSpec | IntervalSpec | SmoothingSpec | ScatterSpec | HeatmapSpec | TreemapSpec | DistributionSpec | AreaSpec | CustomSpec | PieSpec

@@ -661,7 +661,28 @@ export interface TreemapPlotScene {
   groupGap: number
 }
 
-export type NativePlotScene = CartesianBarPlotScene | ComparisonStemPlotScene | WaterfallPlotScene | ButterflyPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene | DistributionPlotScene | HeatmapPlotScene | TreemapPlotScene
+export interface PieSliceScene {
+  id: ElementId
+  datumId: DatumId
+  seriesId: SeriesId
+  legacyKey: string
+  name: string
+  value: number
+  percent: number
+  displayValue: string
+  color: string
+  label: { visible: boolean; text: string; style: ChartTextStyle; color: string }
+}
+
+export interface PiePlotScene {
+  kind: 'pie'
+  slices: PieSliceScene[]
+  total: number
+  innerRadius: number
+  labelPosition: 'outside' | 'inside'
+}
+
+export type NativePlotScene = CartesianBarPlotScene | ComparisonStemPlotScene | WaterfallPlotScene | ButterflyPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene | DistributionPlotScene | HeatmapPlotScene | TreemapPlotScene | PiePlotScene
 
 export interface NativeChartScene extends ChartSceneBase {
   plot: NativePlotScene
@@ -755,3 +776,5 @@ export interface ResolvedSlopeChangeLabelPlacement {
 
 export type ResolvedScene = NativeChartScene & { geometry: ResolvedSceneGeometry; resolvedReservations: ResolvedReservation[] }
 export type ResolvedNativeChartScene = NativeChartScene & { geometry: ResolvedSceneGeometry; resolvedReservations: ResolvedReservation[] }
+
+export type NativePieChartScene = NativeChartScene & { plot: PiePlotScene }

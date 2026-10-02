@@ -57,7 +57,7 @@ export type ChartKind = 'bar' | 'stacked-bar' | 'normalized-stacked-bar' | 'wate
   | 'horizontal-bar' | 'butterfly' | 'horizontal-stacked-bar' | 'horizontal-normalized-stacked-bar'
   | 'lollipop' | 'horizontal-lollipop' | 'dumbbell'
   | 'line' | 'spline' | 'step-line' | 'indexed-line' | 'seasonal-line' | 'slope' | 'range-line' | 'step-range-line' | 'confidence-line'
-  | 'moving-average-line' | 'moving-average-scatter' | 'heatmap' | 'treemap'
+  | 'moving-average-line' | 'moving-average-scatter' | 'heatmap' | 'treemap' | 'pie' | 'donut'
   | 'area' | 'stacked-area' | 'normalized-stacked-area' | 'scatter' | 'bubble'
   | 'boxplot' | 'violinplot' | 'raincloud' | 'histogram' | 'kde-plot' | 'ridgeline' | 'beeswarm' | 'strip-plot' | 'jitter-plot' | 'counts-plot' | 'barcode-plot'
 export interface ChartTextStyle {
@@ -103,6 +103,9 @@ export interface ChartSeriesSelection { name: string; color: string }
 export interface AnnotationFragment { id: string; text: string; color: string; bold: boolean; italic: boolean; underline?: boolean; backgroundColor?: string }
 export interface ChartAnnotation {
   id: string
+  name?: string
+  hidden?: boolean
+  locked?: boolean
   x: number
   y: number
   width: number
@@ -117,8 +120,13 @@ export interface ChartAnnotation {
   fragments: AnnotationFragment[]
   html?: string
 }
+export type DecorationAnchor = { annotationId: string; side: 'auto' | 'left' | 'right' | 'top' | 'bottom'; position?: { x: number; y: number }; elementKey?: never } | { elementKey: string; annotationId?: never; side?: never; position?: never }
+
 export interface ChartDecoration {
   id: string
+  name?: string
+  hidden?: boolean
+  locked?: boolean
   type: 'area' | 'line' | 'horizontal-line' | 'vertical-line' | 'arrow' | 'curved-line'
   x: number
   y: number
@@ -134,9 +142,30 @@ export interface ChartDecoration {
   curvature?: number
   fitToPlot?: boolean
   fitToPlotWidth?: boolean
+  // Optional position is normalized within the annotation box (0–1).
+  startAnchor?: DecorationAnchor
+  endAnchor?: DecorationAnchor
+  controlPoints?: { first: { x: number; y: number }; second: { x: number; y: number } }
 }
 
 export interface ChartConfig {
+  multiples?: {
+    columns: number
+    rows: number
+    gap: number
+    sharedValueScale?: boolean
+    sharedXScale?: boolean
+    sharedScaleLabels?: 'all' | 'left' | 'bottom'
+    equalCategorySpacing?: boolean
+    sharedCategoryLabels?: boolean
+    valueMin?: number | null
+    valueMax?: number | null
+    valueStep?: number | null
+    panels: Array<{ id: string; config: ChartConfig } | null>
+  }
+  /** Plot alignment supplied by the multiples renderer. */
+  minimumPlotInsets?: { top: number; right: number; bottom: number; left: number }
+  categoryOrder?: string[]
   customFonts?: Array<{ name: string; dataUrl: string; fileName?: string; weight?: number; style?: 'normal' | 'italic' }>
   paletteName?: string
   palette?: string[]
@@ -145,6 +174,7 @@ export interface ChartConfig {
   canvasPreset?: 'square' | 'portrait' | 'presentation-wide' | 'presentation-standard' | 'custom'
   canvasWidth?: number
   canvasHeight?: number
+  canvasTheme?: 'light' | 'dark'
   canvasBackground?: string
   autoFitCanvas?: boolean
   canvasMarginTop?: number
@@ -340,6 +370,10 @@ export interface ChartConfig {
   heatmapRowSortDirection?: 'ascending' | 'descending'
   heatmapMissingColor?: string
   heatmapMissingLabel?: string
+  pieInnerRadius?: number
+  pieLabelPosition?: 'outside' | 'inside'
+  pieValueFormat?: 'absolute' | 'percent' | 'both'
+  pieShowNames?: boolean
   treemapSubcategoryField?: string
   treemapGap?: number
   treemapGroupGap?: number
@@ -460,7 +494,7 @@ export type DateLabelFormat = 'auto' | 'year-full' | 'year-short' | 'year-first-
 export interface ChartPlugin {
   id: ChartKind
   label: string
-  category: 'comparison' | 'bar-horizontal' | 'trend' | 'smoothing' | 'area' | 'relationship' | 'distribution' | 'heatmap' | 'hierarchy'
+  category: 'comparison' | 'bar-horizontal' | 'trend' | 'smoothing' | 'area' | 'relationship' | 'distribution' | 'heatmap' | 'hierarchy' | 'composition'
   capabilities: ChartCapabilities
   settings: ChartSettingsCapabilities
   defaultConfig: Partial<ChartConfig>
@@ -472,7 +506,7 @@ export interface ChartPlugin {
 }
 
 export interface ChartCapabilities {
-  coordinateSystem: 'cartesian' | 'hierarchy' | 'matrix' | 'custom'
+  coordinateSystem: 'cartesian' | 'hierarchy' | 'matrix' | 'custom' | 'radial'
   axes: false | { category?: { placements: Array<'side' | 'internal'> }; lane?: { placements: Array<'side'> }; value?: { scaleTypes: Array<'linear' | 'log' | 'date'> }; x?: { scaleTypes: Array<'linear' | 'date'> }; y?: { scaleTypes: Array<'linear' | 'log'> } }
   guides: Array<'legend' | 'direct-series' | 'color-scale' | 'size-scale'>
   endpointLabels?: boolean

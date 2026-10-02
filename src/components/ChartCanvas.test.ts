@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as echarts from 'echarts'
-import { applySeriesVisualState, chartTransitionMode, enableCustomSeriesTransitions, positionYAxisTitleGraphic } from './ChartCanvas'
+import { applySeriesVisualState, chartTransitionMode, disableChartAnimations, enableCustomSeriesTransitions, positionYAxisTitleGraphic } from './ChartCanvas'
 import { customFontCss } from '../features/chart-export/chartExport'
 import { decorationGraphics } from './chartDecorations'
 import { getChartPlugin } from '../core/chartRegistry'
@@ -11,7 +11,7 @@ const config: ChartConfig = {
   kind: 'line', xField: 'year', yField: 'a', yFields: ['a', 'b', 'c'], seriesField: '', aggregation: 'none', valueMode: 'absolute', missingMode: 'gap',
   title: '', subtitle: '', note: '', source: '', titleText: text(30), subtitleText: text(20), axisTitleText: text(16), axisLabelText: text(14), legendText: text(16), directLabelText: text(16), valueText: text(14), noteText: text(14), sourceText: text(14), showValues: false,
   xAxisTitle: '', yAxisTitle: '', xAxisTitleGap: 10, yAxisTitleGap: 10, xAxisPosition: 'bottom', yAxisPosition: 'left', showXAxisTitle: false, showYAxisTitle: false, showXAxisLine: true, showYAxisLine: false, axisLineColor: '#555555', axisLineWidth: 1, axisLineType: 'solid', showXTicks: true, showYTicks: false, tickLength: 5,
-  elementStyles: {}, seriesStyles: { a: { legendNote: '10%' }, b: { legendNote: '9%' }, c: { legendNote: '8%' } }, annotations: [], color: '#6956e8', showLegend: false, showDirectLabels: true, showDirectLabelLines: false, showHorizontalGrid: true, showVerticalGrid: false, gridColor: '#dddddd', gridWidth: 1, gridType: 'solid', canvasWidth: 800, canvasHeight: 500,
+  elementStyles: {}, seriesStyles: { a: { legendNote: '10%' }, b: { legendNote: '9%' }, c: { legendNote: '8%' } }, annotations: [], color: '#1677a6', showLegend: false, showDirectLabels: true, showDirectLabelLines: false, showHorizontalGrid: true, showVerticalGrid: false, gridColor: '#dddddd', gridWidth: 1, gridType: 'solid', canvasWidth: 800, canvasHeight: 500,
 }
 const table: DataTable = { name: 'line', columns: ['year', 'a', 'b', 'c'], rows: [{ year: 2022, a: 10, b: 9.8, c: 9.6 }, { year: 2023, a: 10, b: 9.9, c: 9.8 }] }
 
@@ -34,6 +34,17 @@ describe('native canvas adapters', () => {
     const option = { series: [{ type: 'custom', renderItem: () => ({ type: 'rect', shape: { x: 10, width: 20 }, style: { fill: '#222222' } }) }] }
     enableCustomSeriesTransitions(option, true)
     expect(option.series[0].renderItem()).toMatchObject({ shape: { transition: 'all' }, style: { transition: 'all', enterFrom: { opacity: 0 } } })
+  })
+
+  it('forces export options to render as a complete static frame', () => {
+    const option: Record<string, unknown> & { series: Array<Record<string, unknown>> } = {
+      animation: true,
+      animationDuration: 240,
+      series: [{ type: 'line', animation: true, animationDuration: 240, progressive: 400, universalTransition: { enabled: true } }],
+    }
+    disableChartAnimations(option)
+    expect(option).toMatchObject({ animation: false, animationDuration: 0, series: [{ animation: false, animationDuration: 0, progressive: 0 }] })
+    expect(option.series[0].universalTransition).toBeUndefined()
   })
 
   it('embeds uploaded fonts for SVG and PNG export', () => {

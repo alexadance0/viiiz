@@ -20,7 +20,7 @@ export function DateFormatDialog({ table, column, onApply, onClose }: Props) {
 
   return <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
     <section className="date-dialog" role="dialog" aria-modal="true" aria-labelledby="date-dialog-title">
-      <header><div><span className="eyebrow">Ручное правило</span><h2 id="date-dialog-title">Формат столбца «{column}»</h2><p>Опишите порядок частей даты. Разделители можно использовать любые.</p></div><button onClick={onClose} aria-label="Закрыть">×</button></header>
+      <header><div><h2 id="date-dialog-title">Формат столбца «{column}»</h2><p>Опишите порядок частей даты. Разделители можно использовать любые.</p></div><button type="button" onClick={onClose} aria-label="Закрыть">×</button></header>
       <div className="dialog-body">
         <label className="mask-field">Маска даты<input value={format} onChange={(event) => setFormat(event.target.value.toUpperCase())} placeholder="DD.MM.YYYY"/><small>Токены: <b>D/DD</b> день, <b>M/MM</b> месяц, <b>MMM/MMMM</b> название месяца, <b>YY/YYYY</b> год, <b>Q</b> квартал</small></label>
         <div className="preset-list">{PRESETS.map((preset) => <button className={format === preset ? 'active' : ''} onClick={() => setFormat(preset)} key={preset}>{preset}</button>)}</div>

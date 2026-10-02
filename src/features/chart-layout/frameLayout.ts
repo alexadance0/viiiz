@@ -21,5 +21,10 @@ export function resolveFrame({ canvas, spacing, reservations = [] }: FrameLayout
   const canvasRect = { x: 0, y: 0, width: canvas.width, height: canvas.height }
   const content = insetRect(canvasRect, spacing.canvasInsets)
   const resolved = resolveReservations(content, reservations)
+  if (spacing.minimumPlotInsets) {
+    const minimum = insetRect(canvasRect, spacing.minimumPlotInsets)
+    const x = Math.max(resolved.plot.x, minimum.x), y = Math.max(resolved.plot.y, minimum.y)
+    resolved.plot = { x, y, width: Math.max(0, Math.min(resolved.plot.x + resolved.plot.width, minimum.x + minimum.width) - x), height: Math.max(0, Math.min(resolved.plot.y + resolved.plot.height, minimum.y + minimum.height) - y) }
+  }
   return { canvas: canvasRect, content, plot: resolved.plot, reservations, resolvedReservations: resolved.reservations }
 }
