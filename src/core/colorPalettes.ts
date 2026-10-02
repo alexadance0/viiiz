@@ -15,17 +15,24 @@ export const threeColorPalette = ([start, middle, end]: [string, string, string]
 ]
 
 export function randomPalette(count = 7): string[] {
-  const hue = Math.random() * 360
-  const saturation = .55 + Math.random() * .25
-  const lightness = .42 + Math.random() * .16
-  const amplitude = saturation * Math.min(lightness, 1 - lightness)
-  return Array.from({ length: count }, (_, index) => {
-    const nextHue = (hue + index * 137.508) % 360
-    // Convert HSL to hex so generated colors work with pickers, contrast and export.
-    const channel = (offset: number) => {
-      const step = (offset + nextHue / 30) % 12
-      return Math.round(255 * (lightness - amplitude * Math.max(-1, Math.min(step - 3, 9 - step, 1)))).toString(16).padStart(2, '0')
+  const colors: number[][] = []
+  for (let index = 0; index < count; index++) {
+    let best: number[] = [], bestDistance = -1
+    // Bound retries even if the random source produces repeated candidates.
+    for (let attempt = 0; attempt < 24; attempt++) {
+      const hue = Math.random() * 360
+      const saturation = .08 + Math.random() * .82
+      const lightness = .18 + Math.random() * .66
+      const amplitude = saturation * Math.min(lightness, 1 - lightness)
+      const candidate = [0, 8, 4].map((offset) => {
+        const step = (offset + hue / 30) % 12
+        return Math.round(255 * (lightness - amplitude * Math.max(-1, Math.min(step - 3, 9 - step, 1))))
+      })
+      const distance = Math.min(Infinity, ...colors.map((color) => Math.hypot(...candidate.map((channel, i) => channel - color[i]))))
+      if (distance > bestDistance) { best = candidate; bestDistance = distance }
+      if (distance >= 60) break
     }
-    return `#${channel(0)}${channel(8)}${channel(4)}`
-  })
+    colors.push(best)
+  }
+  return colors.map((color) => `#${color.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`)
 }
