@@ -39,3 +39,17 @@ it('renders square cells inside the measured plot and preserves category selecti
     expect(cell.info.elementKey).toContain('pie:')
   }
 })
+
+it('fits the side caption rail to short text and centers the grid together with its captions', () => {
+  const scene = resolveNativeScene(compileNativeWaffleScene(table, config()))
+  const option = renderScene(scene) as { nativeSelectionHits: Array<{ rect: { x: number; y: number; width: number; height: number }; info: { selectionTarget?: string } }> }
+  const cells = option.nativeSelectionHits.filter((hit) => hit.info.selectionTarget !== 'value-label')
+  const labels = option.nativeSelectionHits.filter((hit) => hit.info.selectionTarget === 'value-label')
+  expect(labels).toHaveLength(3)
+  expect(labels[0].rect.width).toBeLessThan(scene.geometry.plot.width * .2)
+  const left = Math.min(...cells.map(({ rect }) => rect.x))
+  const gridRight = Math.max(...cells.map(({ rect }) => rect.x + rect.width))
+  const right = Math.max(...labels.map(({ rect }) => rect.x + rect.width))
+  expect(labels[0].rect.x - gridRight).toBeLessThan(30)
+  expect(Math.abs((left + right) / 2 - (scene.geometry.plot.x + scene.geometry.plot.width / 2))).toBeLessThan(2)
+})

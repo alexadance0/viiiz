@@ -63,6 +63,7 @@ test('waffle supports multiline category captions inside regions, colored side e
   await page.getByRole('combobox', { name: 'Расположение подписей' }).selectOption('inside')
   await page.getByRole('combobox', { name: 'Цвет подписей' }).selectOption('auto')
   await expect(canvas.locator('svg text').filter({ hasText: '12,4 тыс. чел.' })).toHaveAttribute('fill', '#ffffff')
+  await expect(canvas.locator('svg text').filter({ hasText: '12,4 тыс. чел.' })).toHaveAttribute('stroke', '#0072b2')
   // SVG paint order must keep the letters above both the grid and their colored backing.
   await expect.poll(() => canvas.locator('svg text').filter({ hasText: '12,4 тыс. чел.' }).evaluate((text) => {
     const box = text.getBoundingClientRect()
@@ -78,6 +79,7 @@ test('waffle supports multiline category captions inside regions, colored side e
   await page.getByRole('button', { name: 'Скачать SVG' }).click()
   const svg = await readFile((await (await download).path())!, 'utf8')
   expect(svg).toContain('12,4 тыс. чел.')
+  expect(svg).toContain('stroke="#0072b2"')
   await page.locator('.export-menu > summary').click()
   await page.getByRole('combobox', { name: 'Расположение подписей' }).selectOption('legend')
   await page.getByRole('combobox', { name: 'Цвет подписей' }).selectOption('category')
