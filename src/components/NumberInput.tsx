@@ -42,7 +42,7 @@ export function NumberInput({ value, onValueChange, onBlur, onFocus, ...props }:
     if (!next) setDraft(String(value))
     else {
       const normalized = clampNumber(next.value, props.min, props.max)
-      setDraft(String(normalized)); onValueChange(normalized)
+      setDraft(String(normalized)); if (normalized !== value) onValueChange(normalized)
     }
     onBlur?.(event)
   }}/>
@@ -70,7 +70,7 @@ export function OptionalNumberInput({ value, onValueChange, onBlur, onFocus, pla
     if (!next) setDraft(externalDraft)
     else {
       const normalized = clampNumber(next.value, props.min, props.max)
-      setDraft(String(normalized)); onValueChange(normalized)
+      setDraft(String(normalized)); if (normalized !== value) onValueChange(normalized)
     }
     onBlur?.(event)
   }}/>

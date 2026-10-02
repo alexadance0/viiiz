@@ -17,4 +17,6 @@ export interface DistributionSpec extends SpecBase { family: 'distribution'; ori
 export interface AreaSpec extends SpecBase { family: 'area'; stacking: 'none' | 'stacked' | 'normalized'; fillOpacity: number }
 export interface PieSpec extends SpecBase { family: 'pie'; innerRadius: number }
 export interface CustomSpec extends SpecBase { family: 'custom' }
-export type ChartSpec = BarSpec | LollipopSpec | WaterfallSpec | ButterflySpec | DumbbellSpec | LineSpec | SlopeSpec | IntervalSpec | SmoothingSpec | ScatterSpec | HeatmapSpec | TreemapSpec | DistributionSpec | AreaSpec | CustomSpec | PieSpec
+export type ChartSpec = BarSpec | LollipopSpec | WaterfallSpec | ButterflySpec | DumbbellSpec | LineSpec | SlopeSpec | IntervalSpec | SmoothingSpec | ScatterSpec | HeatmapSpec | TreemapSpec | DistributionSpec | AreaSpec | CustomSpec | PieSpec | WaffleSpec
+
+export interface WaffleSpec extends SpecBase { family: 'waffle'; columns: number; rows: number }

@@ -1710,7 +1710,7 @@ describe('chart composition alignment', () => {
     expect(chartRegistry.map((plugin) => plugin.id)).toEqual([
       'bar', 'stacked-bar', 'normalized-stacked-bar', 'waterfall', 'horizontal-bar', 'butterfly', 'horizontal-stacked-bar', 'horizontal-normalized-stacked-bar', 'lollipop', 'horizontal-lollipop', 'dumbbell',
       'line', 'spline', 'step-line', 'indexed-line', 'seasonal-line', 'slope', 'moving-average-line', 'moving-average-scatter', 'range-line', 'step-range-line', 'confidence-line',
-      'area', 'stacked-area', 'normalized-stacked-area', 'scatter', 'bubble', 'boxplot', 'violinplot', 'raincloud', 'histogram', 'kde-plot', 'ridgeline', 'beeswarm', 'strip-plot', 'jitter-plot', 'counts-plot', 'barcode-plot', 'heatmap', 'pie', 'donut', 'treemap',
+      'area', 'stacked-area', 'normalized-stacked-area', 'scatter', 'bubble', 'boxplot', 'violinplot', 'raincloud', 'histogram', 'kde-plot', 'ridgeline', 'beeswarm', 'strip-plot', 'jitter-plot', 'counts-plot', 'barcode-plot', 'heatmap', 'pie', 'donut', 'waffle', 'treemap',
     ])
     const first = new Date(2024, 0, 1), second = new Date(2025, 0, 1)
     const universalTable: DataTable = { name: 'all-native', columns: ['x', 'value', 'other', 'size', 'sub'], rows: [

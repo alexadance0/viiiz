@@ -6,6 +6,7 @@ import type { ChartSpec } from './ChartSpec'
 import type { ChartDocument } from './ChartDocument'
 
 export function chartSpecFromLegacy(config: ChartConfig): ChartSpec {
+  if (config.kind === 'waffle') return { family: 'waffle', kind: config.kind, columns: Math.min(30, Math.max(1, Math.round(config.waffleColumns ?? 10))), rows: Math.min(30, Math.max(1, Math.round(config.waffleRows ?? 10))) }
   if (config.kind === 'pie' || config.kind === 'donut') return { family: 'pie', kind: config.kind, innerRadius: config.kind === 'pie' ? 0 : Math.min(85, Math.max(10, config.pieInnerRadius ?? 55)) / 100 }
   if (config.kind === 'waterfall') return { family: 'waterfall', kind: config.kind, showTotal: config.waterfallShowTotal ?? true, labelContent: config.waterfallLabelContent ?? 'change' }
   if (config.kind === 'butterfly') return { family: 'butterfly', kind: config.kind, categoryPlacement: config.butterflyCategoryPosition ?? 'center' }

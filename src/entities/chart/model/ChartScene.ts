@@ -682,7 +682,20 @@ export interface PiePlotScene {
   labelPosition: 'outside' | 'inside'
 }
 
-export type NativePlotScene = CartesianBarPlotScene | ComparisonStemPlotScene | WaterfallPlotScene | ButterflyPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene | DistributionPlotScene | HeatmapPlotScene | TreemapPlotScene | PiePlotScene
+export interface WafflePlotScene {
+  kind: 'waffle'
+  slices: PieSliceScene[]
+  total: number
+  columns: number
+  rows: number
+  counts: number[]
+  gap: number
+  radius: number
+}
+
+export type NativeWaffleChartScene = NativeChartScene & { plot: WafflePlotScene }
+
+export type NativePlotScene = CartesianBarPlotScene | ComparisonStemPlotScene | WaterfallPlotScene | ButterflyPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene | DistributionPlotScene | HeatmapPlotScene | TreemapPlotScene | PiePlotScene | WafflePlotScene
 
 export interface NativeChartScene extends ChartSceneBase {
   plot: NativePlotScene

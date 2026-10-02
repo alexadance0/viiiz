@@ -12,6 +12,7 @@ export interface NativeMarkSelection {
 
 export function nativeMarkSelections(scene: NativeChartScene): NativeMarkSelection[] {
   switch (scene.plot.kind) {
+  case 'waffle':
   case 'pie': return scene.plot.slices.map((slice) => ({ legacyKey: slice.legacyKey, seriesName: slice.name, displayCategory: slice.name, displayValue: slice.displayValue, value: slice.value, color: slice.color }))
   case 'bar': return scene.plot.series.flatMap((series) => series.marks.map((mark) => ({ legacyKey: mark.legacyKey, seriesName: series.name, displayCategory: mark.displayCategory, displayValue: mark.displayValue, value: mark.value, color: mark.style.color })))
   case 'comparison-stem': return scene.plot.series.flatMap((series) => series.points.map((point) => ({ legacyKey: point.legacyKey, seriesName: series.name, displayCategory: point.displayCategory, displayValue: point.displayValue, value: point.value, color: point.marker.fill })))

@@ -6,6 +6,7 @@ const dots = (points: Array<[number, number, number?]>, defaultRadius = 2) => po
 
 function glyph(kind: ChartKind): ReactNode {
   switch (kind) {
+    case 'waffle': return <>{Array.from({ length: 24 }, (_, i) => <rect key={i} className={`tone-${i < 14 ? 1 : i < 20 ? 2 : 3}`} x={4 + i % 6 * 5.5} y={3 + Math.floor(i / 6) * 5.5} width={4} height={4}/>)}</>
     case 'pie': return <><path className="tone-1" d="M20 14V3a11 11 0 1 0 11 11z"/><path className="tone-2" d="M22 12V2a10 10 0 0 1 10 10z"/></>
     case 'donut': return <><path className="tone-1" d="M20 3a11 11 0 1 0 11 11h-5a6 6 0 1 1-6-6z"/><path className="tone-2" d="M22 2a10 10 0 0 1 10 10h-5a5 5 0 0 0-5-5z"/></>
     case 'bar': return <>{[8, 15, 22, 29].map((x, index) => <rect key={x} x={x} y={[15, 8, 12, 4][index]} width="5" height={[9, 16, 12, 20][index]}/>)}</>

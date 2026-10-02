@@ -1,4 +1,4 @@
-import { isPieChart } from '../core/chartKinds'
+import { isCompositionChart } from '../core/chartKinds'
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { Tabs } from '@heroui/react'
 import type { ChartConfig, ChartElementSelection, ChartPlugin, ChartSettingsCapabilities, ChartTextStyle, TimeFrequency } from '../core/types'
@@ -224,7 +224,7 @@ export function ChartSettingsPanel({ isPanel = false, category, config, plugin, 
       {slope && <small className="settings-note">Названия рядов выводятся рядом с конечными значениями, поэтому отдельная легенда не используется.</small>}
       <button type="button" className="reset-element" onClick={() => resetSection('legend')}>Сбросить легенду</button>
     </div></details>
-    {config.kind !== 'treemap' && !isPieChart(config.kind) && <details className="settings-group value-label-settings"><summary>Подписи значений</summary><div>
+    {config.kind !== 'treemap' && !isCompositionChart(config.kind) && <details className="settings-group value-label-settings"><summary>Подписи значений</summary><div>
       <SettingsCheckbox isSelected={config.showValues} onChange={(showValues) => patch({ showValues })}>Показывать подписи значений</SettingsCheckbox>
       {config.showValues && <><TextStyleEditor label="Стиль подписей" value={config.valueText} customFonts={config.customFonts} onChange={(value) => updateText('valueText', value)}/>
       {config.kind === 'waterfall' ? <div className="chart-role-fields waterfall-label-settings">

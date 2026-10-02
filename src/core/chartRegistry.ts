@@ -19,7 +19,8 @@ import { compileNativeSlopeScene } from '../features/chart-types/slope/compiler'
 import { smoothingChartDefinitions } from '../features/chart-types/smoothing'
 import { compileNativeSmoothingScene, isNativeSmoothingKind } from '../features/chart-types/smoothing/compiler'
 import { compileNativePieScene, validateNativePieMapping } from '../features/chart-types/pie/compiler'
-import { isPieChart } from './chartKinds'
+import { compileNativeWaffleScene } from '../features/chart-types/waffle/compiler'
+import { isCompositionChart, isPieChart } from './chartKinds'
 import { treemapChartDefinitions } from '../features/chart-types/treemap'
 import { compileNativeTreemapScene, validateNativeTreemapMapping } from '../features/chart-types/treemap/compiler'
 import { compileNativeWaterfallScene } from '../features/chart-types/waterfall/compiler'
@@ -62,6 +63,7 @@ const genericSettings = (id: ChartKind, category: ChartPlugin['category']): Char
 })
 
 const capabilities = (id: ChartKind): ChartPlugin['capabilities'] => {
+  if (id === 'waffle') return { coordinateSystem: 'matrix', axes: {}, guides: ['legend'], valueLabels: true, markers: false }
   if (isPieChart(id)) return { coordinateSystem: 'radial', axes: {}, guides: ['legend'], valueLabels: true, markers: false }
   if (id === 'treemap') return { coordinateSystem: 'hierarchy', axes: {}, guides: [], valueLabels: true, markers: false }
   if (id === 'heatmap') return { coordinateSystem: 'matrix', axes: { category: { placements: ['side'] }, lane: { placements: ['side'] } }, guides: ['color-scale'], valueLabels: true, markers: false }
@@ -76,6 +78,7 @@ const capabilities = (id: ChartKind): ChartPlugin['capabilities'] => {
 
 const compile = (table: DataTable, config: ChartConfig): NativeChartScene => {
   const id = config.kind
+  if (id === 'waffle') return compileNativeWaffleScene(table, config)
   if (isPieChart(id)) return compileNativePieScene(table, config)
   if (id === 'treemap') return compileNativeTreemapScene(table, config)
   if (id === 'heatmap') return compileNativeHeatmapScene(table, config)
@@ -146,11 +149,11 @@ const descriptors: Descriptor[] = [
   ...relationshipChartDefinitions.map(([id, label]) => ({ id, label, category: 'relationship' as const, settings: relationshipSettings })),
   ...distributionChartDefinitions.map(([id, label]) => ({ id, label, category: 'distribution' as const, settings: distributionSettings })),
   { id: heatmapChartDefinitions[0][0], label: heatmapChartDefinitions[0][1], category: 'heatmap', defaultConfig: { kind: 'heatmap', showYAxisTitle: false, showLegend: false, showDirectLabels: false, showValues: false }, settings: heatmapSettings },
-  ...([['pie', 'Круговая'], ['donut', 'Кольцевая']] as const).map(([id, label]) => ({ id, label, category: 'composition' as const, settings: treemapSettings, defaultConfig: { kind: id, aggregation: 'sum' as const, showValues: true, showLegend: true, showDirectLabels: false } })),
+  ...([['pie', 'Круговая'], ['donut', 'Кольцевая'], ['waffle', 'Вафельная']] as const).map(([id, label]) => ({ id, label, category: 'composition' as const, settings: treemapSettings, defaultConfig: { kind: id, aggregation: 'sum' as const, showValues: true, showLegend: true, showDirectLabels: false } })),
   { id: treemapChartDefinitions[0][0], label: treemapChartDefinitions[0][1], category: 'hierarchy', defaultConfig: { kind: 'treemap', aggregation: 'sum', showValues: true, showLegend: false, showDirectLabels: false, showXAxisTitle: false, showYAxisTitle: false }, settings: treemapSettings },
 ]
 
-const validationFor = (id: ChartKind, base: ChartPlugin['validate']): ChartPlugin['validate'] => isPieChart(id) ? validateNativePieMapping : id === 'treemap' ? validateNativeTreemapMapping
+const validationFor = (id: ChartKind, base: ChartPlugin['validate']): ChartPlugin['validate'] => isCompositionChart(id) ? validateNativePieMapping : id === 'treemap' ? validateNativeTreemapMapping
   : id === 'butterfly' ? (table, config) => { const generic = base(table, config), native = validateNativeButterflyMapping(table, config); return { ok: generic.ok && native.ok, errors: [...generic.errors, ...native.errors] } }
   : isNativeXYKind(id) ? validateNativeXYMapping
   : isNativeDistributionKind(id) ? validateNativeDistributionMapping

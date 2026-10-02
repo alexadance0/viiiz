@@ -34,3 +34,5 @@ export const isNormalizedStackedChart = (kind: ChartKind) => kind === 'normalize
 export const chartUsesAggregation = (kind: ChartKind) => kind !== 'scatter' && kind !== 'bubble' && !isDistributionChart(kind)
 
 export const isPieChart = (kind: ChartKind): kind is 'pie' | 'donut' => kind === 'pie' || kind === 'donut'
+
+export const isCompositionChart = (kind: ChartKind) => isPieChart(kind) || kind === 'waffle'

@@ -19,6 +19,7 @@ const categories = [
 ] as const
 
 const descriptions: Record<ChartKind, string> = {
+  waffle: 'Доли от целого в сетке квадратов',
   pie: 'Сравнить доли в целом',
   donut: 'Показать состав кольцом',
   bar: 'Сравнить величины по категориям',

@@ -57,7 +57,7 @@ export type ChartKind = 'bar' | 'stacked-bar' | 'normalized-stacked-bar' | 'wate
   | 'horizontal-bar' | 'butterfly' | 'horizontal-stacked-bar' | 'horizontal-normalized-stacked-bar'
   | 'lollipop' | 'horizontal-lollipop' | 'dumbbell'
   | 'line' | 'spline' | 'step-line' | 'indexed-line' | 'seasonal-line' | 'slope' | 'range-line' | 'step-range-line' | 'confidence-line'
-  | 'moving-average-line' | 'moving-average-scatter' | 'heatmap' | 'treemap' | 'pie' | 'donut'
+  | 'moving-average-line' | 'moving-average-scatter' | 'heatmap' | 'treemap' | 'pie' | 'donut' | 'waffle'
   | 'area' | 'stacked-area' | 'normalized-stacked-area' | 'scatter' | 'bubble'
   | 'boxplot' | 'violinplot' | 'raincloud' | 'histogram' | 'kde-plot' | 'ridgeline' | 'beeswarm' | 'strip-plot' | 'jitter-plot' | 'counts-plot' | 'barcode-plot'
 export interface ChartTextStyle {
@@ -370,6 +370,10 @@ export interface ChartConfig {
   heatmapRowSortDirection?: 'ascending' | 'descending'
   heatmapMissingColor?: string
   heatmapMissingLabel?: string
+  waffleColumns?: number
+  waffleRows?: number
+  waffleGap?: number
+  waffleRadius?: number
   pieInnerRadius?: number
   pieLabelPosition?: 'outside' | 'inside'
   pieValueFormat?: 'absolute' | 'percent' | 'both'
