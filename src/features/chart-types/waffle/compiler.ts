@@ -4,6 +4,7 @@ import { compileCompositionScene } from '../pie/compiler'
 
 export function compileNativeWaffleScene(table: DataTable, config: ChartConfig): NativeWaffleChartScene {
   const scene = compileCompositionScene(table, { ...config, pieLabelPosition: 'outside' })
+  if (config.waffleShowValues === false) scene.plot.slices.forEach((slice) => { slice.label.text = config.elementStyles[slice.legacyKey]?.label ?? (config.pieShowNames !== false ? slice.name : '') })
   const columns = Math.min(30, Math.max(1, Math.round(config.waffleColumns ?? 10)))
   const rows = Math.min(30, Math.max(1, Math.round(config.waffleRows ?? 10)))
   const quotas = scene.plot.slices.map((slice) => slice.percent / 100 * columns * rows)

@@ -370,6 +370,12 @@ export interface ChartConfig {
   heatmapRowSortDirection?: 'ascending' | 'descending'
   heatmapMissingColor?: string
   heatmapMissingLabel?: string
+  waffleLabelPosition?: 'right' | 'inside' | 'legend'
+  waffleLabelColor?: 'text' | 'category' | 'auto'
+  waffleLabelBackground?: boolean
+  waffleShowValues?: boolean
+  waffleFillDirection?: 'bottom' | 'top'
+  waffleDescriptionText?: ChartTextStyle
   waffleColumns?: number
   waffleRows?: number
   waffleGap?: number
