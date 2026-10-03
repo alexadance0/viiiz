@@ -15,24 +15,5 @@ export const threeColorPalette = ([start, middle, end]: [string, string, string]
 ]
 
 export function randomPalette(count = 7): string[] {
-  const colors: number[][] = []
-  for (let index = 0; index < count; index++) {
-    let best: number[] = [], bestDistance = -1
-    // Bound retries even if the random source produces repeated candidates.
-    for (let attempt = 0; attempt < 24; attempt++) {
-      const hue = Math.random() * 360
-      const saturation = .08 + Math.random() * .82
-      const lightness = .18 + Math.random() * .66
-      const amplitude = saturation * Math.min(lightness, 1 - lightness)
-      const candidate = [0, 8, 4].map((offset) => {
-        const step = (offset + hue / 30) % 12
-        return Math.round(255 * (lightness - amplitude * Math.max(-1, Math.min(step - 3, 9 - step, 1))))
-      })
-      const distance = Math.min(Infinity, ...colors.map((color) => Math.hypot(...candidate.map((channel, i) => channel - color[i]))))
-      if (distance > bestDistance) { best = candidate; bestDistance = distance }
-      if (distance >= 60) break
-    }
-    colors.push(best)
-  }
-  return colors.map((color) => `#${color.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`)
+  return Array.from({ length: count }, () => `#${Math.floor(Math.random() * 0x1000000).toString(16).padStart(6, '0')}`)
 }
