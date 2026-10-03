@@ -1,3 +1,4 @@
+import { isMapChart } from '../../features/chart-types/map/catalog'
 import type { ChartKind } from '../../core/types'
 
 const barKinds = new Set<ChartKind>(['bar', 'stacked-bar', 'normalized-stacked-bar', 'waterfall', 'horizontal-bar', 'butterfly', 'horizontal-stacked-bar', 'horizontal-normalized-stacked-bar'])
@@ -11,7 +12,7 @@ export const loadEchartsForKind = (kind: ChartKind) => Promise.all([
   ...(barKinds.has(kind) ? [import('./loadBar')] : []),
   ...(scatterKinds.has(kind) ? [import('./loadScatter'), import('./loadLine')] : []),
   ...(distributionKinds.has(kind) ? [import('./loadScatter'), import('./loadLine')] : []),
-  ...(!barKinds.has(kind) && !comparisonStemKinds.has(kind) && kind !== 'treemap' && kind !== 'pie' && kind !== 'donut' && kind !== 'waffle' && !scatterKinds.has(kind) && !distributionKinds.has(kind) ? [import('./loadLine')] : []),
+  ...(!isMapChart(kind) && !barKinds.has(kind) && !comparisonStemKinds.has(kind) && kind !== 'sankey' && kind !== 'treemap' && kind !== 'pie' && kind !== 'donut' && kind !== 'waffle' && !scatterKinds.has(kind) && !distributionKinds.has(kind) ? [import('./loadLine')] : []),
 ])
 
 export const preloadAllEcharts = () => Promise.all([

@@ -1709,8 +1709,8 @@ describe('chart composition alignment', () => {
   it('keeps the complete registry order and compiles every chart kind natively', () => {
     expect(chartRegistry.map((plugin) => plugin.id)).toEqual([
       'bar', 'stacked-bar', 'normalized-stacked-bar', 'waterfall', 'horizontal-bar', 'butterfly', 'horizontal-stacked-bar', 'horizontal-normalized-stacked-bar', 'lollipop', 'horizontal-lollipop', 'dumbbell',
-      'line', 'spline', 'step-line', 'indexed-line', 'seasonal-line', 'slope', 'moving-average-line', 'moving-average-scatter', 'range-line', 'step-range-line', 'confidence-line',
-      'area', 'stacked-area', 'normalized-stacked-area', 'scatter', 'bubble', 'boxplot', 'violinplot', 'raincloud', 'histogram', 'kde-plot', 'ridgeline', 'beeswarm', 'strip-plot', 'jitter-plot', 'counts-plot', 'barcode-plot', 'heatmap', 'pie', 'donut', 'waffle', 'treemap',
+      'line', 'spline', 'step-line', 'indexed-line', 'seasonal-line', 'slope', 'bump', 'moving-average-line', 'moving-average-scatter', 'range-line', 'step-range-line', 'confidence-line',
+      'area', 'stacked-area', 'normalized-stacked-area', 'scatter', 'bubble', 'boxplot', 'violinplot', 'raincloud', 'histogram', 'kde-plot', 'ridgeline', 'beeswarm', 'strip-plot', 'jitter-plot', 'counts-plot', 'barcode-plot', 'heatmap', 'pie', 'donut', 'waffle', 'treemap', 'map-russia', 'map-usa', 'map-europe', 'sankey',
     ])
     const first = new Date(2024, 0, 1), second = new Date(2025, 0, 1)
     const universalTable: DataTable = { name: 'all-native', columns: ['x', 'value', 'other', 'size', 'sub'], rows: [
@@ -1718,7 +1718,7 @@ describe('chart composition alignment', () => {
       { x: second, value: 14, other: 9, size: 5, sub: 'B' },
     ] }
     for (const plugin of chartRegistry) {
-      const config: ChartConfig = { ...createDefaultChartConfig(), kind: plugin.id, xField: 'x', yField: 'value', yFields: ['value', 'other'], aggregation: 'sum', dumbbellStartField: 'value', dumbbellEndField: 'other', rangeLowerField: 'other', rangeUpperField: 'value', intervalGroups: [{ main: 'value', lower: 'other', upper: 'size' }], scatterSizeField: 'size', butterflyLeftFields: ['value'], butterflyRightFields: ['other'], distributionGroupField: 'sub', treemapSubcategoryField: 'sub', indexBaseXValue: `date:${first.toISOString()}`, slopeXValues: [`date:${first.toISOString()}`, `date:${second.toISOString()}`] }
+      const config: ChartConfig = { ...createDefaultChartConfig(), kind: plugin.id, xField: 'x', yField: 'value', yFields: ['value', 'other'], aggregation: 'sum', dumbbellStartField: 'value', dumbbellEndField: 'other', rangeLowerField: 'other', rangeUpperField: 'value', intervalGroups: [{ main: 'value', lower: 'other', upper: 'size' }], scatterSizeField: 'size', butterflyLeftFields: ['value'], butterflyRightFields: ['other'], distributionGroupField: 'sub', treemapSubcategoryField: 'sub', sankeyTargetField: 'sub', indexBaseXValue: `date:${first.toISOString()}`, slopeXValues: [`date:${first.toISOString()}`, `date:${second.toISOString()}`] }
       const scene = plugin.compile(universalTable, config)
       expect(scene.plot.kind).not.toBe('legacy')
       expect(() => renderScene(scene)).not.toThrow()

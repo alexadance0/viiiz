@@ -1,3 +1,4 @@
+import { isMapChart } from '../features/chart-types/map/catalog'
 import type { ChartConfig, ChartKind } from './types'
 
 const distributionKinds: ChartKind[] = ['boxplot', 'violinplot', 'raincloud', 'histogram', 'kde-plot', 'ridgeline', 'beeswarm', 'strip-plot', 'jitter-plot', 'counts-plot', 'barcode-plot']
@@ -26,12 +27,12 @@ export const usesHorizontalAxes = (config: Pick<ChartConfig, 'kind' | 'barOrient
   : isHorizontalChart(config.kind) || isBarChart(config.kind) && config.barOrientation === 'horizontal'
 export const isBarChart = (kind: ChartKind) => kind === 'bar' || kind === 'stacked-bar' || kind === 'normalized-stacked-bar' || kind === 'waterfall' || kind === 'lollipop' || isHorizontalBarChart(kind)
 export const isAreaChart = (kind: ChartKind) => kind === 'area' || kind === 'stacked-area' || kind === 'normalized-stacked-area'
-export const isLineLikeChart = (kind: ChartKind) => kind === 'line' || kind === 'spline' || kind === 'step-line' || kind === 'moving-average-line' || kind === 'moving-average-scatter' || kind === 'slope' || kind === 'range-line' || kind === 'step-range-line' || kind === 'confidence-line' || isAreaChart(kind)
+export const isLineLikeChart = (kind: ChartKind) => kind === 'bump' || kind === 'line' || kind === 'spline' || kind === 'step-line' || kind === 'moving-average-line' || kind === 'moving-average-scatter' || kind === 'slope' || kind === 'range-line' || kind === 'step-range-line' || kind === 'confidence-line' || isAreaChart(kind)
 export const isStackedBarChart = (kind: ChartKind) => kind === 'stacked-bar' || kind === 'normalized-stacked-bar' || kind === 'butterfly' || kind === 'horizontal-stacked-bar' || kind === 'horizontal-normalized-stacked-bar'
 export const isStackedAreaChart = (kind: ChartKind) => kind === 'stacked-area' || kind === 'normalized-stacked-area'
 export const isStackedChart = (kind: ChartKind) => isStackedBarChart(kind) || isStackedAreaChart(kind)
 export const isNormalizedStackedChart = (kind: ChartKind) => kind === 'normalized-stacked-bar' || kind === 'horizontal-normalized-stacked-bar' || kind === 'normalized-stacked-area'
-export const chartUsesAggregation = (kind: ChartKind) => kind !== 'scatter' && kind !== 'bubble' && !isDistributionChart(kind)
+export const chartUsesAggregation = (kind: ChartKind) => !isMapChart(kind) && kind !== 'scatter' && kind !== 'bubble' && !isDistributionChart(kind)
 
 export const isPieChart = (kind: ChartKind): kind is 'pie' | 'donut' => kind === 'pie' || kind === 'donut'
 

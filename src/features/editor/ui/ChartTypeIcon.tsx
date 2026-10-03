@@ -6,6 +6,9 @@ const dots = (points: Array<[number, number, number?]>, defaultRadius = 2) => po
 
 function glyph(kind: ChartKind): ReactNode {
   switch (kind) {
+    case 'map-russia':
+    case 'map-usa':
+    case 'map-europe': return <><path className="soft-fill" d="M4 8l8-5 8 4 9-3 7 6-5 7-7 3-5 5-6-4-7 1z"/><path d="M12 3l2 10-8 9m8-9 10 7m-4-13 4 6 12-3m-12 3v7" fill="none"/></>
     case 'waffle': return <>{Array.from({ length: 24 }, (_, i) => <rect key={i} className={`tone-${i < 14 ? 1 : i < 20 ? 2 : 3}`} x={4 + i % 6 * 5.5} y={3 + Math.floor(i / 6) * 5.5} width={4} height={4}/>)}</>
     case 'pie': return <><path className="tone-1" d="M20 14V3a11 11 0 1 0 11 11z"/><path className="tone-2" d="M22 12V2a10 10 0 0 1 10 10z"/></>
     case 'donut': return <><path className="tone-1" d="M20 3a11 11 0 1 0 11 11h-5a6 6 0 1 1-6-6z"/><path className="tone-2" d="M22 2a10 10 0 0 1 10 10h-5a5 5 0 0 0-5-5z"/></>
@@ -25,6 +28,7 @@ function glyph(kind: ChartKind): ReactNode {
     case 'step-line': return <polyline points="4,21 12,21 12,15 21,15 21,9 30,9 30,4 36,4" fill="none"/>
     case 'indexed-line': return <>{line('4,14 12,10 20,9 28,6 36,4', 'up')}{line('4,14 12,14 20,15 28,12 36,13', 'middle')}{line('4,14 12,18 20,19 28,18 36,22', 'down')}</>
     case 'seasonal-line': return <><g className="raw-series"><path d="M4 21C9 18 11 10 16 12s6 7 11 4 5-8 9-7" fill="none"/><path d="M4 24C9 21 11 14 16 15s7 5 11 2 5-7 9-6" fill="none"/></g><path className="strong-line" d="M4 19C9 16 11 7 16 9s7 7 11 3 5-9 9-8" fill="none"/></>
+    case 'bump': return <>{line('5,5 15,14 25,23 35,14', 'a')}{line('5,14 15,23 25,14 35,5', 'b')}{line('5,23 15,5 25,5 35,23', 'c')}{dots([[5,5],[15,14],[25,23],[35,14],[5,14],[15,23],[25,14],[35,5],[5,23],[15,5],[25,5],[35,23]],1.4)}</>
     case 'slope': return <>{line('6,20 34,6','a')}{line('6,7 34,17','b')}{dots([[6,20],[34,6],[6,7],[34,17]],1.6)}</>
     case 'range-line': return <><path className="soft-fill" d="M4 17l7-7 8 3 8-8 9 3v7l-9-3-8 7-8-3-7 6z"/><path d="M4 17l7-7 8 3 8-8 9 3M4 22l7-6 8 3 8-7 9 3" fill="none"/></>
     case 'confidence-line': return <><path className="confidence-fill" d="M4 15C10 10 14 10 20 6c6-4 10-5 16-3v15c-6-2-10 0-16 4-6 4-10 3-16 5z"/><path className="strong-line" d="M4 21c6-5 10-4 16-7 6-4 10-5 16-4" fill="none"/></>
@@ -48,6 +52,7 @@ function glyph(kind: ChartKind): ReactNode {
     case 'counts-plot': return <>{dots([[5,14,1.4],[11,14,2],[19,14,4],[28,14,2.8],[35,14,1.6]])}</>
     case 'barcode-plot': return <>{[5,8,12,14,19,24,27,33,36].map((x) => <path key={x} d={`M${x} 5v18`}/>)}</>
     case 'heatmap': return <>{[0,1,2].flatMap((row) => [0,1,2,3].map((column) => <rect className={`tone-${(row + column) % 3 + 1}`} key={`${row}-${column}`} x={4 + column * 8} y={3 + row * 8} width="7" height="7"/>))}</>
+    case 'sankey': return <><path className="tone-1" d="M6 4C18 4 22 3 33 3v10C22 13 18 12 6 12Z"/><path className="tone-2" d="M6 13C18 13 22 19 33 19v6C22 25 18 20 6 20Z"/><path d="M5 3v18M34 2v12M34 18v8"/></>
     case 'treemap': return <><rect className="tone-1" x="4" y="3" width="19" height="22"/><rect className="tone-2" x="24" y="3" width="12" height="12"/><rect className="tone-3" x="24" y="16" width="12" height="9"/><path d="M4 14h19M14 14v11"/></>
     default: return line('4,21 12,13 20,16 28,7 36,4')
   }

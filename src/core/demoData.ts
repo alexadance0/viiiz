@@ -1,3 +1,4 @@
+import { mapPresets, mapRegions } from '../features/chart-types/map/catalog'
 import type { DataTable, DataValue } from './types'
 
 const makeTable = (name: string, input: Array<Record<string, DataValue>>): DataTable => {
@@ -39,6 +40,16 @@ export const categoricalDemoTable = makeTable('Демо-данные · топ �
   ['Великобритания', 3.6, 6], ['Франция', 3.2, 7], ['Италия', 2.4, 8], ['Канада', 2.2, 9], ['Бразилия', 2.2, 10],
 ].map(([country, gdp, place]) => ({ country: String(country), gdp_trillion_usd: Number(gdp), place: Number(place) })))
 
+export const mapDemoTables = Object.fromEntries(mapPresets.map((preset) => [preset.id, makeTable(`Демо-данные · ${preset.label.toLowerCase()}`, mapRegions(preset.id).map((region, index) => ({ Территория: region.name, Значение: index % 13 === 0 ? null : index % 11 === 0 ? 0 : Math.round(30 + (Math.sin(index * .79) + 1) * 35) })))])) as Record<'russia' | 'usa' | 'europe', DataTable>
+
+export const bumpDemoTable = makeTable('Демо-данные · рейтинг брендов', [
+  { Период: '2021', Север: 82, Искра: 65, Волна: 48, Вектор: 30 },
+  { Период: '2022', Север: 74, Искра: 88, Волна: 55, Вектор: 42 },
+  { Период: '2023', Север: 60, Искра: 80, Волна: 92, Вектор: 68 },
+  { Период: '2024', Север: 72, Искра: 64, Волна: 86, Вектор: 98 },
+  { Период: '2025', Север: 90, Искра: 75, Волна: 102, Вектор: 84 },
+])
+
 export const dumbbellDemoTable = makeTable('Демо-данные · до и после', [
   ['Север', 42, 57], ['Юг', 63, 58], ['Восток', 35, 49], ['Запад', 71, 71], ['Центр', 54, 68],
 ].map(([region, before, after]) => ({ region: String(region), before: Number(before), after: Number(after) })))
@@ -76,3 +87,16 @@ export const entrepreneurshipDifficultiesDemoTable = makeTable('ВЦИОМ · т
   ['Другое', 'Другое', 6],
   ['Затрудняюсь ответить', 'Затрудняюсь ответить', 12],
 ].map(([category, difficulty, percent]) => ({ Категория: String(category), Трудность: String(difficulty), Процент: Number(percent) })))
+
+export const sankeyDemoTable: DataTable = {
+  name: 'Пример потоков',
+  columns: ['Откуда', 'Куда', 'Значение'],
+  rows: [
+    { Откуда: 'Все наборы данных', Куда: 'Обновляются', Значение: 80 },
+    { Откуда: 'Все наборы данных', Куда: 'Исключены из плана', Значение: 20 },
+    { Откуда: 'Обновляются', Куда: 'Доступны', Значение: 65 },
+    { Откуда: 'Обновляются', Куда: 'Временно недоступны', Значение: 15 },
+    { Откуда: 'Доступны', Куда: 'Актуальны', Значение: 42 },
+    { Откуда: 'Доступны', Куда: 'Давно не обновлялись', Значение: 23 },
+  ],
+}

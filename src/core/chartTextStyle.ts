@@ -15,6 +15,7 @@ export function applyChartTextStyle(config: ChartConfig, values: Partial<ChartTe
     ...Object.fromEntries(textKeys.map((key) => [key, style(config[key])])),
     xAxisTitleText: style(config.xAxisTitleText ?? config.axisTitleText), yAxisTitleText: style(config.yAxisTitleText ?? config.axisTitleText),
     xAxisLabelText: style(config.xAxisLabelText ?? config.axisLabelText), yAxisLabelText: style(config.yAxisLabelText ?? config.axisLabelText),
+    waffleUnitLegendText: style(config.waffleUnitLegendText ?? config.legendText),
     directLabelText: style(config.directLabelText ?? config.legendText),
     treemapGroupText: style(config.treemapGroupText ?? config.valueText), treemapLeafText: style(config.treemapLeafText ?? config.valueText),
     titleHtml: html(config.titleHtml), subtitleHtml: html(config.subtitleHtml), noteHtml: html(config.noteHtml), sourceHtml: html(config.sourceHtml),

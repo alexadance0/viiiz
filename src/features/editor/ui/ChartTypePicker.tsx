@@ -15,10 +15,16 @@ const categories = [
   { id: 'relationship', label: 'Связи', hint: 'Найти зависимости', accent: '#4568e1' },
   { id: 'distribution', label: 'Распределения', hint: 'Показать форму и разброс данных', accent: '#db5a5a' },
   { id: 'heatmap', label: 'Тепловые карты', hint: 'Показать интенсивность цветом', accent: '#e4a52c' },
+  { id: 'geography', label: 'Карты', hint: 'Сравнить территории по цвету', accent: '#1677a6' },
   { id: 'hierarchy', label: 'Иерархия', hint: 'Показать категории и подкатегории площадью', accent: '#36a476' },
 ] as const
 
 const descriptions: Record<ChartKind, string> = {
+  'map-russia': 'Регионы России, включая заявленные новые регионы',
+  'map-usa': '50 штатов и округ Колумбия',
+  'map-europe': 'Сравнить страны Европы',
+  bump: 'Проследить изменение мест в рейтинге',
+  sankey: 'Показать потоки между категориями',
   waffle: 'Доли от целого в сетке квадратов',
   pie: 'Сравнить доли в целом',
   donut: 'Показать состав кольцом',

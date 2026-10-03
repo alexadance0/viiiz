@@ -1,3 +1,4 @@
+import { waffleCellCoordinates, waffleLabelArea } from './cells'
 import { expect, it } from 'vitest'
 import { createDefaultChartConfig } from '../../../entities/chart/model/defaultChartConfig'
 import { getChartPlugin } from '../../../core/chartRegistry'
@@ -78,4 +79,111 @@ it.each(['bar', 'line', 'pie', 'waffle'] as const)('colors %s legend text with t
   for (const item of option.legend.data) expect(item.textStyle?.color).toBe(item.itemStyle.color)
   const plain = getChartPlugin(kind).buildOption(table, { ...settings, legendLabelColorByCategory: false }) as typeof option
   for (const item of plain.legend.data) expect(item.textStyle?.color).toBeUndefined()
+})
+
+
+it('fills from the top by default and grows complete blocks from every corner', () => {
+  expect(compileNativeWaffleScene(table, config()).compatibilityConfig.waffleFillDirection).toBe('top')
+  expect(waffleCellCoordinates(3, 2).slice(0, 3)).toEqual([[0, 0], [1, 0], [2, 0]])
+  expect(waffleCellCoordinates(3, 2, 'bottom')[0]).toEqual([0, 1])
+  for (const corner of ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const) {
+    const cells = waffleCellCoordinates(5, 3, 'corner', corner, [4, 11])
+    expect(new Set(cells.map(String)).size).toBe(15)
+    const first = cells.slice(0, 4)
+    expect(new Set(first.map(([column]) => column)).size).toBe(2)
+    expect(new Set(first.map(([, row]) => row)).size).toBe(2)
+    expect(cells[0]).toEqual([corner.endsWith('right') ? 4 : 0, corner.startsWith('bottom') ? 2 : 0])
+    const area = waffleLabelArea(5, 3, first)
+    expect(area.width * area.height).toBe(4)
+    for (let row = area.row; row < area.row + area.height; row++) for (let column = area.column; column < area.column + area.width; column++) expect(first).toContainEqual([column, row])
+  }
+})
+
+it('uses the actual cell value, calculates rows and leaves the final row incomplete', () => {
+  const data = { ...table, rows: [{ Категория: 'Норматив', Значение: 1700 }, { Категория: 'Сверх нормы', Значение: 1157 }] }
+  const settings = config({ waffleCellValue: 10, waffleColumns: 14, waffleShowUnitLegend: true, waffleUnitLabel: 'человек', showValues: false })
+  const scene = compileNativeWaffleScene(data, settings)
+  expect(scene.plot.counts).toEqual([170, 116])
+  expect(scene.plot.rows).toBe(21)
+  const option = renderScene(scene) as { series: Array<{ data: unknown[] }>; graphic: Array<{ id?: string; children?: Array<{ type: string; style: { text?: string } }> }> }
+  expect(option.series.reduce((sum, series) => sum + series.data.length, 0)).toBe(286)
+  expect(option.graphic.find((item) => item.id === 'waffle-unit-legend')?.children?.find((item) => item.type === 'text')?.style.text).toBe('= 10 человек')
+  for (const waffleCellValue of [0, -1, Infinity, .001, 100000]) expect(getChartPlugin('waffle').validate(data, { ...settings, waffleCellValue }).ok).toBe(false)
+})
+
+
+it('keeps every corner-filled category connected on square and rectangular grids', () => {
+  for (const [columns, rows] of [[10, 10], [45, 25], [3, 7], [7, 3], [1, 5], [5, 1]]) {
+    for (const corner of ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const) {
+      const total = columns * rows, counts = [Math.floor(total * .24), Math.floor(total * .21), Math.floor(total * .26)]
+      counts.push(total - counts.reduce((sum, count) => sum + count, 0))
+      const cells = waffleCellCoordinates(columns, rows, 'corner', corner, counts)
+      expect(new Set(cells.map(String)).size).toBe(total)
+      let offset = 0
+      for (const count of counts) {
+        const remaining = new Set(cells.slice(offset, offset + count).map(String))
+        const queue = count ? [cells[offset]] : []
+        if (count) remaining.delete(String(cells[offset]))
+        for (let index = 0; index < queue.length; index++) {
+          const [column, row] = queue[index]
+          for (const neighbor of [[column - 1, row], [column + 1, row], [column, row - 1], [column, row + 1]] as Array<[number, number]>) if (remaining.delete(String(neighbor))) queue.push(neighbor)
+        }
+        expect(remaining.size).toBe(0)
+        offset += count
+      }
+    }
+  }
+})
+
+it('matches the unit legend marker to the grid cells and anchors captions to their own blocks', () => {
+  const data = { ...table, rows: [{ Категория: 'Юг', Значение: 23.6 }, { Категория: 'Восток', Значение: 20.6 }, { Категория: 'Север', Значение: 25.82 }, { Категория: 'Запад', Значение: 29.98 }] }
+  const scene = compileNativeWaffleScene(data, config({ waffleFillDirection: 'corner', waffleCorner: 'top-right', waffleShowUnitLegend: true }))
+  const option = renderScene(scene) as { series: Array<{ data: unknown[]; renderItem(params: { dataIndex: number }): { shape: { x: number; y: number; width: number; height: number } } }>; graphic: Array<{ id?: string; children?: Array<{ type: string; shape?: { width: number; height: number; points?: Array<[number, number]> } }> }> }
+  const marker = option.graphic.find((item) => item.id === 'waffle-unit-legend')?.children?.find((item) => item.type === 'rect')!.shape!
+  const cell = option.series[0].renderItem({ dataIndex: 0 }).shape
+  expect(marker.width).toBe(cell.width)
+  expect(marker.height).toBe(cell.height)
+  const leaders = option.graphic.filter((item) => item.id?.startsWith('waffle-label:')).map((item) => item.children?.find((child) => child.type === 'polyline')?.shape?.points)
+  expect(leaders.every(Boolean)).toBe(true)
+  expect(new Set(leaders.map((points) => points![0][1])).size).toBe(4)
+  for (const label of option.graphic.filter((item) => item.id?.startsWith('waffle-label:'))) {
+    const series = option.series[scene.plot.slices.findIndex((slice) => label.id === `waffle-label:${slice.id}`)]
+    const [anchorX, anchorY] = label.children!.find((child) => child.type === 'polyline')!.shape!.points![0]
+    const blocks = series.data.map((_, dataIndex) => series.renderItem({ dataIndex }).shape)
+    const edge = blocks.filter((block) => Math.abs(block.x + block.width - anchorX) < .001)
+    expect(edge.length).toBeGreaterThan(0)
+    expect(anchorY).toBeGreaterThanOrEqual(Math.min(...edge.map((block) => block.y)))
+    expect(anchorY).toBeLessThanOrEqual(Math.max(...edge.map((block) => block.y + block.height)))
+  }
+})
+
+it.each(['top', 'bottom', 'left', 'right'] as const)('aligns the unit legend at the %s without overlapping the grid', (waffleUnitLegendPosition) => {
+  const scene = compileNativeWaffleScene(table, config({ waffleShowUnitLegend: true, waffleUnitLegendPosition, waffleUnitLabel: 'человек' }))
+  const option = renderScene(scene) as {
+    nativeSelectionHits: Array<{ rect: { x: number; y: number; width: number; height: number }; info: { selectionTarget?: string } }>
+    graphic: Array<{ id?: string; children?: Array<{ type: string; shape?: { x: number; y: number; width: number; height: number }; style?: { y: number; verticalAlign: string } }> }>
+  }
+  const cells = option.nativeSelectionHits.filter((hit) => !hit.info.selectionTarget).map((hit) => hit.rect)
+  const left = Math.min(...cells.map((cell) => cell.x)), right = Math.max(...cells.map((cell) => cell.x + cell.width))
+  const top = Math.min(...cells.map((cell) => cell.y)), bottom = Math.max(...cells.map((cell) => cell.y + cell.height))
+  const legend = option.graphic.find((item) => item.id === 'waffle-unit-legend')!.children!
+  const marker = legend.find((item) => item.type === 'rect')!.shape!
+  const text = legend.find((item) => item.type === 'text')!.style!
+  expect(marker.width).toBeCloseTo(cells[0].width)
+  expect(text.y).toBeCloseTo(marker.y + marker.height / 2)
+  expect(text.verticalAlign).toBe('middle')
+  if (waffleUnitLegendPosition === 'top' || waffleUnitLegendPosition === 'bottom') expect(marker.x).toBeCloseTo(left)
+  if (waffleUnitLegendPosition === 'top') expect(marker.y + marker.height).toBeLessThan(top)
+  if (waffleUnitLegendPosition === 'bottom') expect(marker.y).toBeGreaterThan(bottom)
+  if (waffleUnitLegendPosition === 'left') expect(marker.x + marker.width).toBeLessThan(left)
+  if (waffleUnitLegendPosition === 'right') expect(marker.x).toBeGreaterThan(right)
+})
+
+
+it('places corner-fill remainders in an outer row rather than bending around two edges', () => {
+  const cells = waffleCellCoordinates(45, 25, 'corner', 'top-left', [4, 12, 24, 71, 1014])
+  const firstForty = cells.slice(0, 40)
+  expect(firstForty.filter(([, row]) => row < 6)).toHaveLength(36)
+  expect(firstForty.filter(([, row]) => row === 6)).toEqual([[0, 6], [1, 6], [2, 6], [3, 6]])
+  expect(firstForty.every(([column]) => column < 6)).toBe(true)
 })

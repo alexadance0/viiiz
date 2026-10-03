@@ -89,7 +89,7 @@ export function resolveNativeCartesianScene(sourceScene: NativeChartScene, extra
         }))
         reservations.push({ id: `guide:${guide.id}`, side: 'top', size: Math.ceil(height), gap: scene.document.composition.directLabelPlot, mode: 'outside', priority: 60 })
       } else {
-        const width = Math.min(initial.content.width * .32, Math.max(80, ...items.flatMap((item) => [item.label, item.note ?? ''].flatMap((text) => text.split('\n').map((line) => measureTextWidth(line, item.style.size, item.style.fontFamily, item.style.weight))))) + scene.document.composition.directLabelPlot)
+        const width = Math.min(initial.content.width * .32, Math.max(config.kind === 'bump' ? 120 : 80, ...items.flatMap((item) => [item.label, item.note ?? ''].flatMap((text) => text.split('\n').map((line) => measureTextWidth(line, item.style.size, item.style.fontFamily, item.style.weight))))) + scene.document.composition.directLabelPlot)
         const reservation = guideReservation(guide, width, 0, 30)
         if (reservation) reservations.push(reservation)
       }

@@ -1,6 +1,7 @@
 import type { ChartConfig, DataTable, DataValue } from '../core/types'
 import { slopePositionKey } from '../core/chartScale'
 import { repeatedChartCategories } from '../core/chartData'
+import { isMapChart, mapPresetForKind, unmatchedMapRegions } from '../features/chart-types/map/catalog'
 import { isDistributionChart, isCompositionChart } from '../core/chartKinds'
 import { SettingsCheckbox } from './SettingsCheckbox'
 
@@ -41,6 +42,27 @@ export function ChartDataMapping({ table, numericColumns, config, onChange, onTo
       <SettingsCheckbox className="chart-data-checkbox" isSelected={config.yFields.includes(column)} onChange={() => onToggleField(column)} key={column}>{column}</SettingsCheckbox>
     )}</div>
   </div>
+
+  if (isMapChart(config.kind)) {
+    const preset = mapPresetForKind(config.kind), unmatched = unmatchedMapRegions(table, config.xField, preset)
+    return <section className="chart-data-section">
+      <div><strong>Данные карты</strong><small>Одна строка — одна территория. Поддерживаются русские и английские названия и коды.</small></div>
+      <label>{preset === 'russia' ? 'Регион' : preset === 'usa' ? 'Штат' : 'Страна'}<select value={config.xField} onChange={(event) => patch({ xField: event.target.value })}>{table.columns.map((column) => <option key={column}>{column}</option>)}</select></label>
+      {select('Показатель для окраски', config.yField, (yField) => patch({ yField, yFields: [yField], seriesField: '' }))}
+      <label>Повторяющиеся территории<select value={config.aggregation} onChange={(event) => patch({ aggregation: event.target.value as ChartConfig['aggregation'] })}><option value="none">Без агрегации</option><option value="sum">Сумма</option><option value="average">Среднее</option><option value="min">Минимум</option><option value="max">Максимум</option><option value="count">Количество строк</option></select></label>
+      <small>{preset === 'russia' ? 'Например: Москва, Республика Татарстан, RU-MOW.' : preset === 'usa' ? 'Например: California, Калифорния, CA или US-CA.' : 'Например: Германия, Germany, DE или DEU.'}</small>
+      {!!unmatched.length && <div className="chart-aggregation-warning" role="status"><strong>Не найдены на карте: {unmatched.length}</strong><small>{unmatched.slice(0, 8).join(', ')}{unmatched.length > 8 ? '…' : ''}. Эти строки не участвуют в окраске. Проверьте названия или выберите другую карту.</small></div>}
+      <small>Отсутствующее значение отличается от нуля и показывается отдельным цветом.</small>
+    </section>
+  }
+
+  if (config.kind === 'sankey') return <section className="chart-data-section">
+    <div><strong>Потоки между категориями</strong><small>Одна строка — одна связь. Одинаковые связи суммируются. Нулевые потоки и строки без узлов пропускаются.</small></div>
+    <label>Откуда<select value={config.xField} onChange={(event) => patch({ xField: event.target.value })}>{table.columns.map((column) => <option key={column}>{column}</option>)}</select></label>
+    <label>Куда<select value={config.sankeyTargetField ?? ''} onChange={(event) => patch({ sankeyTargetField: event.target.value })}><option value="">Выберите колонку…</option>{table.columns.filter((column) => column !== config.xField).map((column) => <option key={column}>{column}</option>)}</select></label>
+    {select('Величина потока', config.yField, (yField) => patch({ yField, yFields: [yField] }))}
+    <small>Названия связывают этапы: узел «Доступны» в колонке «Куда» может стать началом следующего потока в колонке «Откуда».</small>
+  </section>
 
   let measures
   if (config.kind === 'dumbbell') {
@@ -113,6 +135,15 @@ export function ChartDataMapping({ table, numericColumns, config, onChange, onTo
       <div><strong>Стороны сравнения</strong><small>Выберите один или несколько рядов для каждой стороны. Несколько рядов складываются внутри категории.</small></div>
       {sideFields('Левая сторона', 'left', left)}
       {sideFields('Правая сторона', 'right', right)}
+    </div>
+  } else if (config.kind === 'bump') {
+    measures = <div className="chart-role-fields">
+      <div><strong>Участники рейтинга</strong><small>Каждый числовой столбец — отдельный участник. Для длинной таблицы выберите колонку с названиями.</small></div>
+      {config.seriesField ? select('Значение', config.yFields[0] ?? config.yField, (yField) => patch({ yField, yFields: [yField] })) : fieldList('Ряды рейтинга')}
+      <label>Участник<select value={config.seriesField} onChange={(event) => patch({ seriesField: event.target.value })}><option value="">Названия выбранных показателей</option>{table.columns.filter((column) => column !== config.xField && !config.yFields.includes(column)).map((column) => <option key={column}>{column}</option>)}</select></label>
+      <label>Данные рейтинга<select value={config.bumpMode ?? 'value'} onChange={(event) => patch({ bumpMode: event.target.value as ChartConfig['bumpMode'] })}><option value="value">Рассчитать места по значениям</option><option value="rank">Готовые места из таблицы</option></select></label>
+      {(config.bumpMode ?? 'value') === 'value' && <label>Первое место<select value={config.bumpRankDirection ?? 'desc'} onChange={(event) => patch({ bumpRankDirection: event.target.value as ChartConfig['bumpRankDirection'] })}><option value="desc">Наибольшее значение</option><option value="asc">Наименьшее значение</option></select></label>}
+      <small>Первое место сверху. Равные значения делят место: 1, 1, 3. Пропуски не участвуют в расчёте.</small>
     </div>
   } else if (config.kind === 'seasonal-line') {
     measures = <div className="chart-role-fields">

@@ -1,4 +1,5 @@
 import type { ChartConfig, DataTable } from '../../../core/types'
+import { isMapChart, mapPresetForKind } from '../../../features/chart-types/map/catalog'
 import { isAreaChart, isDistributionChart, isHorizontalChart, isNormalizedStackedChart, isStackedChart } from '../../../core/chartKinds'
 import { DEFAULT_CANVAS } from './defaults'
 import { compositionSpacing } from '../../../features/chart-layout/spacing'
@@ -6,13 +7,15 @@ import type { ChartSpec } from './ChartSpec'
 import type { ChartDocument } from './ChartDocument'
 
 export function chartSpecFromLegacy(config: ChartConfig): ChartSpec {
-  if (config.kind === 'waffle') return { family: 'waffle', kind: config.kind, columns: Math.min(30, Math.max(1, Math.round(config.waffleColumns ?? 10))), rows: Math.min(30, Math.max(1, Math.round(config.waffleRows ?? 10))) }
+  if (config.kind === 'waffle') return { family: 'waffle', kind: config.kind, columns: Math.min(100, Math.max(1, Math.round(config.waffleColumns ?? 10))), rows: Math.min(100, Math.max(1, Math.round(config.waffleRows ?? 10))) }
   if (config.kind === 'pie' || config.kind === 'donut') return { family: 'pie', kind: config.kind, innerRadius: config.kind === 'pie' ? 0 : Math.min(85, Math.max(10, config.pieInnerRadius ?? 55)) / 100 }
   if (config.kind === 'waterfall') return { family: 'waterfall', kind: config.kind, showTotal: config.waterfallShowTotal ?? true, labelContent: config.waterfallLabelContent ?? 'change' }
   if (config.kind === 'butterfly') return { family: 'butterfly', kind: config.kind, categoryPlacement: config.butterflyCategoryPosition ?? 'center' }
   if (config.kind === 'lollipop' || config.kind === 'horizontal-lollipop') return { family: 'lollipop', kind: config.kind, orientation: config.kind === 'horizontal-lollipop' ? 'horizontal' : 'vertical' }
   if (config.kind === 'dumbbell') return { family: 'dumbbell', kind: config.kind, orientation: config.dumbbellOrientation ?? 'horizontal', startField: config.dumbbellStartField, endField: config.dumbbellEndField }
   if (config.kind === 'heatmap') return { family: 'heatmap', kind: config.kind, scale: config.heatmapScaleMode ?? 'diverging', scalePosition: config.heatmapScalePosition ?? 'right' }
+  if (isMapChart(config.kind)) return { family: 'map', kind: config.kind, preset: mapPresetForKind(config.kind), showNames: config.mapShowNames ?? false }
+  if (config.kind === 'sankey') return { family: 'sankey', kind: config.kind, targetField: config.sankeyTargetField, nodeWidth: config.sankeyNodeWidth ?? 10, nodeGap: config.sankeyNodeGap ?? 24, linkOpacity: config.sankeyLinkOpacity ?? .45, curvature: config.sankeyCurvature ?? .5 }
   if (config.kind === 'treemap') return { family: 'treemap', kind: config.kind, subcategoryField: config.treemapSubcategoryField, groupGap: config.treemapGroupGap ?? 5, leafGap: config.treemapGap ?? 2 }
   if (isDistributionChart(config.kind)) return { family: 'distribution', kind: config.kind, orientation: config.distributionOrientation ?? 'horizontal', layout: config.distributionLayoutMode ?? 'measures' }
   if (config.kind === 'scatter' || config.kind === 'bubble') return { family: 'scatter', kind: config.kind, bubble: config.kind === 'bubble', sizeField: config.scatterSizeField, colorField: config.scatterColorField }
@@ -20,6 +23,7 @@ export function chartSpecFromLegacy(config: ChartConfig): ChartSpec {
   if (isAreaChart(config.kind)) return { family: 'area', kind: config.kind, stacking: isNormalizedStackedChart(config.kind) ? 'normalized' : isStackedChart(config.kind) ? 'stacked' : 'none', fillOpacity: config.areaFillOpacity ?? .32 }
   if (config.kind === 'range-line' || config.kind === 'step-range-line' || config.kind === 'confidence-line') return { family: 'interval', kind: config.kind, variant: config.kind }
   if (config.kind === 'moving-average-line' || config.kind === 'moving-average-scatter') return { family: 'smoothing', kind: config.kind, variant: config.kind }
+  if (config.kind === 'bump') return { family: 'line', kind: config.kind, variant: config.kind, missing: config.missingMode, rankMode: config.bumpMode ?? 'value', rankDirection: config.bumpRankDirection ?? 'desc' }
   if (config.kind.includes('line')) return { family: 'line', kind: config.kind, variant: config.kind, missing: config.missingMode }
   if (config.kind.includes('bar')) return { family: 'bar', kind: config.kind, orientation: isHorizontalChart(config.kind) || config.barOrientation === 'horizontal' ? 'horizontal' : 'vertical', stacking: isNormalizedStackedChart(config.kind) ? 'normalized' : isStackedChart(config.kind) ? 'stacked' : 'none', width: config.barWidth ?? 68, seriesGap: config.barSeriesGap ?? 30 }
   return { family: 'custom', kind: config.kind }

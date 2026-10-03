@@ -56,8 +56,8 @@ export interface DataIssue {
 export type ChartKind = 'bar' | 'stacked-bar' | 'normalized-stacked-bar' | 'waterfall'
   | 'horizontal-bar' | 'butterfly' | 'horizontal-stacked-bar' | 'horizontal-normalized-stacked-bar'
   | 'lollipop' | 'horizontal-lollipop' | 'dumbbell'
-  | 'line' | 'spline' | 'step-line' | 'indexed-line' | 'seasonal-line' | 'slope' | 'range-line' | 'step-range-line' | 'confidence-line'
-  | 'moving-average-line' | 'moving-average-scatter' | 'heatmap' | 'treemap' | 'pie' | 'donut' | 'waffle'
+  | 'bump' | 'line' | 'spline' | 'step-line' | 'indexed-line' | 'seasonal-line' | 'slope' | 'range-line' | 'step-range-line' | 'confidence-line'
+  | 'map-russia' | 'map-usa' | 'map-europe' | 'moving-average-line' | 'moving-average-scatter' | 'heatmap' | 'treemap' | 'sankey' | 'pie' | 'donut' | 'waffle'
   | 'area' | 'stacked-area' | 'normalized-stacked-area' | 'scatter' | 'bubble'
   | 'boxplot' | 'violinplot' | 'raincloud' | 'histogram' | 'kde-plot' | 'ridgeline' | 'beeswarm' | 'strip-plot' | 'jitter-plot' | 'counts-plot' | 'barcode-plot'
 export interface ChartTextStyle {
@@ -349,6 +349,9 @@ export interface ChartConfig {
   slopeIncreaseColor?: string
   slopeDecreaseColor?: string
   slopeNeutralColor?: string
+  bumpMode?: 'rank' | 'value'
+  bumpRankDirection?: 'desc' | 'asc'
+  bumpShowStartLabels?: boolean
   indexBaseXValue?: string
   seasonalAccentYears?: string[]
   seasonalMutedColor?: string
@@ -374,7 +377,13 @@ export interface ChartConfig {
   waffleLabelColor?: 'text' | 'category' | 'auto'
   waffleLabelBackground?: boolean
   waffleShowValues?: boolean
-  waffleFillDirection?: 'bottom' | 'top'
+  waffleFillDirection?: 'bottom' | 'top' | 'corner'
+  waffleCorner?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+  waffleCellValue?: number
+  waffleShowUnitLegend?: boolean
+  waffleUnitLegendPosition?: 'top' | 'bottom' | 'left' | 'right'
+  waffleUnitLabel?: string
+  waffleUnitLegendText?: ChartTextStyle
   waffleDescriptionText?: ChartTextStyle
   waffleColumns?: number
   waffleRows?: number
@@ -384,6 +393,22 @@ export interface ChartConfig {
   pieLabelPosition?: 'outside' | 'inside'
   pieValueFormat?: 'absolute' | 'percent' | 'both'
   pieShowNames?: boolean
+  mapShowNames?: boolean
+  mapLabelFormat?: 'name' | 'code'
+  mapBorderColor?: string
+  mapBorderWidth?: number
+  sankeyTargetField?: string
+  sankeyNodeWidth?: number
+  sankeyNodeGap?: number
+  sankeyLinkOpacity?: number
+  sankeyCurvature?: number
+  sankeyLinkColor?: 'source' | 'target' | 'single'
+  sankeyLabelPosition?: 'outside' | 'inside'
+  sankeyShowNames?: boolean
+  sankeyPercentBase?: 'total' | 'parent'
+  sankeyValueFormat?: 'absolute' | 'percent' | 'both'
+  sankeyLabelColorByCategory?: boolean
+  sankeyNodeAlign?: 'left' | 'justify'
   treemapSubcategoryField?: string
   treemapGap?: number
   treemapGroupGap?: number
@@ -505,7 +530,7 @@ export type DateLabelFormat = 'auto' | 'year-full' | 'year-short' | 'year-first-
 export interface ChartPlugin {
   id: ChartKind
   label: string
-  category: 'comparison' | 'bar-horizontal' | 'trend' | 'smoothing' | 'area' | 'relationship' | 'distribution' | 'heatmap' | 'hierarchy' | 'composition'
+  category: 'comparison' | 'bar-horizontal' | 'trend' | 'smoothing' | 'area' | 'relationship' | 'distribution' | 'heatmap' | 'hierarchy' | 'composition' | 'geography'
   capabilities: ChartCapabilities
   settings: ChartSettingsCapabilities
   defaultConfig: Partial<ChartConfig>

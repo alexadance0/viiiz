@@ -14,6 +14,12 @@ export function LineVariantSettings({ config, numericColumns = config.yFields, t
     <label>Прозрачность исходных данных, %<NumberInput min="5" max="80" value={Math.round((config.movingAverageRawOpacity ?? .22) * 100)} onValueChange={(value) => patch({ movingAverageRawOpacity: value / 100 })}/></label>
     <small className="settings-note">Среднее рассчитывается отдельно для каждого выбранного ряда по предыдущим N наблюдениям.</small>
   </div></details>
+  if (config.kind === 'bump') return <details className="settings-group line-variant-settings" open><summary>Динамика рейтинга</summary><div>
+    <label>Данные рейтинга<select value={config.bumpMode ?? 'value'} onChange={(event) => patch({ bumpMode: event.target.value as ChartConfig['bumpMode'] })}><option value="value">Рассчитать места по значениям</option><option value="rank">Готовые места из таблицы</option></select></label>
+    {(config.bumpMode ?? 'value') === 'value' && <label>Первое место<select value={config.bumpRankDirection ?? 'desc'} onChange={(event) => patch({ bumpRankDirection: event.target.value as ChartConfig['bumpRankDirection'] })}><option value="desc">Наибольшее значение</option><option value="asc">Наименьшее значение</option></select></label>}
+    <SettingsCheckbox isSelected={config.bumpShowStartLabels ?? true} onChange={(bumpShowStartLabels) => patch({ bumpShowStartLabels })}>Названия в начале линий</SettingsCheckbox>
+    <small className="settings-note">Названия на концах включаются в разделе «Легенда». Равные значения делят место, пропуски остаются пустыми.</small>
+  </div></details>
   if (config.kind === 'indexed-line') {
     const positions = [...new Map(table.rows.map((row) => [chartDataValueKey(row[config.xField]), row[config.xField]])).entries()].sort(([, left], [, right]) => left instanceof Date && right instanceof Date ? left.getTime() - right.getTime() : typeof left === 'number' && typeof right === 'number' ? left - right : 0)
     return <details className="settings-group line-variant-settings"><summary>Индекс к дате</summary><div>

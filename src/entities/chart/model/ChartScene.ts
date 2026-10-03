@@ -171,6 +171,7 @@ export interface AreaSeriesScene extends CartesianPointSeriesScene {
 }
 
 interface CartesianPointPlotScene {
+  valueAxisInverse?: boolean
   categoryPlacement: 'point'
   categories: Array<{ id: DatumId; value: DataValue; label: string; coordinate: string }>
   categoryLabelPlan: { interval: 'auto' | number | ((index: number) => boolean); fontSize: number; rotation: number; hideOverlap: boolean; showMaxLabel?: boolean }
@@ -695,7 +696,38 @@ export interface WafflePlotScene {
 
 export type NativeWaffleChartScene = NativeChartScene & { plot: WafflePlotScene }
 
-export type NativePlotScene = CartesianBarPlotScene | ComparisonStemPlotScene | WaterfallPlotScene | ButterflyPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene | DistributionPlotScene | HeatmapPlotScene | TreemapPlotScene | PiePlotScene | WafflePlotScene
+export interface SankeyPlotScene {
+  kind: 'sankey'
+  total: number
+  nodes: Array<{
+    id: ElementId; seriesId: SeriesId; datumId: DatumId; legacyKey: string
+    name: string; depth: number; value: number; color: string
+    displayCategory: string; displayValue: string; displayLabel: string
+    label: { visible: boolean; text: string; style: ChartTextStyle }
+  }>
+  links: Array<{
+    id: ElementId; seriesId: SeriesId; datumId: DatumId; legacyKey: string
+    source: string; target: string; value: number; color: string
+    displayCategory: string; displayValue: string
+  }>
+}
+export type NativeSankeyChartScene = NativeChartScene & { plot: SankeyPlotScene }
+
+export interface MapRegionScene {
+  id: ElementId; datumId: DatumId; seriesId: SeriesId; legacyKey: string
+  regionId: string; name: string; value: number | null
+  displayCategory: string; displayValue: string; displayLabel: string; color: string
+  disputed: boolean; polygons: number[][][][]; center: [number, number]; area: number
+  label: { visible: boolean; explicit: boolean; text: string; style: ChartTextStyle }
+}
+export interface MapPlotScene {
+  kind: 'map'; preset: 'russia' | 'usa' | 'europe'
+  regions: MapRegionScene[]; width: number; height: number; unmatched: string[]
+  colorDomain: HeatmapPlotScene['colorDomain']
+}
+export type NativeMapChartScene = NativeChartScene & { plot: MapPlotScene }
+
+export type NativePlotScene = CartesianBarPlotScene | ComparisonStemPlotScene | WaterfallPlotScene | ButterflyPlotScene | CartesianLinePlotScene | CartesianAreaPlotScene | CartesianSlopePlotScene | CartesianSmoothingPlotScene | CartesianIntervalPlotScene | CartesianXYPlotScene | DistributionPlotScene | HeatmapPlotScene | MapPlotScene | TreemapPlotScene | SankeyPlotScene | PiePlotScene | WafflePlotScene
 
 export interface NativeChartScene extends ChartSceneBase {
   plot: NativePlotScene

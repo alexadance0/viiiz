@@ -44,6 +44,7 @@ Wave 3 started from `57a9357`; native Waterfall/Butterfly implementation complet
 | violinplot / raincloud / ridgeline | statistical density shapes | native | dedicated lane/value density geometry | raw observations editable; derived density excluded | shared SVG/PNG boundary | no |
 | histogram / kde-plot | distribution frequency/density | native semantic frequency layers | native continuous value × frequency/density axes | stable bins and source observations | shared SVG/PNG boundary | no |
 | heatmap | matrix | native | resolved cells and four-sided color guide | native custom renderer | semantic compiler/layout/renderer | yes |
+| map-russia / map-usa / map-europe | choropleth geography | native, bundled Natural Earth polygons | fitted projected paths, inset states and shared color guide | stable territory metadata → callback adapter | shared SVG/PNG boundary | no |
 | treemap | hierarchy | native | resolved hierarchy rectangles and label bands | native custom renderer | semantic compiler/layout/renderer | yes |
 
 ## Bar characterization coverage
@@ -158,3 +159,9 @@ Post-review parity also covers null Waterfall steps at the beginning/middle/end,
 ## Wave 6 final native cleanup
 
 Every registry entry compiles a semantic scene and renders through the same resolved-scene boundary. Registry order/defaults/settings/inference/validation remain explicit and tested, while the public option API is a compatibility facade. Recursive renderer-option visitors, legacy scene payloads, dual compiler modes, family throwing guards, Canvas direct-guide/value-hit/bar-grid reconstruction and nearest-pixel event recovery have been deleted. Persistence compatibility remains intentionally isolated to `ChartConfig`, the legacy config adapter, stable `legacyKey` aliases and the outer UI selection adapter.
+
+## Bump: ranking over time
+
+Bump reuses the native Line scene, layout, selection and export pipeline with an explicit inverted value axis. Values are aggregated before per-period competition ranking (`1, 1, 3` for ties); ascending and descending ranking, wide measures and long participant tables are supported. Supplied places remain unchanged and must be positive integers. Percent conversion, logarithmic scales and zero filling do not affect ranks; missing observations remain missing.
+
+Stable source point IDs survive rank direction and series-order changes. Tooltips identify both the place and original value in calculated mode. Two direct-series guides reserve endpoint label space, and the value-label rail stays outside the initial names. Rank axes use an automatic integer domain and step. A four-brand sample is available from the editor's data examples.

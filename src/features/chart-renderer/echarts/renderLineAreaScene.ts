@@ -21,6 +21,7 @@ export type ResolvedCartesianPointRenderModel = Omit<ResolvedPointScene, 'plot'>
     categoryAxis: PointPlot['categoryAxis']
     valueAxis: PointPlot['valueAxis']
     valueDomain: PointPlot['valueDomain']
+    valueAxisInverse?: boolean
     series: Array<LineSeriesScene | AreaSeriesScene | SmoothingLayerScene>
   }
 }
@@ -81,6 +82,7 @@ function valueAxis(scene: ResolvedCartesianPointRenderModel) {
   const nameGap = (axis.ticks.visible ? axis.ticks.length : 0) + (axis.labels.visible ? axis.labels.gap + axis.labels.size : 0) + (axis.title?.gap ?? 0)
   const normalized = stacking(scene.plot) === 'normalized'
   return {
+    inverse: scene.plot.valueAxisInverse,
     type: config.yAxisScaleType === 'log' ? 'log' : 'value', logBase: config.yAxisScaleType === 'log' ? 10 : undefined, position: side, min: scene.plot.valueDomain.min, max: scene.plot.valueDomain.max, interval: config.yAxisScaleType === 'log' ? undefined : scene.plot.valueDomain.step,
     name: '', nameLocation: 'middle', nameGap, nameTextStyle: axis.title ? textStyle(axis.title.style) : undefined, triggerEvent: true,
     axisLine: { show: axis.line.visible, onZero: false, lineStyle }, axisTick: { show: axis.ticks.visible, inside: false, length: axis.ticks.length, lineStyle },
@@ -152,7 +154,7 @@ export function renderCartesianPointBase(scene: ResolvedCartesianPointRenderMode
     const showDirect = directGuide?.visible && direct?.visible
     const directText = direct?.note ? `{name|${direct.label}}\n{note|${direct.note}}` : `{name|${direct?.label ?? item.name}}`
     const directStyle = direct?.style ?? config.directLabelText ?? config.legendText
-    const directLabel = { show: true, distance: config.directLabelGap ?? 14, formatter: directText, width: Math.max(80, scene.geometry.reservations['guide:direct-series']?.width ?? 120), overflow: 'break', ...textStyle(directStyle), rich: { name: textStyle(directStyle), note: { ...textStyle(directStyle), fontSize: Math.max(8, directStyle.size - 2), opacity: .75 } } }
+    const directLabel = { show: true, distance: config.directLabelGap ?? 14, formatter: config.kind === 'bump' ? `${direct?.label ?? item.name}${direct?.note ? `\n${direct.note}` : ''}` : directText, verticalAlign: 'middle', width: Math.max(80, scene.geometry.reservations['guide:direct-series']?.width ?? 120), overflow: 'break', ...textStyle(directStyle), rich: config.kind === 'bump' ? undefined : { name: textStyle(directStyle), note: { ...textStyle(directStyle), fontSize: Math.max(8, directStyle.size - 2), opacity: .75 } } }
     const defaultZ = 30 + (scene.plot.series.length - seriesIndex) * 10
     const z = item.presentation?.emphasis === 'accent' ? 1000 + (item.presentation.layerPriority ?? seriesIndex) : defaultZ + (item.presentation?.layerPriority ?? 0)
     return {
@@ -164,11 +166,11 @@ export function renderCartesianPointBase(scene: ResolvedCartesianPointRenderMode
       markLine: seriesIndex === 0 && config.showZeroLine && config.yAxisScaleType !== 'log' ? { silent: true, symbol: 'none', data: [{ yAxis: 0 }], lineStyle: { color: config.zeroLineColor, width: config.zeroLineWidth, type: config.zeroLineType }, label: { show: false } } : undefined,
       endLabel: showDirect && !directLeft ? directLabel : undefined,
       labelLine: showDirect ? { show: direct?.leaderLine ?? false, length: config.directLabelGap ?? 14, length2: 8, lineStyle: { color: direct?.color ?? item.color, width: config.directLabelLineWidth ?? 1, type: config.directLabelLineType ?? 'solid' } } : undefined,
-      labelLayout: showDirect ? { align: directLeft ? 'right' : 'left', moveOverlap: 'shiftY', hideOverlap: false } : { hideOverlap: config.valueLabelHideOverlap ?? false, moveOverlap: 'shiftY' },
+      labelLayout: showDirect && config.kind === 'bump' ? (params: { dataIndex?: number }) => ({ align: params.dataIndex === firstIndex && (config.bumpShowStartLabels ?? true) ? 'right' : 'left', verticalAlign: 'middle', moveOverlap: 'shiftY', hideOverlap: false }) : showDirect ? { align: directLeft ? 'right' : 'left', moveOverlap: 'shiftY', hideOverlap: false } : { hideOverlap: config.valueLabelHideOverlap ?? false, moveOverlap: 'shiftY' },
       data: item.points.map((point, index) => {
         const resolvedLabelPosition = point.label.position === 'auto' ? 'top' : point.label.position
         const pointLabel = { show: point.label.visible, formatter: point.label.text, position: resolvedLabelPosition, ...textStyle(point.label.style), ...valueLabelAlignment(resolvedLabelPosition) }
-        const directPoint = showDirect && directLeft && index === firstIndex
+        const directPoint = showDirect && (directLeft || config.kind === 'bump' && (config.bumpShowStartLabels ?? true)) && index === firstIndex
         return {
           id: point.id, value: point.value, name: scene.plot.categories[index]?.coordinate, elementId: point.id, datumId: point.datumId, seriesId: point.seriesId, elementKey: point.legacyKey, sourceSeriesName: item.name, displayValue: point.displayValue, displayCategory: point.displayCategory, displayColor: item.color,
           symbol: point.marker.shape, symbolSize: point.marker.visible ? point.marker.size : 0, itemStyle: { color: point.marker.fill, borderColor: point.marker.stroke, borderWidth: point.marker.strokeWidth }, label: directPoint ? { ...directLabel, position: 'left', align: 'right' } : pointLabel, emphasis: { label: pointLabel }, directLegendLabel: directPoint,

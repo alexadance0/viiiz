@@ -5,6 +5,7 @@ export const lineChartDefinitions = [
   ['indexed-line', 'Индекс к дате'],
   ['seasonal-line', 'Сравнение по годам'],
   ['slope', 'Наклонный график'],
+  ['bump', 'Динамика рейтинга'],
 ] as const
 
 export const intervalChartDefinitions = [

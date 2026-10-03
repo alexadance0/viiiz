@@ -533,7 +533,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         resolvedScene.plot.positions.filter((position) => typeof position.value === 'string').forEach((position) => editable.set(`x:${position.coordinate}`, { sourceKey: position.coordinate, displayText: position.label }))
       }
       editableAxisLabels.current = editable
-      type NativeSelectionHit = { rect: { x: number; y: number; width: number; height: number }; info: { elementKey: string; sourceSeriesName: string; displayCategory: string; displayValue: string; displayLabel?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target']; axis?: 'x' | 'y'; selectionMode?: 'series-first' } }
+      type NativeSelectionHit = { points?: Array<[number, number]>; rect: { x: number; y: number; width: number; height: number }; info: { elementKey: string; sourceSeriesName: string; displayCategory: string; displayValue: string; displayLabel?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target']; axis?: 'x' | 'y'; selectionMode?: 'series-first' } }
       type NativeCategoryLayout = CategoryLabelLayout
       const option = renderScene(resolvedScene) as Record<string, unknown> & { graphic?: unknown[]; nativeSelectionHits?: NativeSelectionHit[]; nativeCategoryLayouts?: NativeCategoryLayout[]; nativeTreemapHits?: typeof nativeTreemapHits.current; nativePlotBounds?: PlotBounds }
       const nativeSelectionHits = option.nativeSelectionHits ?? []
@@ -914,7 +914,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       }
       let refreshGraphics = Boolean(exactBounds || barGrid.length || exactDisplayDecorations.length)
       if (nativeSelectionHits.length) {
-        const hits = nativeSelectionHits.map((hit, index) => ({ id: `native-selection-hit-${index}`, type: 'rect', z: 140, cursor: 'pointer', shape: hit.rect, style: hit.info.elementKey === selectedElementKey && hit.info.selectionTarget === selectedElementTarget ? { fill: 'rgba(0,0,0,0)', stroke: '#1677a6', lineWidth: 1 } : { fill: 'rgba(0,0,0,0)' }, onmousedown: (event: { offsetX?: number; offsetY?: number }) => {
+        const hits = nativeSelectionHits.map((hit, index) => ({ id: `native-selection-hit-${index}`, type: hit.points ? 'polygon' : 'rect', z: 140, cursor: 'pointer', shape: hit.points ? { points: hit.points } : hit.rect, style: hit.info.elementKey === selectedElementKey && hit.info.selectionTarget === selectedElementTarget ? { fill: 'rgba(0,0,0,0)', stroke: '#1677a6', lineWidth: 1 } : { fill: 'rgba(0,0,0,0)' }, onmousedown: (event: { offsetX?: number; offsetY?: number }) => {
           const point = hit.info, seriesName = point.sourceSeriesName
           if (plotKind !== 'treemap') return
           const group = { key: `treemap-group:${seriesName}`, seriesName, category: seriesName, value: '', label: seriesName } satisfies ChartElementSelection
@@ -929,7 +929,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
             onSettingsFocus?.(`${point.axis ?? 'y'}-axis-labels`)
             return
           }
-          onSelect?.({ key: point.elementKey, seriesName, category: point.displayCategory, value: point.displayValue, color: point.displayColor, target: point.selectionTarget })
+          onSelect?.({ key: point.elementKey, seriesName, category: point.displayCategory, value: point.displayValue, label: point.displayLabel, color: point.displayColor, target: point.selectionTarget })
           onSettingsFocus?.('element')
         } }))
         option.graphic = [...(Array.isArray(option.graphic) ? option.graphic : []), ...hits]

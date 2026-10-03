@@ -1,3 +1,7 @@
+import { compileNativeMapScene, validateMapMapping } from '../features/chart-types/map/compiler'
+import { inferMapRegionField, isMapChart, mapPresets, mapPresetForKind } from '../features/chart-types/map/catalog'
+import { compileNativeBumpScene, validateBumpMapping } from '../features/chart-types/bump/compiler'
+import { compileNativeSankeyScene, validateNativeSankeyMapping } from '../features/chart-types/sankey/compiler'
 import type { NativeChartScene } from '../entities/chart/model/ChartScene'
 import { nativeMarkSelections } from '../entities/chart/model/sceneVisitors'
 import { renderScene } from '../features/chart-renderer/echarts/renderScene'
@@ -19,7 +23,7 @@ import { compileNativeSlopeScene } from '../features/chart-types/slope/compiler'
 import { smoothingChartDefinitions } from '../features/chart-types/smoothing'
 import { compileNativeSmoothingScene, isNativeSmoothingKind } from '../features/chart-types/smoothing/compiler'
 import { compileNativePieScene, validateNativePieMapping } from '../features/chart-types/pie/compiler'
-import { compileNativeWaffleScene } from '../features/chart-types/waffle/compiler'
+import { compileNativeWaffleScene, validateNativeWaffleMapping } from '../features/chart-types/waffle/compiler'
 import { isCompositionChart, isPieChart } from './chartKinds'
 import { treemapChartDefinitions } from '../features/chart-types/treemap'
 import { compileNativeTreemapScene, validateNativeTreemapMapping } from '../features/chart-types/treemap/compiler'
@@ -65,6 +69,8 @@ const genericSettings = (id: ChartKind, category: ChartPlugin['category']): Char
 const capabilities = (id: ChartKind): ChartPlugin['capabilities'] => {
   if (id === 'waffle') return { coordinateSystem: 'matrix', axes: {}, guides: ['legend'], valueLabels: true, markers: false }
   if (isPieChart(id)) return { coordinateSystem: 'radial', axes: {}, guides: ['legend'], valueLabels: true, markers: false }
+  if (isMapChart(id)) return { coordinateSystem: 'custom', axes: {}, guides: ['color-scale'], valueLabels: true, markers: false }
+  if (id === 'sankey') return { coordinateSystem: 'custom', axes: {}, guides: [], valueLabels: true, markers: false }
   if (id === 'treemap') return { coordinateSystem: 'hierarchy', axes: {}, guides: [], valueLabels: true, markers: false }
   if (id === 'heatmap') return { coordinateSystem: 'matrix', axes: { category: { placements: ['side'] }, lane: { placements: ['side'] } }, guides: ['color-scale'], valueLabels: true, markers: false }
   if (id === 'scatter' || id === 'bubble') return { coordinateSystem: 'cartesian', axes: { x: { scaleTypes: ['linear', 'date'] }, y: { scaleTypes: ['linear', 'log'] } }, guides: id === 'bubble' ? ['legend', 'size-scale'] : ['legend'], valueLabels: true, markers: true }
@@ -78,8 +84,11 @@ const capabilities = (id: ChartKind): ChartPlugin['capabilities'] => {
 
 const compile = (table: DataTable, config: ChartConfig): NativeChartScene => {
   const id = config.kind
+  if (isMapChart(id)) return compileNativeMapScene(table, config)
+  if (id === 'bump') return compileNativeBumpScene(table, config)
   if (id === 'waffle') return compileNativeWaffleScene(table, config)
   if (isPieChart(id)) return compileNativePieScene(table, config)
+  if (id === 'sankey') return compileNativeSankeyScene(table, config)
   if (id === 'treemap') return compileNativeTreemapScene(table, config)
   if (id === 'heatmap') return compileNativeHeatmapScene(table, config)
   if (id === 'waterfall') return compileNativeWaterfallScene(table, config)
@@ -124,7 +133,7 @@ type Descriptor = Pick<ChartPlugin, 'id' | 'label' | 'category' | 'settings'> & 
 
 const lineSettings = (id: ChartKind) => {
   const base = genericSettings(id, 'trend')
-  return { ...base, features: { ...base.features, lineVariant: ['indexed-line', 'seasonal-line', 'slope'].includes(id) || base.features.lineVariant } }
+  return { ...base, features: { ...base.features, lineVariant: ['indexed-line', 'seasonal-line', 'slope', 'bump'].includes(id) || base.features.lineVariant } }
 }
 
 const barSettings = (id: typeof barChartDefinitions[number][0], category: ChartPlugin['category']) => {
@@ -142,7 +151,7 @@ const treemapSettings: ChartPlugin['settings'] = { sections: ['series', 'annotat
 const descriptors: Descriptor[] = [
   ...barChartDefinitions.map(([id, label, category]) => ({ id, label, category, settings: barSettings(id, category) })),
   { id: 'dumbbell', label: 'Гантельная', category: 'comparison', settings: { ...genericSettings('bar', 'comparison'), series: ['color', 'markers'], features: { ...genericSettings('bar', 'comparison').features, directLabels: false, barLayout: false, lineVariant: true } } },
-  ...lineChartDefinitions.map(([id, label]) => ({ id, label, category: 'trend' as const, settings: lineSettings(id) })),
+  ...lineChartDefinitions.map(([id, label]) => ({ id, label, category: 'trend' as const, settings: lineSettings(id), ...(id === 'bump' ? { defaultConfig: { kind: id, bumpMode: 'value' as const, showDirectLabels: true, showLegend: false } } : {}) })),
   ...smoothingChartDefinitions.map(([id, label]) => ({ id, label, category: 'smoothing' as const, settings: genericSettings(id, 'smoothing') })),
   ...intervalChartDefinitions.map(([id, label]) => ({ id, label, category: 'trend' as const, settings: { ...genericSettings('line', 'trend'), features: { ...genericSettings('line', 'trend').features, lineVariant: true } } })),
   ...areaChartDefinitions.map(([id, label]) => ({ id, label, category: 'area' as const, settings: genericSettings(id, 'area') })),
@@ -151,20 +160,23 @@ const descriptors: Descriptor[] = [
   { id: heatmapChartDefinitions[0][0], label: heatmapChartDefinitions[0][1], category: 'heatmap', defaultConfig: { kind: 'heatmap', showYAxisTitle: false, showLegend: false, showDirectLabels: false, showValues: false }, settings: heatmapSettings },
   ...([['pie', 'Круговая'], ['donut', 'Кольцевая'], ['waffle', 'Вафельная']] as const).map(([id, label]) => ({ id, label, category: 'composition' as const, settings: treemapSettings, defaultConfig: { kind: id, aggregation: 'sum' as const, showValues: true, showLegend: true, showDirectLabels: false } })),
   { id: treemapChartDefinitions[0][0], label: treemapChartDefinitions[0][1], category: 'hierarchy', defaultConfig: { kind: 'treemap', aggregation: 'sum', showValues: true, showLegend: false, showDirectLabels: false, showXAxisTitle: false, showYAxisTitle: false }, settings: treemapSettings },
+  ...mapPresets.map(({ kind: id, label }) => ({ id, label, category: 'geography' as const, defaultConfig: { kind: id, aggregation: 'sum' as const, heatmapScaleMode: 'sequential' as const, heatmapLowColor: '#edf2f7', heatmapHighColor: '#1677a6', showValues: false, showLegend: false, showDirectLabels: false }, settings: { ...heatmapSettings, sections: ['series', 'annotations', 'text', 'headings', 'legend-values', 'credits'] as ChartPlugin['settings']['sections'] } })),
+  { id: 'sankey', label: 'Санкей', category: 'relationship', defaultConfig: { kind: 'sankey', aggregation: 'sum', showValues: true, showLegend: false, showDirectLabels: false }, settings: { ...treemapSettings, sections: ['series', 'annotations', 'text', 'headings', 'credits'] } },
 ]
 
-const validationFor = (id: ChartKind, base: ChartPlugin['validate']): ChartPlugin['validate'] => isCompositionChart(id) ? validateNativePieMapping : id === 'treemap' ? validateNativeTreemapMapping
+const validationFor = (id: ChartKind, base: ChartPlugin['validate']): ChartPlugin['validate'] => isMapChart(id) ? validateMapMapping : id === 'waffle' ? validateNativeWaffleMapping : id === 'sankey' ? validateNativeSankeyMapping : isCompositionChart(id) ? validateNativePieMapping : id === 'treemap' ? validateNativeTreemapMapping
   : id === 'butterfly' ? (table, config) => { const generic = base(table, config), native = validateNativeButterflyMapping(table, config); return { ok: generic.ok && native.ok, errors: [...generic.errors, ...native.errors] } }
   : isNativeXYKind(id) ? validateNativeXYMapping
   : isNativeDistributionKind(id) ? validateNativeDistributionMapping
   : id === 'slope' ? slopeValidation
+  : id === 'bump' ? (table, config) => { const baseResult = base(table, config); const rankResult = validateBumpMapping(table, config); const errors = [...baseResult.errors, ...rankResult.errors]; return { ok: errors.length === 0, errors } }
   : id === 'indexed-line' ? indexedValidation
   : id === 'seasonal-line' ? seasonalValidation
   : base
 
 export const chartRegistry: ChartPlugin[] = descriptors.map((descriptor) => {
   const compilePlugin = (table: DataTable, config: ChartConfig) => compile(table, config)
-  return { ...descriptor, defaultConfig: descriptor.defaultConfig ?? { kind: descriptor.id }, capabilities: capabilities(descriptor.id), inferMapping, validate: validationFor(descriptor.id, validateMapping), compile: compilePlugin, buildOption: (table, config) => renderScene(compilePlugin(table, config)) }
+  return { ...descriptor, defaultConfig: descriptor.defaultConfig ?? { kind: descriptor.id }, capabilities: capabilities(descriptor.id), inferMapping: isMapChart(descriptor.id) ? (table) => ({ ...inferMapping(table), xField: inferMapRegionField(table, mapPresetForKind(descriptor.id)) }) : descriptor.id === 'sankey' ? (table) => ({ ...inferMapping(table), sankeyTargetField: table.columns.find((column) => column !== inferMapping(table).xField && column !== inferMapping(table).yField) }) : inferMapping, validate: validationFor(descriptor.id, validateMapping), compile: compilePlugin, buildOption: (table, config) => renderScene(compilePlugin(table, config)) }
 })
 
 export function getChartPlugin(id: ChartKind) {

@@ -10,10 +10,11 @@ interface Props {
   individual?: boolean
   alwaysVisible?: boolean
   defaultSize?: number
+  defaultVisible?: boolean
 }
 
-export function MarkerSettings({ value, lineColor, onChange, individual = false, alwaysVisible = false, defaultSize = 8 }: Props) {
-  const shown = alwaysVisible || individual || (value.showMarker ?? false)
+export function MarkerSettings({ value, lineColor, onChange, individual = false, alwaysVisible = false, defaultSize = 8, defaultVisible = false }: Props) {
+  const shown = alwaysVisible || individual || (value.showMarker ?? defaultVisible)
   const fill = value.markerFill ?? (alwaysVisible ? lineColor : '#ffffff')
   const border = value.markerBorder ?? lineColor
   return <div className="marker-settings">

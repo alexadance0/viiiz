@@ -1,3 +1,4 @@
+import { nonCartesianFrame } from '../../chart-types/nonCartesianFrame'
 import type { TreemapNodeScene } from '../../../entities/chart/model/ChartScene'
 import { nativeGraphicTextStyle, renderNativeBarScene } from './renderBarScene'
 import type { ResolvedTreemapScene } from '../../chart-types/treemap/layout'
@@ -5,9 +6,9 @@ import type { ResolvedTreemapScene } from '../../chart-types/treemap/layout'
 const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!)
 
 export function renderTreemapScene(scene: ResolvedTreemapScene): Record<string, unknown> {
-  const config = scene.compatibilityConfig, hiddenStyle = config.axisLabelText
-  const hiddenAxis = (id: string, orientation: 'horizontal' | 'vertical') => ({ id, channel: 'value' as const, orientation, placement: { kind: 'side' as const, side: orientation === 'horizontal' ? 'bottom' as const : 'left' as const }, line: { visible: false }, ticks: { visible: false, length: 0 }, labels: { visible: false, size: 0, gap: 0, style: hiddenStyle } })
-  const fake = { ...scene, plot: { kind: 'bar' as const, categoryPlacement: 'band' as const, orientation: 'vertical' as const, stacking: 'none' as const, categories: [], categoryAxis: { ...hiddenAxis('category', 'horizontal'), channel: 'category' as const }, valueAxis: hiddenAxis('value', 'vertical'), valueDomain: { min: 0, max: 1, step: 1 }, barWidth: 100, seriesGap: 0, series: [] } }
+  const config = scene.compatibilityConfig
+  const fake = { ...nonCartesianFrame(scene), geometry: scene.geometry, resolvedReservations: scene.resolvedReservations }
+
   const option = renderNativeBarScene(fake)
   const all = scene.plot.nodes.flatMap((node) => [node, ...node.children])
   const nodeById = new Map(all.map((node) => [node.id, node]))

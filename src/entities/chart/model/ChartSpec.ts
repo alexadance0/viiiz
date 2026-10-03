@@ -6,17 +6,19 @@ export interface LollipopSpec extends SpecBase { family: 'lollipop'; orientation
 export interface WaterfallSpec extends SpecBase { family: 'waterfall'; showTotal: boolean; labelContent: 'change' | 'cumulative' | 'both' }
 export interface ButterflySpec extends SpecBase { family: 'butterfly'; categoryPlacement: 'center' | 'left' | 'right' }
 export interface DumbbellSpec extends SpecBase { family: 'dumbbell'; orientation: 'vertical' | 'horizontal'; startField?: string; endField?: string }
-export interface LineSpec extends SpecBase { family: 'line'; variant: ChartKind; missing: 'gap' | 'zero' | 'connect' }
+export interface LineSpec extends SpecBase { family: 'line'; variant: ChartKind; missing: 'gap' | 'zero' | 'connect'; rankMode?: 'rank' | 'value'; rankDirection?: 'desc' | 'asc' }
 export interface SlopeSpec extends SpecBase { family: 'slope'; showValues: boolean; showSeriesNames: boolean; showInternalValueLabels: boolean }
 export interface IntervalSpec extends SpecBase { family: 'interval'; variant: 'range-line' | 'step-range-line' | 'confidence-line' }
 export interface SmoothingSpec extends SpecBase { family: 'smoothing'; variant: ChartKind }
 export interface ScatterSpec extends SpecBase { family: 'scatter'; bubble: boolean; sizeField?: string; colorField?: string }
 export interface HeatmapSpec extends SpecBase { family: 'heatmap'; scale: 'sequential' | 'diverging'; scalePosition: 'top' | 'right' | 'bottom' | 'left' }
+export interface MapSpec extends SpecBase { family: 'map'; preset: 'russia' | 'usa' | 'europe'; showNames: boolean }
+export interface SankeySpec extends SpecBase { family: 'sankey'; targetField?: string; nodeWidth: number; nodeGap: number; linkOpacity: number; curvature: number }
 export interface TreemapSpec extends SpecBase { family: 'treemap'; subcategoryField?: string; groupGap: number; leafGap: number }
 export interface DistributionSpec extends SpecBase { family: 'distribution'; orientation: 'vertical' | 'horizontal'; layout: 'measures' | 'categories' }
 export interface AreaSpec extends SpecBase { family: 'area'; stacking: 'none' | 'stacked' | 'normalized'; fillOpacity: number }
 export interface PieSpec extends SpecBase { family: 'pie'; innerRadius: number }
 export interface CustomSpec extends SpecBase { family: 'custom' }
-export type ChartSpec = BarSpec | LollipopSpec | WaterfallSpec | ButterflySpec | DumbbellSpec | LineSpec | SlopeSpec | IntervalSpec | SmoothingSpec | ScatterSpec | HeatmapSpec | TreemapSpec | DistributionSpec | AreaSpec | CustomSpec | PieSpec | WaffleSpec
+export type ChartSpec = BarSpec | LollipopSpec | WaterfallSpec | ButterflySpec | DumbbellSpec | LineSpec | SlopeSpec | IntervalSpec | SmoothingSpec | ScatterSpec | HeatmapSpec | TreemapSpec | SankeySpec | MapSpec | DistributionSpec | AreaSpec | CustomSpec | PieSpec | WaffleSpec
 
 export interface WaffleSpec extends SpecBase { family: 'waffle'; columns: number; rows: number }
