@@ -19,7 +19,7 @@ export function renderWaffleScene(scene: ResolvedScene & NativeWaffleChartScene)
   const naturalLabelWidth = Math.max(0, ...labels.map((slice) => {
     const descriptionStyle = config.waffleDescriptionText ?? { ...slice.label.style, size: Math.max(6, Math.round(slice.label.style.size * .85)), weight: 400 }
     const width = (text: string, style: typeof slice.label.style) => Math.max(0, ...text.split('\n').map((line) => measureTextWidth(line, style.size, style.fontFamily, style.weight)))
-    return Math.max(width(slice.label.text, slice.label.style), width(config.seriesStyles[slice.name]?.legendNote ?? '', descriptionStyle)) + (config.waffleLabelColor === 'category' ? 0 : 20)
+    return Math.max(width(slice.label.text, slice.label.style), width(config.seriesStyles[slice.name]?.legendNote ?? '', descriptionStyle))
   }))
   const labelWidth = labels.length && placement === 'right' ? Math.min(plot.width * .35, naturalLabelWidth + 8) : 0
   const availableWidth = Math.max(1, plot.width - labelWidth - (labelWidth ? 24 : 0))
@@ -55,13 +55,12 @@ export function renderWaffleScene(scene: ResolvedScene & NativeWaffleChartScene)
     const color = override?.valueText?.color ?? (config.waffleLabelColor === 'category' ? slice.color : config.waffleLabelColor === 'auto' && placement === 'inside' ? contrastText(slice.color) : slice.label.color)
     const description = config.seriesStyles[slice.name]?.legendNote?.trim() ?? ''
     const bodyStyle = config.waffleDescriptionText ?? { ...slice.label.style, size: Math.max(6, Math.round(slice.label.style.size * .85)), weight: 400 }
-    const marker = placement === 'right' && config.waffleLabelColor !== 'category' ? 20 : 0
-    const width = Math.max(1, area.width - marker)
+    const width = Math.max(1, area.width)
     const title = wrapMeasuredText(slice.label.text, slice.label.style.size, width, slice.label.style.fontFamily, slice.label.style.weight)
     const body = wrapMeasuredText(description, bodyStyle.size, width, bodyStyle.fontFamily, bodyStyle.weight)
     const titleHeight = title.lines * Math.round(slice.label.style.size * slice.label.style.lineHeight / 100)
     const bodyHeight = body.lines * Math.round(bodyStyle.size * bodyStyle.lineHeight / 100)
-    return { slice, area, color, bodyStyle, marker, title, body, titleHeight, bodyHeight, height: titleHeight + (bodyHeight ? bodyHeight + 8 : 0), preferredTop: occupied.length ? Math.min(...occupied.map((cell) => bounds(cell).y)) : plot.y, offset }
+    return { slice, area, color, bodyStyle, title, body, titleHeight, bodyHeight, height: titleHeight + (bodyHeight ? bodyHeight + 8 : 0), preferredTop: occupied.length ? Math.min(...occupied.map((cell) => bounds(cell).y)) : plot.y, offset }
   })
   if (placement === 'right') layouts.sort((a, b) => a.preferredTop - b.preferredTop)
   let sideY = plot.y
@@ -72,7 +71,7 @@ export function renderWaffleScene(scene: ResolvedScene & NativeWaffleChartScene)
   }
   let labelIndex = 0
   for (const layout of layouts) {
-    const { slice, area, color, bodyStyle, marker, title, body, titleHeight, bodyHeight } = layout
+    const { slice, area, color, bodyStyle, title, body, titleHeight, bodyHeight } = layout
     const top = placement === 'inside' ? area.y : sideTops[labelIndex++]
     const availableHeight = placement === 'inside' ? area.height : Math.max(0, plot.y + plot.height - top)
     if (availableHeight < slice.label.style.size || area.width < slice.label.style.size * 2) continue
@@ -81,9 +80,8 @@ export function renderWaffleScene(scene: ResolvedScene & NativeWaffleChartScene)
     const height = clippedTitleHeight + (shownBodyHeight ? shownBodyHeight + 8 : 0)
     const children: unknown[] = []
     const silhouette = (size: number) => placement === 'inside' && config.waffleLabelBackground !== false ? { stroke: slice.color, lineWidth: Math.max(3, size * .35) } : {}
-    if (marker) children.push({ type: 'rect', shape: { x: area.x, y: top + 4, width: 10, height: 10 }, style: { fill: slice.color } })
-    children.push({ type: 'text', z: 21, style: { ...nativeGraphicTextStyle(slice.label.style), ...silhouette(slice.label.style.size), x: area.x + marker, y: top, text: title.text, fill: color, align: 'left', verticalAlign: 'top', width: area.width - marker, height: clippedTitleHeight, overflow: 'truncate', lineOverflow: 'truncate', ellipsis: '…' } })
-    if (shownBodyHeight) children.push({ type: 'text', z: 21, style: { ...nativeGraphicTextStyle(bodyStyle), ...silhouette(bodyStyle.size), x: area.x + marker, y: top + clippedTitleHeight + 8, text: body.text, fill: config.waffleLabelColor === 'text' || !config.waffleLabelColor ? bodyStyle.color : color, align: 'left', verticalAlign: 'top', width: area.width - marker, height: shownBodyHeight, overflow: 'truncate', lineOverflow: 'truncate', ellipsis: '…' } })
+    children.push({ type: 'text', z: 21, style: { ...nativeGraphicTextStyle(slice.label.style), ...silhouette(slice.label.style.size), x: area.x, y: top, text: title.text, fill: color, align: 'left', verticalAlign: 'top', width: area.width, height: clippedTitleHeight, overflow: 'truncate', lineOverflow: 'truncate', ellipsis: '…' } })
+    if (shownBodyHeight) children.push({ type: 'text', z: 21, style: { ...nativeGraphicTextStyle(bodyStyle), ...silhouette(bodyStyle.size), x: area.x, y: top + clippedTitleHeight + 8, text: body.text, fill: config.waffleLabelColor === 'text' || !config.waffleLabelColor ? bodyStyle.color : color, align: 'left', verticalAlign: 'top', width: area.width, height: shownBodyHeight, overflow: 'truncate', lineOverflow: 'truncate', ellipsis: '…' } })
     labelGraphics.push({ id: `waffle-label:${slice.id}`, type: 'group', z: 20, children })
     labelHits.push({ rect: { x: area.x, y: top, width: area.width, height }, info: { ...selection(slice), selectionTarget: 'value-label' } })
   }
@@ -91,7 +89,7 @@ export function renderWaffleScene(scene: ResolvedScene & NativeWaffleChartScene)
   return {
     ...option, animation: false, xAxis: undefined, yAxis: undefined,
     nativeSelectionHits: [...cells.map((slice, index) => ({ rect: bounds(index), info: selection(slice) })), ...labelHits],
-    legend: { ...legend, selectedMode: false, data: legend.data?.map((item) => ({ ...item, textStyle: config.waffleLabelColor === 'category' ? { color: slices.find((slice) => slice.name === item.name)?.color } : undefined })) },
+    legend: { ...legend, selectedMode: false, data: legend.data?.map((item) => ({ ...item, textStyle: (config.legendLabelColorByCategory ?? config.waffleLabelColor === 'category') ? { color: slices.find((slice) => slice.name === item.name)?.color } : undefined })) },
     tooltip: { trigger: 'item', confine: true, formatter: (params: { seriesIndex: number }) => { const slice = slices[params.seriesIndex]; return slice ? `<b>${escape(slice.name)}</b><br/>${escape(slice.displayValue)}` : '' } },
     graphic: [...(option.graphic as unknown[] ?? []), ...labelGraphics],
     series: slices.map((slice, sliceIndex) => {

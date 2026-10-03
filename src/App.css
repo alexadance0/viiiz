@@ -2207,6 +2207,7 @@
   --settings-help-size:11px;
   --settings-control-height:40px;
 }
+.settings-panel>*{flex-shrink:0}
 .settings-category-shell{--settings-category-accent:var(--ink)}
 .settings-category-title{color:var(--settings-category-accent)}
 .settings-category-tabs>.tabs__list-container{

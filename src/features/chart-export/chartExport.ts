@@ -42,9 +42,9 @@ export const appendStyledText = (svg: SVGSVGElement, blocks: ExportTextBlock[]) 
     const lineHeight = Math.round(block.style.size * block.style.lineHeight / 100)
     const lines: Array<Array<{ text: string; run: ExportTextRun; width: number }>> = [[]]
     let lineWidth = 0
-    block.runs.forEach((run) => run.text.split(/(\s+|\n)/).forEach((text) => {
+    block.runs.forEach((run) => run.text.split(/(\n|[^\S\n]+)/).forEach((text) => {
       if (!text) return
-      if (text.includes('\n')) { lines.push([]); lineWidth = 0; return }
+      if (text === '\n') { lines.push([]); lineWidth = 0; return }
       const width = textWidth(text, run, block.style)
       const isWhitespace = /^\s+$/.test(text)
       if (!isWhitespace && lineWidth && lineWidth + width > block.width) { lines.push([]); lineWidth = 0 }

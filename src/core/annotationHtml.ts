@@ -3,6 +3,28 @@ const dangerousTags = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', '
 
 export const annotationTextHtml = (text: string) => text.replace(/[&<>]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character]!)
 
+export function highlightTextRange(range: Range, color: string): Range {
+  const span = document.createElement('span')
+  span.style.backgroundColor = color
+  try { range.surroundContents(span) } catch { span.append(range.extractContents()); range.insertNode(span) }
+  span.querySelectorAll<HTMLElement>('*').forEach((element) => element.style.removeProperty('background-color'))
+  // Split surrounding inline styles so an old background cannot show through the new alpha.
+  for (let parent = span.parentElement; parent && ['SPAN', 'B', 'STRONG', 'I', 'EM', 'U'].includes(parent.tagName); parent = span.parentElement) {
+    const before = range.cloneRange(), after = range.cloneRange()
+    before.selectNodeContents(parent); before.setEndBefore(span)
+    after.selectNodeContents(parent); after.setStartAfter(span)
+    const prefix = parent.cloneNode(false) as HTMLElement, suffix = parent.cloneNode(false) as HTMLElement
+    prefix.append(before.cloneContents()); suffix.append(after.cloneContents())
+    const inherited = parent.cloneNode(false) as HTMLElement
+    inherited.style.removeProperty('background-color')
+    inherited.append(...span.childNodes); span.append(inherited)
+    parent.replaceWith(...(prefix.textContent || prefix.querySelector('br') ? [prefix] : []), span, ...(suffix.textContent || suffix.querySelector('br') ? [suffix] : []))
+  }
+  const next = document.createRange()
+  next.selectNodeContents(span)
+  return next
+}
+
 export function sanitizeAnnotationHtml(html: string): string {
   const root = document.createElement('template')
   root.innerHTML = html

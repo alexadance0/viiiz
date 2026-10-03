@@ -7,6 +7,36 @@ const settled = async (page: import('@playwright/test').Page) => {
   await expect(page.locator('.chart-error')).toHaveCount(0)
 }
 
+test('donut keeps the stage navigation at the bottom while settings change and scroll', async ({ page }) => {
+  await page.goto('/editor')
+  await page.locator('.upload-card input').setInputFiles({ name: 'shares.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) })
+  await page.getByRole('button', { name: /Выбрать график/ }).click()
+  await page.getByRole('button', { name: 'Кольцевая', exact: true }).click()
+  await page.getByRole('button', { name: 'Настроить оформление →' }).click()
+  const settings = page.locator('details').filter({ has: page.getByText('Секторы и подписи', { exact: true }) })
+  if (!(await settings.evaluate((element) => element.hasAttribute('open')))) await settings.locator(':scope > summary').click()
+  await page.getByRole('combobox', { name: 'Положение подписей' }).selectOption('inside')
+  await page.getByText('Название категории в подписи', { exact: true }).click()
+  const panel = page.locator('.settings-panel')
+  const bottomGap = () => panel.evaluate((element) => Math.abs(element.getBoundingClientRect().bottom - element.querySelector('.settings-footer')!.getBoundingClientRect().bottom))
+  for (const height of [540, 600, 660, 720, 810, 900, 1080]) {
+    await page.setViewportSize({ width: 1280, height })
+    for (const scrollTop of [0, 150, 10000, 0]) {
+      await panel.evaluate((element, top) => { element.scrollTop = top }, scrollTop)
+      await expect.poll(bottomGap).toBeLessThanOrEqual(1)
+      await expect.poll(() => panel.evaluate((element) => {
+        const shell = element.querySelector('.settings-category-shell')!
+        const settings = shell.querySelector('.visual-settings')!
+        return settings.getBoundingClientRect().bottom - shell.getBoundingClientRect().bottom
+      })).toBeLessThanOrEqual(1)
+    }
+  }
+  await page.getByText('Стиль подписей', { exact: true }).click()
+  await expect.poll(bottomGap).toBeLessThanOrEqual(1)
+  await page.getByRole('tab', { name: 'Текст', exact: true }).click()
+  await expect.poll(bottomGap).toBeLessThanOrEqual(1)
+})
+
 test('pie and donut support category colors, labels, sector selection and SVG/PNG export', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))

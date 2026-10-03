@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ChartConfig, ChartTextStyle } from '../core/types'
-import { annotationTextHtml, sanitizeAnnotationHtml } from '../core/annotationHtml'
+import { annotationTextHtml, highlightTextRange, sanitizeAnnotationHtml } from '../core/annotationHtml'
 import { TextFragmentToolbar } from './TextFragmentToolbar'
 
 interface Props {
@@ -94,7 +94,7 @@ export function CanvasTextOverlay({ id, text, html, style, left, top, width, cus
     onChange(sanitized, plain)
   }
   const restore = () => {
-    if (!range.current) return false
+    if (!range.current || !editor.current?.contains(range.current.commonAncestorContainer)) return false
     const selection = window.getSelection(); selection?.removeAllRanges(); selection?.addRange(range.current)
     return true
   }
@@ -125,6 +125,11 @@ export function CanvasTextOverlay({ id, text, html, style, left, top, width, cus
     if (!selection && syncBlockStyle(values)) return
     const currentRange = selection ?? activeRange()
     if (!currentRange) return
+    if (values.backgroundColor) {
+      range.current = highlightTextRange(currentRange, values.backgroundColor)
+      restore(); save(); syncToolbarStyle()
+      return
+    }
     const span = document.createElement('span'); Object.assign(span.style, values)
     try { currentRange.surroundContents(span) } catch { span.append(currentRange.extractContents()); currentRange.insertNode(span) }
     span.querySelectorAll<HTMLElement>('*').forEach((element) => Object.assign(element.style, values))

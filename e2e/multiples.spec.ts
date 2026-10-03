@@ -383,6 +383,108 @@ test('edits common composition texts on canvas and keeps panel text tools outsid
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(page.viewportSize()!.width)
   await page.getByRole('button', { name: 'Выровнять справа', exact: true }).click()
   await expect(panel.locator('.canvas-rich-text')).toHaveCSS('text-align', 'right')
+  const panelTitle = panel.locator('.canvas-rich-text-content')
+  const panelSize = Number(await page.locator('.portal-text-toolbar .text-size-field input').inputValue())
+  await page.getByRole('button', { name: 'Увеличить размер', exact: true }).click()
+  await expect(panelTitle).toHaveCSS('font-size', `${panelSize + 1}px`)
+  await page.getByRole('button', { name: 'Снять выделение', exact: true }).click()
+  await panel.locator('.canvas-rich-text-display').filter({ hasText: /^По полу$/ }).click()
+  await expect(page.locator('.portal-text-toolbar .text-size-field input')).toHaveValue(String(panelSize + 1))
   await page.screenshot({ path: '/tmp/viiiz-composition-text-tools.png', fullPage: true })
   expect(errors).toEqual([])
+})
+
+for (const [key, count] of [['Enter', 1], ['Enter', 2], ['Shift+Enter', 1]] as const) {
+  test(`panel text keeps ${count} ${key} line breaks in SVG export`, async ({ page }) => {
+    await page.goto('/editor')
+    await page.getByRole('button', { name: 'Группы респондентов', exact: true }).click()
+    await page.getByRole('button', { name: /Выбрать график 2: По полу/ }).click()
+    const panel = page.locator('.multiples-cell.selected')
+    await panel.locator('svg text').filter({ hasText: /^По полу$/ }).click()
+    const editor = panel.locator('.canvas-rich-text-content')
+    await editor.fill('Первая')
+    await editor.press('End')
+    for (let index = 0; index < count; index++) await editor.press(key)
+    await page.keyboard.insertText('Вторая')
+    const lineHeight = await editor.evaluate((element) => Number.parseFloat(getComputedStyle(element).lineHeight))
+    await expect(editor).toHaveText(/Первая.*Вторая/s)
+    await expect(panel.locator('.chart-canvas-shell')).toHaveAttribute('data-render-status', 'settled')
+    await page.locator('.export-menu > summary').click()
+    const download = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Скачать SVG', exact: true }).click()
+    const svg = await readFile((await (await download).path())!, 'utf8')
+    const lines = await page.evaluate((content) => [...new DOMParser().parseFromString(content, 'image/svg+xml').querySelectorAll('svg svg text')]
+      .filter((node) => node.getAttribute('fill-opacity') !== '0' && (node.textContent === 'Первая' || node.textContent === 'Вторая'))
+      .map((node) => ({ text: node.textContent, y: Number(node.getAttribute('y')) })), svg)
+    expect(lines.map((line) => line.text)).toEqual(['Первая', 'Вторая'])
+    expect(lines[1].y - lines[0].y).toBeCloseTo(count * lineHeight, 1)
+  })
+}
+
+test('all panel text blocks retain Enter line breaks in composition export', async ({ page }) => {
+  await page.goto('/editor')
+  await page.getByRole('button', { name: 'Группы респондентов', exact: true }).click()
+  await page.getByRole('button', { name: /Выбрать график 2: По полу/ }).click()
+  await page.getByRole('tab', { name: 'Текст', exact: true }).click()
+  await page.locator('.heading-settings > summary').click()
+  await page.locator('.settings-checkbox').filter({ hasText: 'Показывать подзаголовок' }).click()
+  await page.locator('.credits-settings > summary').click()
+  for (const label of ['Показывать комментарий', 'Показывать источник']) await page.locator('.settings-checkbox').filter({ hasText: label }).click()
+  const panel = page.locator('.multiples-cell.selected')
+  const lineHeights: Record<string, number> = {}
+  for (const [field, text] of [['title', 'По полу'], ['subtitle', 'Подзаголовок графика'], ['note', 'Комментарий к графику'], ['source', 'Источник: данные пользователя']]) {
+    await panel.locator('svg text').filter({ hasText: new RegExp(`^${text}$`) }).click()
+    const editor = panel.locator('.canvas-rich-text-content')
+    await editor.fill(`${field}Первая`)
+    await editor.press('End')
+    await editor.press('Enter')
+    await page.keyboard.insertText(`${field}Вторая`)
+    await page.getByRole('button', { name: 'Снять выделение', exact: true }).click()
+  }
+  await expect(panel.locator('.chart-canvas-shell')).toHaveAttribute('data-render-status', 'settled')
+  for (const field of ['title', 'subtitle', 'note', 'source']) lineHeights[field] = await panel.locator('.canvas-rich-text-display').filter({ hasText: new RegExp(`^${field}Первая`) }).evaluate((element) => Number.parseFloat(getComputedStyle(element).lineHeight))
+  await page.locator('.export-menu > summary').click()
+  const download = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Скачать SVG', exact: true }).click()
+  const svg = await readFile((await (await download).path())!, 'utf8')
+  const exported = await page.evaluate((content) => [...new DOMParser().parseFromString(content, 'image/svg+xml').querySelectorAll('svg svg text')]
+    .filter((node) => node.getAttribute('fill-opacity') !== '0')
+    .map((node) => ({ text: node.textContent, y: Number(node.getAttribute('y')) })), svg)
+  for (const field of ['title', 'subtitle', 'note', 'source']) {
+    const lines = exported.filter((node) => node.text === `${field}Первая` || node.text === `${field}Вторая`)
+    expect(lines.map((line) => line.text)).toEqual([`${field}Первая`, `${field}Вторая`])
+    expect(lines[1].y - lines[0].y).toBeCloseTo(lineHeights[field], 1)
+  }
+  const bounds = await page.evaluate((content) => {
+    const root = new DOMParser().parseFromString(content, 'image/svg+xml').documentElement as unknown as SVGSVGElement
+    root.style.cssText = 'position:fixed;left:0;top:0;visibility:hidden;pointer-events:none'
+    document.body.append(root)
+    const frame = root.getBoundingClientRect()
+    const rectangles = [...root.querySelectorAll('text')].filter((node) => node.getAttribute('fill-opacity') !== '0' && /^(title|subtitle|note|source)(Первая|Вторая)$/.test(node.textContent ?? '')).map((node) => {
+      const rect = node.getBoundingClientRect()
+      return { text: node.textContent, x: (rect.x - frame.x) / frame.width, y: (rect.y - frame.y) / frame.height, width: rect.width / frame.width, height: rect.height / frame.height }
+    })
+    root.remove()
+    return rectangles
+  }, svg)
+  expect(bounds).toHaveLength(8)
+  const pngDownload = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Скачать PNG', exact: true }).click()
+  const png = await readFile((await (await pngDownload).path())!)
+  const ink = await page.evaluate(async ({ data, rectangles }) => {
+    const image = new Image()
+    image.src = data
+    await image.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = image.width; canvas.height = image.height
+    const context = canvas.getContext('2d')!
+    context.drawImage(image, 0, 0)
+    return rectangles.map((rect) => {
+      const pixels = context.getImageData(Math.floor(rect.x * image.width), Math.floor(rect.y * image.height), Math.max(1, Math.ceil(rect.width * image.width)), Math.max(1, Math.ceil(rect.height * image.height))).data
+      let count = 0
+      for (let index = 0; index < pixels.length; index += 4) if (pixels[index + 3] && pixels[index] < 190 && pixels[index + 1] < 190 && pixels[index + 2] < 190) count++
+      return { text: rect.text, count }
+    })
+  }, { data: `data:image/png;base64,${png.toString('base64')}`, rectangles: bounds })
+  for (const line of ink) expect(line.count, String(line.text)).toBeGreaterThan(10)
 })

@@ -80,8 +80,8 @@ export function CanvasSettings({ config, onChange, sizeLocked = false }: Props) 
   const showSubtitle = (config.showSubtitle ?? true) && Boolean(config.subtitle)
   const showNote = (config.showNote ?? true) && Boolean(config.note)
   const showSource = (config.showSource ?? true) && Boolean(config.source)
-  const standardLegend = config.showLegend && !config.showDirectLabels
-  const legendPosition = config.legendPosition ?? 'top'
+  const standardLegend = config.kind === 'waffle' ? config.showValues && config.waffleLabelPosition === 'legend' : config.showLegend && !config.showDirectLabels
+  const legendPosition = config.kind === 'waffle' ? 'top' : config.legendPosition ?? 'top'
   const horizontal = usesHorizontalAxes(config)
   const physicalXAxis = horizontal ? 'Y' : 'X'
   const physicalYAxis = horizontal ? 'X' : 'Y'

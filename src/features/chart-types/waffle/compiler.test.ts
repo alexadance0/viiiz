@@ -53,3 +53,29 @@ it('fits the side caption rail to short text and centers the grid together with 
   expect(labels[0].rect.x - gridRight).toBeLessThan(30)
   expect(Math.abs((left + right) / 2 - (scene.geometry.plot.x + scene.geometry.plot.width / 2))).toBeLessThan(2)
 })
+
+it.each(['text', 'category', 'auto'] as const)('renders side captions without markers in %s color mode', (waffleLabelColor) => {
+  const option = renderScene(compileNativeWaffleScene(table, config({ waffleLabelColor }))) as { legend: { show: boolean }; graphic: Array<{ id?: string; children?: Array<{ type: string }> }> }
+  const labels = option.graphic.filter((item) => item.id?.startsWith('waffle-label:'))
+  expect(labels).toHaveLength(3)
+  expect(labels.every((label) => label.children?.every((child) => child.type === 'text'))).toBe(true)
+  expect(option.legend.show).toBe(false)
+})
+
+it('uses label placement as the only switch for the waffle top legend', () => {
+  for (const placement of ['right', 'inside', 'legend'] as const) {
+    const scene = compileNativeWaffleScene(table, config({ waffleLabelPosition: placement, showLegend: placement !== 'legend', legendPosition: 'bottom' }))
+    expect(scene.guides[0]).toMatchObject({ visible: placement === 'legend', position: 'top' })
+    expect(scene.compatibilityConfig.showLegend).toBe(placement === 'legend')
+  }
+  expect(compileNativeWaffleScene(table, config({ waffleLabelPosition: 'legend', showValues: false })).guides[0].visible).toBe(false)
+})
+
+it.each(['bar', 'line', 'pie', 'waffle'] as const)('colors %s legend text with the actual category or series color', (kind) => {
+  const settings = config({ kind, waffleLabelPosition: 'legend', showLegend: true, legendLabelColorByCategory: true, seriesStyles: { 'А': { color: '#123456', legendLabel: 'Категория А' }, 'Значение': { color: '#654321', legendLabel: 'Мой ряд' } } })
+  const option = getChartPlugin(kind).buildOption(table, settings) as { legend: { data: Array<{ itemStyle: { color: string }; textStyle?: { color: string } }> } }
+  expect(option.legend.data.length).toBeGreaterThan(0)
+  for (const item of option.legend.data) expect(item.textStyle?.color).toBe(item.itemStyle.color)
+  const plain = getChartPlugin(kind).buildOption(table, { ...settings, legendLabelColorByCategory: false }) as typeof option
+  for (const item of plain.legend.data) expect(item.textStyle?.color).toBeUndefined()
+})

@@ -492,6 +492,7 @@ export interface ChartConfig {
   categoryAxisLabelAlignment?: 'plot' | 'outer'
   categoryLabelOverrides?: { x?: Record<string, string>; y?: Record<string, string> }
   legendMarker?: 'auto' | 'circle' | 'square' | 'line' | 'diamond' | 'triangle'
+  legendLabelColorByCategory?: boolean
 }
 
 export type DateLabelFormat = 'auto' | 'year-full' | 'year-short' | 'year-first-full'

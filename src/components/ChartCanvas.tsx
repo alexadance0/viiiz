@@ -207,6 +207,9 @@ function annotationRuns(annotation: ChartAnnotation, defaults: Omit<AnnotationRu
     if (node.nodeType === Node.TEXT_NODE) { if (node.textContent) runs.push({ ...state, text: node.textContent }); return }
     if (!(node instanceof HTMLElement)) return
     if (node.tagName === 'BR') { runs.push({ ...state, text: '\n' }); return }
+    const block = ['DIV', 'P'].includes(node.tagName)
+    if (block && runs.length && !runs.at(-1)!.text.endsWith('\n')) runs.push({ ...state, text: '\n' })
+    const start = runs.length
     const weight = node.style.fontWeight
     const decoration = node.style.textDecorationLine || node.style.textDecoration
     const explicitBold = weight ? Number(weight) >= 600 || weight === 'bold' : undefined
@@ -214,7 +217,7 @@ function annotationRuns(annotation: ChartAnnotation, defaults: Omit<AnnotationRu
     const explicitUnderline = decoration ? decoration.includes('underline') : undefined
     const next = { ...state, color: node.style.color || state.color, backgroundColor: node.style.backgroundColor ? (node.style.backgroundColor === 'transparent' ? undefined : node.style.backgroundColor) : state.backgroundColor, textStrokeColor: node.style.webkitTextStrokeColor || shadowColor(node.style.textShadow) || state.textStrokeColor, textStrokeWidth: node.style.webkitTextStrokeWidth || (node.style.textShadow ? '2' : state.textStrokeWidth), bold: ['B', 'STRONG'].includes(node.tagName) ? true : explicitBold ?? state.bold, italic: ['I', 'EM'].includes(node.tagName) ? true : explicitItalic ?? state.italic, underline: node.tagName === 'U' ? true : explicitUnderline ?? state.underline, fontFamily: node.style.fontFamily || state.fontFamily, fontSize: Number.parseFloat(node.style.fontSize) || state.fontSize }
     node.childNodes.forEach((child) => walk(child, next))
-    if (['DIV', 'P'].includes(node.tagName)) runs.push({ ...next, text: '\n' })
+    if (block && (runs.length === start || !runs.at(-1)!.text.endsWith('\n'))) runs.push({ ...next, text: '\n' })
   }
   root.childNodes.forEach((node) => walk(node, { ...defaults, color: annotation.fragments[0]?.color ?? defaults.color }))
   while (runs.at(-1)?.text === '\n') runs.pop()
@@ -1241,7 +1244,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           {config.annotations.filter((annotation) => !annotation.hidden && annotation.id !== selected?.id).map((annotation) => <AnnotationDisplay key={annotation.id} annotation={annotation} canvasBackground={config.canvasBackground} onSelect={() => { if (!annotation.locked) onAnnotationSelect?.(annotation.id) }}/>)}
           <Suspense fallback={null}>
             {categoryLabelLayout && selectedCategoryLabel && <CanvasTextOverlay id={`category-${categoryLabelLayout.axis}-${categoryLabelLayout.category}`} text={config.categoryLabelOverrides?.[categoryLabelLayout.axis]?.[categoryLabelLayout.category] ?? categoryLabelLayout.category} style={categoryLabelLayout.style} left={categoryLabelLayout.left} top={categoryLabelLayout.top} width={categoryLabelLayout.width} rotation={categoryLabelLayout.rotation} policy={{ richText: false, multiline: true, explicitNewlines: true, styleToolbar: false }} customFonts={config.customFonts} canvasBackground={config.canvasBackground} onChange={(_html, text) => onCategoryLabelChange?.(categoryLabelLayout.axis, categoryLabelLayout.category, text)}/>}
-            {richField && richLayout && richStyle && <CanvasTextOverlay id={richField} text={richText} html={richHtml} style={{ ...richStyle, size: richLayout.baseSize }} left={richLayout.left} top={richLayout.top} width={richLayout.width} customFonts={config.customFonts} canvasBackground={config.canvasBackground} onChange={(html, text) => onRichTextChange?.(richField, html, text)} onStyleChange={(style) => { const key = `${richField}Text` as 'titleText' | 'subtitleText' | 'noteText' | 'sourceText'; (config as unknown as Record<typeof key, ChartConfig['titleText']>)[key] = { ...config[key], ...style }; onTextStyleChange?.(richField, style) }}/>}
+            {richField && richLayout && richStyle && <CanvasTextOverlay id={richField} text={richText} html={richHtml} style={{ ...richStyle, size: richLayout.baseSize }} left={richLayout.left} top={richLayout.top} width={richLayout.width} customFonts={config.customFonts} canvasBackground={config.canvasBackground} onChange={(html, text) => onRichTextChange?.(richField, html, text)} onStyleChange={(style) => onTextStyleChange?.(richField, style)}/>}
             {selected && <AnnotationOverlay annotation={selected} customFonts={config.customFonts} canvasBackground={config.canvasBackground} onChange={(annotation) => onAnnotationChange?.(annotation)} onDuplicate={() => onAnnotationDuplicate?.(selected)} onDelete={() => onAnnotationDelete?.(selected.id)} onClose={() => onAnnotationSelect?.('')}/>}
           </Suspense>
         </div>

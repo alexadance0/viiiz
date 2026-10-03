@@ -3,6 +3,7 @@ import type { NativeWaffleChartScene } from '../../../entities/chart/model/Chart
 import { compileCompositionScene } from '../pie/compiler'
 
 export function compileNativeWaffleScene(table: DataTable, config: ChartConfig): NativeWaffleChartScene {
+  config = { ...config, showLegend: config.showValues && config.waffleLabelPosition === 'legend', legendPosition: 'top' }
   const scene = compileCompositionScene(table, { ...config, pieLabelPosition: 'outside' })
   if (config.waffleShowValues === false) scene.plot.slices.forEach((slice) => { slice.label.text = config.elementStyles[slice.legacyKey]?.label ?? (config.pieShowNames !== false ? slice.name : '') })
   const columns = Math.min(30, Math.max(1, Math.round(config.waffleColumns ?? 10)))

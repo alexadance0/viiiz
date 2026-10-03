@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ToggleButton, ToggleButtonGroup } from '@heroui/react'
 import { AlignCenter, AlignLeft, AlignRight, Copy, GripVertical, Trash2 } from 'lucide-react'
 import type { ChartAnnotation, ChartConfig } from '../core/types'
-import { annotationTextHtml, sanitizeAnnotationHtml } from '../core/annotationHtml'
+import { annotationTextHtml, highlightTextRange, sanitizeAnnotationHtml } from '../core/annotationHtml'
 import { TextFragmentToolbar } from './TextFragmentToolbar'
 
 interface Props { annotation: ChartAnnotation; customFonts?: ChartConfig['customFonts']; canvasBackground?: string; onChange(value: ChartAnnotation): void; onDuplicate(): void; onDelete(): void; onClose(): void }
@@ -50,7 +50,7 @@ export function AnnotationOverlay({ annotation, customFonts, canvasBackground = 
     if (selection?.rangeCount && editor.current?.contains(selection.anchorNode)) range.current = selection.getRangeAt(0).cloneRange()
   }
   const restoreSelection = () => {
-    if (!range.current) return false
+    if (!range.current || !editor.current?.contains(range.current.commonAncestorContainer)) return false
     const selection = window.getSelection(); selection?.removeAllRanges(); selection?.addRange(range.current)
     return true
   }
@@ -77,6 +77,11 @@ export function AnnotationOverlay({ annotation, customFonts, canvasBackground = 
   const apply = (styles: Partial<CSSStyleDeclaration>) => {
     const currentRange = activeRange()
     if (!currentRange) return
+    if (styles.backgroundColor) {
+      range.current = highlightTextRange(currentRange, styles.backgroundColor)
+      restoreSelection(); save(); syncToolbarStyle()
+      return
+    }
     const span = document.createElement('span')
     Object.assign(span.style, styles)
     try { currentRange.surroundContents(span) } catch { span.append(currentRange.extractContents()); currentRange.insertNode(span) }

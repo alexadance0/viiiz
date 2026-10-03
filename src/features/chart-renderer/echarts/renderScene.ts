@@ -34,6 +34,15 @@ export function resolveNativeScene(scene: ChartScene | ResolvedScene): ResolvedS
 
 export function renderScene(scene: ChartScene | ResolvedScene): Record<string, unknown> {
   const resolved = resolveNativeScene(scene)
+  const option = renderResolvedScene(resolved)
+  if (resolved.compatibilityConfig.legendLabelColorByCategory) {
+    const legend = option.legend as { data?: Array<{ itemStyle?: { color?: string }; textStyle?: Record<string, unknown> }> } | undefined
+    if (legend?.data) legend.data = legend.data.map((item) => ({ ...item, textStyle: { ...item.textStyle, color: item.itemStyle?.color } }))
+  }
+  return option
+}
+
+function renderResolvedScene(resolved: ResolvedScene): Record<string, unknown> {
   if (resolved.plot.kind === 'waffle') return renderWaffleScene(resolved as ResolvedScene & NativeWaffleChartScene)
   if (resolved.plot.kind === 'pie') return renderPieScene(resolved as ResolvedScene & NativePieChartScene)
   if (resolved.plot.kind === 'bar') return renderNativeBarScene(resolved as ResolvedNativeBarScene)
