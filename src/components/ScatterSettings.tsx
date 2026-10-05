@@ -37,6 +37,16 @@ export function ScatterSettings({ config, columns, numericColumns, table, onChan
   return <details className="settings-group scatter-settings" open>
     <summary>Точки и зависимости</summary>
     <div>
+      {config.kind === 'connected-scatter' && <fieldset>
+        <legend>Соединение точек</legend>
+        <label>Порядок точек<select value={config.scatterOrderField ?? ''} onChange={(event) => patch({ scatterOrderField: event.target.value || undefined })}><option value="">Как строки в таблице</option>{columns.map((column) => <option key={column}>{column}</option>)}</select></label>
+        <label>Направление порядка<select value={config.scatterOrderDirection ?? 'asc'} onChange={(event) => patch({ scatterOrderDirection: event.target.value as ChartConfig['scatterOrderDirection'] })}><option value="asc">По возрастанию</option><option value="desc">По убыванию</option></select></label>
+        <label>Толщина соединений, px<NumberInput min="0.5" max="12" step="0.5" value={config.scatterConnectionWidth ?? 2} onValueChange={(scatterConnectionWidth) => patch({ scatterConnectionWidth })}/></label>
+        <label>Тип соединений<select value={config.scatterConnectionType ?? 'solid'} onChange={(event) => patch({ scatterConnectionType: event.target.value as ChartConfig['scatterConnectionType'] })}><option value="solid">Сплошная</option><option value="dashed">Пунктирная</option><option value="dotted">Точечная</option></select></label>
+        <label>Прозрачность соединений, %<NumberInput min="0" max="100" value={Math.round((config.scatterConnectionOpacity ?? .8) * 100)} onValueChange={(value) => patch({ scatterConnectionOpacity: value / 100 })}/></label>
+        <SettingsCheckbox isSelected={config.missingMode === 'connect'} onChange={(connect) => patch({ missingMode: connect ? 'connect' : 'gap' })}>Соединять через пропуски</SettingsCheckbox>
+        <small className="settings-note">Даты и числа сортируются по значению, текст — по названию. Равные значения сохраняют порядок строк. Точки без значения порядка остаются несоединёнными.</small>
+      </fieldset>}
       <p className="scatter-settings__intro">Кодируйте дополнительное измерение размером или цветом, подписывайте важные объекты и добавляйте ориентиры.</p>
       <fieldset><legend>Точки</legend>
         {config.kind === 'bubble' ? <>

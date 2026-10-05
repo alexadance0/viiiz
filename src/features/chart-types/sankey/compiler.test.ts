@@ -52,4 +52,36 @@ describe('Sankey flows', () => {
     expect(option.xAxis).toBeUndefined()
     expect(option.series).toMatchObject([{ type: 'custom', coordinateSystem: 'none' }])
   })
+  it('keeps multistage branches in order without crossed ribbons when endpoints share the last stage', () => {
+    const scene = compileNativeSankeyScene({ name: 'Early endpoints', columns: ['Откуда', 'Куда', 'Значение'], rows: [
+      { Откуда: 'Все наборы данных', Куда: 'Обновляются', Значение: 80 },
+      { Откуда: 'Все наборы данных', Куда: 'Исключены из плана', Значение: 20 },
+      { Откуда: 'Обновляются', Куда: 'Доступны', Значение: 65 },
+      { Откуда: 'Обновляются', Куда: 'Временно недоступны', Значение: 15 },
+      { Откуда: 'Доступны', Куда: 'Актуальны', Значение: 42 },
+      { Откуда: 'Доступны', Куда: 'Давно не обновлялись', Значение: 23 },
+    ] }, { ...config, xField: 'Откуда', sankeyTargetField: 'Куда', yField: 'Значение', sankeyNodeAlign: 'justify' })
+    const resolved = resolveNativeSankeyScene(scene)
+    const endpoints = scene.plot.nodes.filter((node) => !scene.plot.links.some((link) => link.source === node.name))
+      .sort((a, b) => resolved.geometry.sankey.nodes[a.id].rect.y - resolved.geometry.sankey.nodes[b.id].rect.y)
+    expect(endpoints.map((node) => node.name)).toEqual(['Актуальны', 'Давно не обновлялись', 'Временно недоступны', 'Исключены из плана'])
+    expect(new Set(endpoints.map((node) => resolved.geometry.sankey.nodes[node.id].rect.x)).size).toBe(1)
+    const ribbons = scene.plot.links.map((link) => resolved.geometry.sankey.linkHits[link.id])
+    const bandAt = (ribbon: Array<[number, number]>, x: number) => {
+      const edge = ribbon.slice(0, ribbon.length / 2)
+      const index = edge.findIndex((point, index) => index > 0 && point[0] >= x)
+      const [x1, y1] = edge[index - 1], [x2, y2] = edge[index]
+      const y = y1 + (y2 - y1) * (x - x1) / (x2 - x1)
+      return [y, y + ribbon[ribbon.length - 1][1] - ribbon[0][1]]
+    }
+    for (const [index, a] of ribbons.entries()) for (const b of ribbons.slice(index + 1)) {
+      const left = Math.max(a[0][0], b[0][0]), right = Math.min(a[a.length / 2 - 1][0], b[b.length / 2 - 1][0])
+      if (left >= right) continue
+      for (let sample = 1; sample < 20; sample++) {
+        const x = left + (right - left) * sample / 20
+        const [aTop, aBottom] = bandAt(a, x), [bTop, bBottom] = bandAt(b, x)
+        expect(Math.min(aBottom, bBottom) - Math.max(aTop, bTop)).toBeLessThanOrEqual(.01)
+      }
+    }
+  })
 })

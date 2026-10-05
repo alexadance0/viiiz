@@ -8,8 +8,8 @@ describe('axis label placement', () => {
   })
 
   it('mirrors the outer-edge category alignment without changing the reserved rail', () => {
-    expect(verticalAxisLabelPlacement('left', 84, 8, 6, 'outer')).toEqual({ align: 'left', margin: 98 })
-    expect(verticalAxisLabelPlacement('right', 84, 8, 6, 'outer')).toEqual({ align: 'right', margin: 98 })
+    expect(verticalAxisLabelPlacement('left', 84, 8, 6, 'outer')).toEqual({ align: 'left', margin: 92 })
+    expect(verticalAxisLabelPlacement('right', 84, 8, 6, 'outer')).toEqual({ align: 'right', margin: 92 })
   })
 
   it('anchors rotated bottom-up labels by the tick-facing edge', () => {

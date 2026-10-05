@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { applyDateRule, parseDateByRule } from '../core/dateRule'
 import type { DataTable, DateParseRule } from '../core/types'
+import { formatTimeValue } from '../core/timeFrequency'
 import { NumberInput } from './NumberInput'
 
 const PRESETS = ['DD.MM.YYYY', 'DD.MM.YY', 'YYYY-MM-DD', 'MM/DD/YYYY', 'YYYY-MM', 'YYYY-Q', 'Q YYYY', 'DD MMMM YYYY']
@@ -26,7 +27,7 @@ export function DateFormatDialog({ table, column, onApply, onClose }: Props) {
         <div className="preset-list">{PRESETS.map((preset) => <button className={format === preset ? 'active' : ''} onClick={() => setFormat(preset)} key={preset}>{preset}</button>)}</div>
         <div className="rule-options"><label>Граница двузначного года<div><NumberInput min="1" max="99" value={pivot} onValueChange={(value) => setPivot(Math.min(99, Math.max(1, value)))}/><span><b>00–{String(pivot - 1).padStart(2, '0')}</b> → 2000-е<br/><b>{String(pivot).padStart(2, '0')}–99</b> → 1900-е</span></div></label><label>Если значение не распознано<select value={invalid} onChange={(event) => setInvalid(event.target.value as DateParseRule['invalid'])}><option value="keep">Оставить исходным</option><option value="null">Заменить пропуском</option></select></label></div>
         <div className="rule-score"><div><strong>{matched}</strong><span>распознано</span></div><div><strong>{allValues.length - matched}</strong><span>не распознано</span></div><div><strong>{Math.round(matched / Math.max(allValues.length, 1) * 100)}%</strong><span>уверенность</span></div></div>
-        <div className="date-preview"><div className="preview-heading"><strong>Предпросмотр</strong><span>Исходное значение → результат</span></div>{results.map(({ source, result }, index) => <div className={result.matched ? 'preview-row success' : 'preview-row failed'} key={index}><code>{String(source)}</code><span>→</span><b>{result.value ? result.value.toLocaleDateString('ru-RU') : result.reason}</b></div>)}</div>
+        <div className="date-preview"><div className="preview-heading"><strong>Предпросмотр</strong><span>Исходное значение → результат</span></div>{results.map(({ source, result }, index) => <div className={result.matched ? 'preview-row success' : 'preview-row failed'} key={index}><code>{source instanceof Date ? formatTimeValue(source, undefined, 'day-month-year') : String(source)}</code><span>→</span><b>{result.value ? result.value.toLocaleDateString('ru-RU') : result.reason}</b></div>)}</div>
       </div>
       <footer><button className="button" onClick={onClose}>Отмена</button><button className="button primary" disabled={!format || matched === 0} onClick={() => onApply(applyDateRule(table, column, rule))}>Применить к столбцу</button></footer>
     </section>

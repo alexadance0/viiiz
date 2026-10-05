@@ -9,6 +9,7 @@ export interface TextLayoutInput {
   maxWidth: number
   rotation?: number
   wrap?: boolean
+  breakWords?: boolean
 }
 export interface TextLayoutResult {
   lines: string[]
@@ -46,7 +47,7 @@ const mergeRun = (runs: ResolvedRun[], run: ResolvedRun) => {
   else runs.push({ ...run })
 }
 
-function wrapRuns(runs: ResolvedRun[], width: number, measure: Measure, wrap: boolean) {
+function wrapRuns(runs: ResolvedRun[], width: number, measure: Measure, wrap: boolean, breakWords: boolean) {
   if (!wrap) return [runs]
   const tokens = runs.flatMap((run) => run.text.split(/(\s+)/).filter(Boolean).map((text) => ({ text, style: run.style })))
   const lines: ResolvedRun[][] = []
@@ -67,7 +68,7 @@ function wrapRuns(runs: ResolvedRun[], width: number, measure: Measure, wrap: bo
     if (runWidth(candidate, measure) <= width) { line = candidate; continue }
     if (line.length) flush()
     if (!token.text.trim()) continue
-    if (measure(token.text, token.style) <= width) { line = [{ ...token }]; continue }
+    if (!breakWords || measure(token.text, token.style) <= width) { line = [{ ...token }]; continue }
     let fragment = ''
     for (const character of token.text) {
       if (fragment && measure(fragment + character, token.style) > width) { lines.push([{ text: fragment, style: token.style }]); fragment = character }
@@ -83,7 +84,7 @@ export function layoutText(input: TextLayoutInput, measure: Measure = canvasMeas
   const style = input.document.baseStyle
   const sourceText = input.document.blocks.map((block) => block.runs.map((run) => run.text).join('')).join('\n')
   const maxWidth = Math.max(1, input.maxWidth)
-  const key = measure === canvasMeasure ? JSON.stringify([input.document, maxWidth, input.rotation ?? 0, input.wrap !== false]) : ''
+  const key = measure === canvasMeasure ? JSON.stringify([input.document, maxWidth, input.rotation ?? 0, input.wrap !== false, input.breakWords !== false]) : ''
   const cached = key && cache.get(key)
   if (cached) return cached
   const paragraphs: ResolvedRun[][] = [[]]
@@ -94,11 +95,11 @@ export function layoutText(input: TextLayoutInput, measure: Measure = canvasMeas
       if (part) mergeRun(paragraphs.at(-1)!, { text: part, style: { ...style, ...run.style } })
     }))
   })
-  const lineRuns = paragraphs.flatMap((paragraph) => wrapRuns(paragraph, maxWidth, measure, input.wrap !== false))
+  const lineRuns = paragraphs.flatMap((paragraph) => wrapRuns(paragraph, maxWidth, measure, input.wrap !== false, input.breakWords !== false))
   const lines = lineRuns.map((runs) => runs.map((run) => run.text).join(''))
   const lineHeights = lineRuns.map((runs) => Math.max(Math.round(style.size * style.lineHeight / 100), ...runs.map((run) => Math.round(run.style.size * run.style.lineHeight / 100))))
   const lineHeight = Math.max(...lineHeights)
-  const size = { width: Math.min(maxWidth, Math.max(0, ...lineRuns.map((runs) => runWidth(runs, measure)))), height: lineHeights.reduce((sum, height) => sum + height, 0) }
+  const size = { width: Math.min(input.breakWords === false ? Infinity : maxWidth, Math.max(0, ...lineRuns.map((runs) => runWidth(runs, measure)))), height: lineHeights.reduce((sum, height) => sum + height, 0) }
   const result = { lines, lineRuns, sourceText, size, rotatedSize: rotatedSize(size, input.rotation ?? 0), lineHeight }
   if (key) cache.set(key, result)
   return result

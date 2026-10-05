@@ -1,3 +1,4 @@
+import { chartPalettes } from '../../../core/colorPalettes'
 import type { ChartTextStyle } from '../../../core/types'
 
 export const DEFAULT_CANVAS = {
@@ -21,7 +22,7 @@ export const DEFAULT_COMPOSITION_SPACING = {
   tickLength: 6,
 } as const
 
-export const DEFAULT_CHART_PALETTE = ['#0072b2', '#e69f00', '#009e73', '#d55e00', '#cc79a7', '#56b4e9', '#f0e442'] as const
+export const DEFAULT_CHART_PALETTE = chartPalettes.find((palette) => palette.id === 'spectral-11')!.colors
 
 export const defaultChartTextStyle = (size: number, weight = 400, color = '#2b2b2b'): ChartTextStyle => ({
   fontFamily: 'Onest, sans-serif', size, color, weight, italic: false, lineHeight: 120, align: 'left',

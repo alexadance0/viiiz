@@ -40,7 +40,7 @@ export const categoricalDemoTable = makeTable('Демо-данные · топ �
   ['Великобритания', 3.6, 6], ['Франция', 3.2, 7], ['Италия', 2.4, 8], ['Канада', 2.2, 9], ['Бразилия', 2.2, 10],
 ].map(([country, gdp, place]) => ({ country: String(country), gdp_trillion_usd: Number(gdp), place: Number(place) })))
 
-export const mapDemoTables = Object.fromEntries(mapPresets.map((preset) => [preset.id, makeTable(`Демо-данные · ${preset.label.toLowerCase()}`, mapRegions(preset.id).map((region, index) => ({ Территория: region.name, Значение: index % 13 === 0 ? null : index % 11 === 0 ? 0 : Math.round(30 + (Math.sin(index * .79) + 1) * 35) })))])) as Record<'russia' | 'usa' | 'europe', DataTable>
+export const mapDemoTables = Object.fromEntries(mapPresets.map((preset) => [preset.id, makeTable(`Демо-данные · ${preset.label.toLowerCase()}`, mapRegions(preset.id).map((region, index) => ({ Территория: preset.id === 'russia' && region.id === 'RU-TYU' ? 'Тюменская область без автономных округов' : preset.id === 'russia' && region.id === 'RU-ARK' ? 'Архангельская область без Ненецкого автономного округа' : region.name, Значение: index % 13 === 0 ? null : index % 11 === 0 ? 0 : Math.round(30 + (Math.sin(index * .79) + 1) * 35) })))])) as Record<'russia' | 'usa' | 'europe' | 'world', DataTable>
 
 export const bumpDemoTable = makeTable('Демо-данные · рейтинг брендов', [
   { Период: '2021', Север: 82, Искра: 65, Волна: 48, Вектор: 30 },
@@ -89,14 +89,38 @@ export const entrepreneurshipDifficultiesDemoTable = makeTable('ВЦИОМ · т
 ].map(([category, difficulty, percent]) => ({ Категория: String(category), Трудность: String(difficulty), Процент: Number(percent) })))
 
 export const sankeyDemoTable: DataTable = {
-  name: 'Пример потоков',
+  name: 'Трамп · атаки в Twitter',
   columns: ['Откуда', 'Куда', 'Значение'],
   rows: [
-    { Откуда: 'Все наборы данных', Куда: 'Обновляются', Значение: 80 },
-    { Откуда: 'Все наборы данных', Куда: 'Исключены из плана', Значение: 20 },
-    { Откуда: 'Обновляются', Куда: 'Доступны', Значение: 65 },
-    { Откуда: 'Обновляются', Куда: 'Временно недоступны', Значение: 15 },
-    { Откуда: 'Доступны', Куда: 'Актуальны', Значение: 42 },
-    { Откуда: 'Доступны', Куда: 'Давно не обновлялись', Значение: 23 },
-  ],
+    ['Атаки в Twitter', 'Демократы', 38],
+    ['Атаки в Twitter', 'Республиканцы', 12],
+    ['Атаки в Twitter', 'СМИ', 89],
+    ['Атаки в Twitter', 'Другие', 32],
+    ['Демократы', 'Другие демократы', 24],
+    ['Демократы', 'Чак и Нэнси', 6],
+    ['Демократы', 'Хиллари', 8],
+    ['Республиканцы', 'Коркер', 4],
+    ['Республиканцы', 'Другие республиканцы', 8],
+    ['СМИ', 'Конкретные издания', 56],
+    ['СМИ', '«Фейковые новости»', 33],
+    ['Конкретные издания', 'Другие СМИ', 14],
+    ['Конкретные издания', 'NYT', 17],
+    ['Конкретные издания', 'CNN', 13],
+    ['Конкретные издания', 'NBC', 12],
+    ['Другие', 'Зарубежные деятели', 3],
+    ['Другие', 'Компании', 4],
+    ['Другие', 'Публичные фигуры', 11],
+    ['Другие', 'Знаменитости', 6],
+    ['Другие', 'Спорт', 8],
+    ['Публичные фигуры', 'Коми', 7],
+    ['Публичные фигуры', 'Другие публичные фигуры', 4],
+  ].map(([from, to, value]) => ({ Откуда: String(from), Куда: String(to), Значение: Number(value) })),
 }
+
+
+export const marimekkoDemoTable = makeTable('Демо-данные · размер рынков и доли брендов', [
+  { Рынок: 'Смартфоны', Альфа: 180, Бета: 120, Гамма: 60, Другие: 40 },
+  { Рынок: 'Ноутбуки', Альфа: 60, Бета: 80, Гамма: 30, Другие: 30 },
+  { Рынок: 'Планшеты', Альфа: 40, Бета: 20, Гамма: 25, Другие: 15 },
+  { Рынок: 'Часы', Альфа: 15, Бета: 10, Гамма: 15, Другие: 10 },
+])

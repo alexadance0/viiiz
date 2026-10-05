@@ -7,6 +7,7 @@ import { datasetQualityIssues } from './dataQuality'
 const missing = (value: DataValue) => value == null || value === ''
 
 export function inferColumnType(table: DataTable, column: string): ColumnType {
+  if (table.textColumns?.includes(column)) return 'text'
   const values = table.rows.map((row) => row[column]).filter((value) => !missing(value))
   if (!values.length) return 'text'
   const sample = values.slice(0, 200)
@@ -87,6 +88,7 @@ export function renameColumn(table: DataTable, oldName: string, newName: string)
   return {
     ...table,
     columns: table.columns.map((column) => column === oldName ? clean : column),
+    textColumns: table.textColumns?.map((column) => column === oldName ? clean : column),
     rows: renameRows(table.rows)!,
     rawRows: renameRows(table.rawRows),
     normalizations,
@@ -129,6 +131,7 @@ export function convertColumn(table: DataTable, column: string, type: ColumnType
     rows,
     rawRows,
     timeProfiles,
+    textColumns: type === 'text' ? table.textColumns : table.textColumns?.filter((field) => field !== column),
   }
 }
 
@@ -143,7 +146,8 @@ export function editCell(table: DataTable, rowIndex: number, column: string, inp
   }
   if (raw != null && type === 'date') {
     const rule = table.dateRules?.[column]
-    value = (rule ? parseDateByRule(raw, rule).value : parseDateValue(raw, 'dmy', 50, true)?.value) ?? raw
+    const editorDate = /^\d{2}\.\d{2}\.\d{4}$/.test(raw) ? parseDateByRule(raw, { format: 'DD.MM.YYYY', twoDigitYearPivot: 50, invalid: 'keep' }).value : null
+    value = editorDate ?? (rule ? parseDateByRule(raw, rule).value : parseDateValue(raw, 'dmy', 50, true)?.value) ?? raw
   }
   const rows = table.rows.map((row, index) => index === rowIndex ? { ...row, [column]: value } : row)
   const sourceRows = table.rawRows ?? table.rows

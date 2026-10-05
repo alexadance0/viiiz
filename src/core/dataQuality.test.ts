@@ -6,6 +6,10 @@ import type { TimeProfile } from './types'
 const monthly: TimeProfile = { frequency: 'monthly', label: 'Месячные', confidence: 100, source: 'notation' }
 
 describe('table transpose', () => {
+  it('keeps local calendar dates when converting them to column headers', () => {
+    const result = transposeTable({ name: 'calendar', columns: ['date', 'value'], rows: [{ date: new Date(2025, 0, 1), value: 10 }, { date: new Date(2024, 1, 29), value: 20 }] })
+    expect(result.columns).toEqual(['date', '2025-01-01', '2024-02-29'])
+  })
   it('uses the first column as headers and preserves every value', () => {
     const result = transposeTable({ name: 'sales', columns: ['region', 'profit', 'orders'], rows: [
       { region: 'Север', profit: 10, orders: 2 },

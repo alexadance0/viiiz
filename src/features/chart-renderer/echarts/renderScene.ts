@@ -1,3 +1,4 @@
+import { renderStreamScene } from './renderStreamScene'
 import { resolveNativeMapScene } from '../../chart-types/map/layout'
 import { renderMapScene } from './renderMapScene'
 import type { NativeMapChartScene } from '../../../entities/chart/model/ChartScene'
@@ -12,6 +13,7 @@ import type { NativePieChartScene } from '../../../entities/chart/model/ChartSce
 import type { ChartScene, NativeButterflyChartScene, NativeComparisonStemChartScene, NativeDistributionChartScene, NativeHeatmapChartScene, NativeSlopeChartScene, NativeTreemapChartScene, NativeWaterfallChartScene, NativeXYChartScene, ResolvedScene } from '../../../entities/chart/model/ChartScene'
 import { resolveNativeCartesianScene } from '../../chart-types/bar/layout'
 import { renderNativeBarScene } from './renderBarScene'
+import { renderMarimekkoScene } from './renderMarimekkoScene'
 import { renderNativePointScene } from './renderLineAreaScene'
 import type { ResolvedNativeBarScene } from './renderBarScene'
 import type { ResolvedPointScene } from './renderLineAreaScene'
@@ -53,7 +55,8 @@ function renderResolvedScene(resolved: ResolvedScene): Record<string, unknown> {
   if (resolved.plot.kind === 'sankey') return renderSankeyScene(resolved as ReturnType<typeof resolveNativeSankeyScene>)
   if (resolved.plot.kind === 'waffle') return renderWaffleScene(resolved as ResolvedScene & NativeWaffleChartScene)
   if (resolved.plot.kind === 'pie') return renderPieScene(resolved as ResolvedScene & NativePieChartScene)
-  if (resolved.plot.kind === 'bar') return renderNativeBarScene(resolved as ResolvedNativeBarScene)
+  if (resolved.plot.kind === 'bar') return resolved.compatibilityConfig.kind === 'marimekko' ? renderMarimekkoScene(resolved as ResolvedNativeBarScene) : renderNativeBarScene(resolved as ResolvedNativeBarScene)
+  if (resolved.compatibilityConfig.kind === 'stream-graph') return renderStreamScene(resolved as ResolvedPointScene)
   if (resolved.plot.kind === 'line' || resolved.plot.kind === 'area') return renderNativePointScene(resolved as ResolvedPointScene)
   if (resolved.plot.kind === 'smoothing') return renderSmoothingScene(resolved as ResolvedSmoothingScene)
   if (resolved.plot.kind === 'interval') return renderIntervalScene(resolved as ResolvedIntervalScene)

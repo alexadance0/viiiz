@@ -5,6 +5,7 @@ export interface DataTable {
   name: string
   columns: string[]
   rows: DataRow[]
+  textColumns?: string[]
   importWarnings?: string[]
   rawRows?: DataRow[]
   normalizations?: Record<string, NormalizationSummary>
@@ -55,10 +56,10 @@ export interface DataIssue {
 
 export type ChartKind = 'bar' | 'stacked-bar' | 'normalized-stacked-bar' | 'waterfall'
   | 'horizontal-bar' | 'butterfly' | 'horizontal-stacked-bar' | 'horizontal-normalized-stacked-bar'
-  | 'lollipop' | 'horizontal-lollipop' | 'dumbbell'
+  | 'lollipop' | 'horizontal-lollipop' | 'dumbbell' | 'dot-plot' | 'arrow-plot'
   | 'bump' | 'line' | 'spline' | 'step-line' | 'indexed-line' | 'seasonal-line' | 'slope' | 'range-line' | 'step-range-line' | 'confidence-line'
-  | 'map-russia' | 'map-usa' | 'map-europe' | 'moving-average-line' | 'moving-average-scatter' | 'heatmap' | 'treemap' | 'sankey' | 'pie' | 'donut' | 'waffle'
-  | 'area' | 'stacked-area' | 'normalized-stacked-area' | 'scatter' | 'bubble'
+  | 'map-russia' | 'map-usa' | 'map-europe' | 'map-world' | 'tilemap-russia' | 'tilemap-usa' | 'tilemap-europe' | 'tilemap-world' | 'moving-average-line' | 'moving-average-scatter' | 'heatmap' | 'treemap' | 'sankey' | 'pie' | 'donut' | 'waffle' | 'marimekko'
+  | 'area' | 'stacked-area' | 'normalized-stacked-area' | 'stream-graph' | 'scatter' | 'bubble' | 'connected-scatter'
   | 'boxplot' | 'violinplot' | 'raincloud' | 'histogram' | 'kde-plot' | 'ridgeline' | 'beeswarm' | 'strip-plot' | 'jitter-plot' | 'counts-plot' | 'barcode-plot'
 export interface ChartTextStyle {
   fontFamily: string
@@ -170,7 +171,9 @@ export interface ChartConfig {
   paletteName?: string
   palette?: string[]
   paletteBaseColor?: string
-  paletteGradientColors?: [string, string, string]
+  paletteReversed?: boolean
+  paletteGradientSteps?: number
+  paletteGradientColors?: [string, string] | [string, string, string]
   canvasPreset?: 'square' | 'portrait' | 'presentation-wide' | 'presentation-standard' | 'custom'
   canvasWidth?: number
   canvasHeight?: number
@@ -306,12 +309,16 @@ export interface ChartConfig {
   barBorderWidth?: number
   barBorderRadius?: number
   barSeriesGap?: number
+  marimekkoMode?: 'normalized' | 'absolute'
   barOrientation?: 'vertical' | 'horizontal'
   butterflyLeftFields?: string[]
   butterflyRightFields?: string[]
   butterflyCategoryPosition?: 'center' | 'left' | 'right'
   categoryAxisInverse?: boolean
   areaFillOpacity?: number
+  streamBaseline?: 'wiggle' | 'centered'
+  streamOrder?: 'inside-out' | 'data'
+  streamSmooth?: boolean
   stepPosition?: 'start' | 'end'
   intervalFillOpacity?: number
   /** Use the colour of the boundary that is above, or one chosen colour for the whole interval. */
@@ -352,6 +359,7 @@ export interface ChartConfig {
   bumpMode?: 'rank' | 'value'
   bumpRankDirection?: 'desc' | 'asc'
   bumpShowStartLabels?: boolean
+  bumpSmooth?: boolean
   indexBaseXValue?: string
   seasonalAccentYears?: string[]
   seasonalMutedColor?: string
@@ -397,6 +405,7 @@ export interface ChartConfig {
   mapLabelFormat?: 'name' | 'code'
   mapBorderColor?: string
   mapBorderWidth?: number
+  mapTileGap?: number
   sankeyTargetField?: string
   sankeyNodeWidth?: number
   sankeyNodeGap?: number
@@ -404,6 +413,7 @@ export interface ChartConfig {
   sankeyCurvature?: number
   sankeyLinkColor?: 'source' | 'target' | 'single'
   sankeyLabelPosition?: 'outside' | 'inside'
+  sankeyCompactLabels?: boolean
   sankeyShowNames?: boolean
   sankeyPercentBase?: 'total' | 'parent'
   sankeyValueFormat?: 'absolute' | 'percent' | 'both'
@@ -425,6 +435,11 @@ export interface ChartConfig {
   treemapHiddenCategories?: string[]
   treemapValueFormat?: 'absolute' | 'percent'
   intervalGroups?: Array<{ main: string; lower: string; upper: string; showBounds?: boolean }>
+  scatterOrderField?: string
+  scatterOrderDirection?: 'asc' | 'desc'
+  scatterConnectionWidth?: number
+  scatterConnectionType?: 'solid' | 'dashed' | 'dotted'
+  scatterConnectionOpacity?: number
   scatterLabelField?: string
   scatterSizeField?: string
   scatterColorField?: string
@@ -530,7 +545,7 @@ export type DateLabelFormat = 'auto' | 'year-full' | 'year-short' | 'year-first-
 export interface ChartPlugin {
   id: ChartKind
   label: string
-  category: 'comparison' | 'bar-horizontal' | 'trend' | 'smoothing' | 'area' | 'relationship' | 'distribution' | 'heatmap' | 'hierarchy' | 'composition' | 'geography'
+  category: 'point-comparison' | 'comparison' | 'bar-horizontal' | 'trend' | 'smoothing' | 'area' | 'relationship' | 'distribution' | 'heatmap' | 'hierarchy' | 'composition' | 'geography'
   capabilities: ChartCapabilities
   settings: ChartSettingsCapabilities
   defaultConfig: Partial<ChartConfig>

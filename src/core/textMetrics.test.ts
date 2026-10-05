@@ -14,4 +14,9 @@ describe('measured text wrapping', () => {
     expect(wrapped.text.split('\n')[0]).toBe('обычное')
     expect(wrapped.lines).toBeGreaterThan(2)
   })
+  it('keeps category words intact even if a word exceeds the wrapping slot', () => {
+    expect(wrapMeasuredText('Великобритания', 18, 30, 'Arial', 400, false).text).toBe('Великобритания')
+    expect(wrapMeasuredText('Тюменская область', 18, 105, 'Arial', 400, false).text).toBe('Тюменская\nобласть')
+  })
+
 })

@@ -31,7 +31,7 @@ import { renderScene, resolveNativeScene } from '../features/chart-renderer/echa
 import { invalidateTextLayoutCache, layoutText, plainTextDocument } from '../features/chart-layout/textLayout'
 import { legacySelection, type ChartSelection } from '../entities/chart/model/ChartSelection'
 import { advanceChartRender, failChartRender, initialChartRenderLifecycle, settleChartRender, type ChartRenderStatus } from './chartRenderLifecycle'
-import { collectFontFamilies, waitForChartFonts } from '../core/textFonts'
+import { collectFontFamilies, normalizeFontFamilies, waitForChartFonts } from '../core/textFonts'
 import { CanvasTextOverlay } from './CanvasTextOverlay'
 
 const AnnotationOverlay = lazy(() => import('./AnnotationOverlay').then(({ AnnotationOverlay: Component }) => ({ default: Component })))
@@ -69,7 +69,7 @@ export const chartTransitionMode = (previous: ChartKind | null, next: ChartKind,
   if (!previous || previous === next) return 'update'
   const families: ChartKind[][] = [
     ['line', 'spline', 'step-line'],
-    ['scatter', 'bubble'],
+    ['scatter', 'bubble', 'connected-scatter'],
     ['strip-plot', 'jitter-plot'],
     ['violinplot', 'raincloud'],
   ]
@@ -149,7 +149,7 @@ function fadePreviousPlot(container: HTMLElement, bounds: PlotBounds, duration: 
 }
 const chartTransitionFamily = (kind: ChartKind) => {
   if (kind === 'line' || kind === 'spline' || kind === 'step-line') return 'line'
-  if (kind === 'scatter' || kind === 'bubble') return 'xy'
+  if (kind === 'scatter' || kind === 'bubble' || kind === 'connected-scatter') return 'xy'
   if (kind === 'strip-plot' || kind === 'jitter-plot') return 'distribution-points'
   if (kind === 'violinplot' || kind === 'raincloud') return 'distribution-density'
   return kind
@@ -194,7 +194,7 @@ interface Props {
   viewZoom?: number
 }
 
-interface AnnotationRun { text: string; color: string; bold: boolean; italic: boolean; underline?: boolean; backgroundColor?: string; textStrokeColor?: string; textStrokeWidth?: string; fontFamily?: string; fontSize?: number }
+interface AnnotationRun { text: string; color: string; bold: boolean; italic: boolean; underline?: boolean; backgroundColor?: string; textStrokeColor?: string; textStrokeWidth?: string; fontFamily?: string; fontSize?: number; fontWeight?: number }
 interface RichLayout { left: number; top: number; width: number; size: number; baseSize: number }
 interface CategoryLabelLayout extends Omit<RichLayout, 'baseSize'> { axis: 'x' | 'y'; category: string; style: ChartConfig['titleText']; rotation: number }
 const richTextSize = (html: string | undefined, fallback: number) => Math.max(fallback, ...[...(html ?? '').matchAll(/font-size\s*:\s*([\d.]+)px/gi)].map((match) => Number(match[1]) || fallback))
@@ -215,7 +215,8 @@ function annotationRuns(annotation: ChartAnnotation, defaults: Omit<AnnotationRu
     const explicitBold = weight ? Number(weight) >= 600 || weight === 'bold' : undefined
     const explicitItalic = node.style.fontStyle ? node.style.fontStyle === 'italic' : undefined
     const explicitUnderline = decoration ? decoration.includes('underline') : undefined
-    const next = { ...state, color: node.style.color || state.color, backgroundColor: node.style.backgroundColor ? (node.style.backgroundColor === 'transparent' ? undefined : node.style.backgroundColor) : state.backgroundColor, textStrokeColor: node.style.webkitTextStrokeColor || shadowColor(node.style.textShadow) || state.textStrokeColor, textStrokeWidth: node.style.webkitTextStrokeWidth || (node.style.textShadow ? '2' : state.textStrokeWidth), bold: ['B', 'STRONG'].includes(node.tagName) ? true : explicitBold ?? state.bold, italic: ['I', 'EM'].includes(node.tagName) ? true : explicitItalic ?? state.italic, underline: node.tagName === 'U' ? true : explicitUnderline ?? state.underline, fontFamily: node.style.fontFamily || state.fontFamily, fontSize: Number.parseFloat(node.style.fontSize) || state.fontSize }
+    const fontWeight = weight ? weight === 'normal' ? 400 : weight === 'bold' ? 700 : Number(weight) || state.fontWeight : ['B', 'STRONG'].includes(node.tagName) ? Math.max(700, state.fontWeight ?? 0) : state.fontWeight
+    const next = { ...state, fontWeight, color: node.style.color || state.color, backgroundColor: node.style.backgroundColor ? (node.style.backgroundColor === 'transparent' ? undefined : node.style.backgroundColor) : state.backgroundColor, textStrokeColor: node.style.webkitTextStrokeColor || shadowColor(node.style.textShadow) || state.textStrokeColor, textStrokeWidth: node.style.webkitTextStrokeWidth || (node.style.textShadow ? '2' : state.textStrokeWidth), bold: ['B', 'STRONG'].includes(node.tagName) ? true : explicitBold ?? state.bold, italic: ['I', 'EM'].includes(node.tagName) ? true : explicitItalic ?? state.italic, underline: node.tagName === 'U' ? true : explicitUnderline ?? state.underline, fontFamily: node.style.fontFamily || state.fontFamily, fontSize: Number.parseFloat(node.style.fontSize) || state.fontSize }
     node.childNodes.forEach((child) => walk(child, next))
     if (block && (runs.length === start || !runs.at(-1)!.text.endsWith('\n'))) runs.push({ ...next, text: '\n' })
   }
@@ -223,7 +224,7 @@ function annotationRuns(annotation: ChartAnnotation, defaults: Omit<AnnotationRu
   while (runs.at(-1)?.text === '\n') runs.pop()
   const merged = runs.reduce<AnnotationRun[]>((result, run) => {
     const previous = result.at(-1)
-    const sameStyle = previous && previous.color === run.color && previous.bold === run.bold && previous.italic === run.italic && previous.underline === run.underline && previous.backgroundColor === run.backgroundColor && previous.textStrokeColor === run.textStrokeColor && previous.textStrokeWidth === run.textStrokeWidth && previous.fontFamily === run.fontFamily && previous.fontSize === run.fontSize
+    const sameStyle = previous && previous.color === run.color && previous.bold === run.bold && previous.italic === run.italic && previous.underline === run.underline && previous.backgroundColor === run.backgroundColor && previous.textStrokeColor === run.textStrokeColor && previous.textStrokeWidth === run.textStrokeWidth && previous.fontFamily === run.fontFamily && previous.fontSize === run.fontSize && previous.fontWeight === run.fontWeight
     if (sameStyle) previous.text += run.text
     else result.push({ ...run })
     return result
@@ -237,7 +238,7 @@ function richBlockStyle(html: string | undefined, plain: string, style: ChartCon
   const safe = (value: string) => value.replaceAll('{', '\\{').replaceAll('}', '\\}')
   return {
     text: richRuns.map((run, index) => `{fragment${index}|${safe(run.text)}}`).join(''),
-    rich: Object.fromEntries(richRuns.map((run, index) => [`fragment${index}`, { fill: run.color, fontFamily: run.fontFamily ?? style.fontFamily, fontSize: run.fontSize ?? renderedSize, fontWeight: run.bold ? 700 : 400, fontStyle: run.italic ? 'italic' : 'normal', textDecoration: run.underline ? 'underline' : 'none', backgroundColor: run.backgroundColor, padding: 0, lineHeight: Math.round((run.fontSize ?? renderedSize) * style.lineHeight / 100) }])),
+    rich: Object.fromEntries(richRuns.map((run, index) => [`fragment${index}`, { fill: run.color, fontFamily: run.fontFamily ?? style.fontFamily, fontSize: run.fontSize ?? renderedSize, fontWeight: run.fontWeight ?? (run.bold ? 700 : 400), fontStyle: run.italic ? 'italic' : 'normal', textDecoration: run.underline ? 'underline' : 'none', backgroundColor: run.backgroundColor, padding: 0, lineHeight: Math.round((run.fontSize ?? renderedSize) * style.lineHeight / 100) }])),
   }
 }
 
@@ -245,7 +246,7 @@ function exportRichBlock(html: string, plain: string, style: ChartConfig['titleT
   const runs = annotationRuns({ id: '', x: 0, y: 0, width: layout.width, fontFamily: style.fontFamily, fontSize: layout.baseSize, backgroundColor: 'transparent', borderColor: 'transparent', textAlign: style.align, fragments: [{ id: '', text: plain, color: style.color, bold: style.weight >= 600, italic: style.italic }], html }, { color: style.color, bold: style.weight >= 600, italic: style.italic, underline: false, fontFamily: style.fontFamily, fontSize: layout.baseSize })
   return {
     left: layout.left, top: layout.top, width: layout.width, style: { ...style, size: layout.baseSize },
-    runs: runs.map((run) => ({ text: run.text, color: run.color, fontFamily: run.fontFamily, fontSize: run.fontSize, fontWeight: run.bold ? Math.max(700, style.weight) : style.weight >= 600 ? 400 : style.weight, italic: run.italic, underline: run.underline, backgroundColor: run.backgroundColor })),
+    runs: runs.map((run) => ({ text: run.text, color: run.color, fontFamily: run.fontFamily, fontSize: run.fontSize, fontWeight: run.fontWeight ?? (run.bold ? Math.max(700, style.weight) : style.weight >= 600 ? 400 : style.weight), italic: run.italic, underline: run.underline, backgroundColor: run.backgroundColor })),
   }
 }
 
@@ -286,7 +287,7 @@ export function applySeriesVisualState(option: Record<string, unknown>, config: 
     if (item.emphasis) delete item.emphasis.focus
     delete item.blur
     const rawName = item.name ?? ''
-    if (item.interactionLayer === 'hit' || rawName.startsWith('__')) return
+    if (item.interactionLayer === 'hit' || rawName.startsWith('__') && !item.customBarOf && !item.segmentOf) return
     const name = item.segmentOf ?? item.customBarOf ?? item.name
     if (!name || (item.silent && !item.segmentOf && !item.customBarOf)) return
     const selectedElementSeries = selectedElementKey?.startsWith(`${name}\u001f`)
@@ -299,8 +300,10 @@ export function applySeriesVisualState(option: Record<string, unknown>, config: 
     item.itemStyle = applyStyleOpacity(item.itemStyle, dimOpacity)
     item.lineStyle = applyStyleOpacity(item.lineStyle, dimOpacity)
     item.areaStyle = applyStyleOpacity(item.areaStyle, dimSeries ? .22 : 1)
+    // ECharts merges matched series: omitted z would retain the hover layer.
+    item.z = Number(item.z ?? 2)
     if (active) {
-      item.z = Math.max(Number(item.z ?? 0), 1000)
+      item.z += 1000
       if (item.type === 'line') item.lineStyle = { ...item.lineStyle, width: Number(item.lineStyle?.width ?? 2) + .8, opacity: 1 }
       if (item.type === 'scatter' || item.type === 'custom') item.itemStyle = { ...item.itemStyle, opacity: 1, shadowColor: 'rgba(32,32,39,.18)', shadowBlur: 4 }
     }
@@ -331,8 +334,9 @@ export function applySeriesVisualState(option: Record<string, unknown>, config: 
       }
     })
   })
-  const graphics = option.graphic as Array<{ comparisonConnectorSeriesNames?: string[]; children?: Array<{ style?: Record<string, unknown> }> }> | undefined
+  const graphics = option.graphic as Array<{ sourceSeriesName?: string; z?: number; comparisonConnectorSeriesNames?: string[]; children?: Array<{ style?: Record<string, unknown> }> }> | undefined
   graphics?.forEach((graphic) => {
+    if (graphic.sourceSeriesName === activeSeriesName) graphic.z = 1000 + Number(graphic.z ?? 0)
     const names = graphic.comparisonConnectorSeriesNames
     if (!names?.length) return
     const opacity = activeSeriesName && !names.includes(activeSeriesName) ? .22 : 1
@@ -340,7 +344,8 @@ export function applySeriesVisualState(option: Record<string, unknown>, config: 
   })
 }
 export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
-  ({ pickingDecorationText, onDecorationTextPick, onDecorationAnchorRequest, pickingDecorationPoint, onDecorationPointPick, onDecorationPointCancel, annotationTool, onAnnotationPlace, onAnnotationCancel, table, config, onSelect, onTreemapMove, onSeriesSelect, onSettingsFocus, onClearSettingsFocus, selectedSettingsSection, selectedSeriesName, selectedElementKey, selectedElementTarget, selectedCategoryLabel: requestedCategoryLabel, onAnnotationSelect, onAnnotationChange, onAnnotationDuplicate, onAnnotationDelete, selectedAnnotationId, selectedDecorationId, onDecorationLayout, onDecorationSelect, onDecorationChange, onRichTextChange, onCategoryLabelChange, onTextStyleChange, viewZoom = 1, disableViewGestures = false }, ref) => {
+  ({ pickingDecorationText, onDecorationTextPick, onDecorationAnchorRequest, pickingDecorationPoint, onDecorationPointPick, onDecorationPointCancel, annotationTool, onAnnotationPlace, onAnnotationCancel, table, config: inputConfig, onSelect, onTreemapMove, onSeriesSelect, onSettingsFocus, onClearSettingsFocus, selectedSettingsSection, selectedSeriesName, selectedElementKey, selectedElementTarget, selectedCategoryLabel: requestedCategoryLabel, onAnnotationSelect, onAnnotationChange, onAnnotationDuplicate, onAnnotationDelete, selectedAnnotationId, selectedDecorationId, onDecorationLayout, onDecorationSelect, onDecorationChange, onRichTextChange, onCategoryLabelChange, onTextStyleChange, viewZoom = 1, disableViewGestures = false }, ref) => {
+    const config = useMemo(() => normalizeFontFamilies(inputConfig), [inputConfig])
     const container = useRef<HTMLDivElement>(null)
     const viewport = useRef<HTMLDivElement>(null)
     const [canvasScale, setCanvasScale] = useState(1)
@@ -533,7 +538,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         resolvedScene.plot.positions.filter((position) => typeof position.value === 'string').forEach((position) => editable.set(`x:${position.coordinate}`, { sourceKey: position.coordinate, displayText: position.label }))
       }
       editableAxisLabels.current = editable
-      type NativeSelectionHit = { points?: Array<[number, number]>; rect: { x: number; y: number; width: number; height: number }; info: { elementKey: string; sourceSeriesName: string; displayCategory: string; displayValue: string; displayLabel?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target']; axis?: 'x' | 'y'; selectionMode?: 'series-first' } }
+      type NativeSelectionHit = { points?: Array<[number, number]>; rect: { x: number; y: number; width: number; height: number }; info: { elementKey: string; sourceSeriesName: string; displayCategory: string; displayValue: string; displayLabel?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target']; axis?: 'x' | 'y'; selectionMode?: 'series-first' | 'axis-label' } }
       type NativeCategoryLayout = CategoryLabelLayout
       const option = renderScene(resolvedScene) as Record<string, unknown> & { graphic?: unknown[]; nativeSelectionHits?: NativeSelectionHit[]; nativeCategoryLayouts?: NativeCategoryLayout[]; nativeTreemapHits?: typeof nativeTreemapHits.current; nativePlotBounds?: PlotBounds }
       const nativeSelectionHits = option.nativeSelectionHits ?? []
@@ -552,7 +557,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       option.animationDurationUpdate = reducedMotion ? 0 : 240
       option.animationEasing ??= 'quarticOut'
       option.animationEasingUpdate ??= 'quarticOut'
-      const selectionStyle = { backgroundColor: 'rgba(0,0,0,0)', borderColor: '#1677a6', borderWidth: 1, borderRadius: 5, padding: [2, 4] }
+      const selectionStyle = { backgroundColor: 'rgba(0,0,0,0)', borderColor: '#1923e3', borderWidth: 1, borderRadius: 5, padding: [2, 4] }
       const labelSelectionStyle = { ...selectionStyle, padding: 0 }
       const availableWidth = Math.max(120, (config.canvasWidth ?? container.current?.clientWidth ?? 1000) - marginLeft - marginRight)
       let headerScale = 1, wrappedTitle = { text: '', lines: 0 }, wrappedSubtitle = { text: '', lines: 0 }, titleHeight = 0, subtitleHeight = 0
@@ -600,9 +605,9 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const physicalXAxisTitle = isHorizontalBar(config) ? config.yAxisTitle : config.xAxisTitle
       const showPhysicalXAxisTitle = isHorizontalBar(config) ? config.showYAxisTitle : config.showXAxisTitle
       const physicalXAxisTitleGap = isHorizontalBar(config) ? config.yAxisTitleGap : config.xAxisTitleGap
-      let physicalXAxisOption = option.xAxis as { name?: string; nameGap?: number } | undefined
+      const physicalXAxisOption = (Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis) as { name?: string; nameGap?: number } | undefined
       const physicalXAxisLabelOffset = Math.max(0, Number(physicalXAxisOption?.nameGap ?? physicalXAxisTitleGap) - physicalXAxisTitleGap)
-      const physicalXAxisOuterReserve = grid?.containLabel === false ? physicalXAxisLabelOffset : 0
+      const physicalXAxisOuterReserve = (Array.isArray(option.grid) ? option.grid[0]?.containLabel : grid?.containLabel) === false ? physicalXAxisLabelOffset : 0
       const xAxisTitleReserve = !editorialAxes && showPhysicalXAxisTitle && physicalXAxisTitle ? Math.round(xAxisTitleStyle.size * xAxisTitleStyle.lineHeight / 100) * Math.max(1, physicalXAxisTitle.split('\n').length) + physicalXAxisTitleGap : 0
       // With `containLabel`, ECharts reserves the label rail inside the grid.
       // Swapped horizontal axes opt out, so their rail belongs in the outer reserve.
@@ -668,15 +673,18 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         })
         series?.forEach((item) => visitSelected(item, item.data ?? []))
       }
-      const cleanPhysicalXAxisOption = cleanOption.xAxis as { name?: string } | undefined
-      const standardXAxisTitle = !editorialAxes && showPhysicalXAxisTitle && Boolean(physicalXAxisTitle)
-      if (standardXAxisTitle) { if (physicalXAxisOption) physicalXAxisOption.name = ''; if (cleanPhysicalXAxisOption) cleanPhysicalXAxisOption.name = '' }
+            const standardXAxisTitle = !editorialAxes && showPhysicalXAxisTitle && Boolean(physicalXAxisTitle)
+      if (standardXAxisTitle) {
+        for (const axes of [option.xAxis, cleanOption.xAxis]) {
+          for (const axis of (Array.isArray(axes) ? axes : axes ? [axes] : []) as Array<{ name?: string }>) axis.name = ''
+        }
+      }
       const xAxisTitleHeight = xAxisTitleReserve ? xAxisTitleReserve - physicalXAxisTitleGap : 0
       const canvasWidth = config.canvasWidth ?? container.current?.clientWidth ?? 1000
-      const xAxisTitleX = (Number(grid?.left ?? marginLeft) + canvasWidth - Number(grid?.right ?? marginRight)) / 2
+      const xAxisTitleX = (nativePlotBounds.left + nativePlotBounds.right) / 2
       const xAxisTitleY = config.xAxisPosition === 'top'
-        ? Number(grid?.top ?? marginTop) - physicalXAxisOuterReserve - physicalXAxisTitleGap - xAxisTitleHeight / 2
-        : canvasHeight - Number(grid?.bottom ?? marginBottom) + physicalXAxisOuterReserve + physicalXAxisTitleGap + xAxisTitleHeight / 2
+        ? nativePlotBounds.top - physicalXAxisOuterReserve - physicalXAxisTitleGap - xAxisTitleHeight / 2
+        : nativePlotBounds.bottom + physicalXAxisOuterReserve + physicalXAxisTitleGap + xAxisTitleHeight / 2
       const xAxisTitleSection = isHorizontalBar(config) ? 'y-axis-title' : 'x-axis-title'
       const makeXAxisTitle = (clean = false) => standardXAxisTitle && { id: 'chart-x-axis-title', type: 'text', x: xAxisTitleX, y: xAxisTitleY, z: 20, silent: clean, cursor: clean ? undefined : 'pointer', style: { text: physicalXAxisTitle, fill: xAxisTitleStyle.color, fontFamily: xAxisTitleStyle.fontFamily, fontSize: xAxisTitleStyle.size, fontWeight: xAxisTitleStyle.weight, fontStyle: xAxisTitleStyle.italic ? 'italic' : 'normal', lineHeight: Math.round(xAxisTitleStyle.size * xAxisTitleStyle.lineHeight / 100), align: 'center', textAlign: 'center', verticalAlign: 'middle', ...(!clean && selectedSettingsSection === xAxisTitleSection ? selectionStyle : {}) }, onclick: clean ? undefined : () => onSettingsFocus?.(xAxisTitleSection) }
       const existing = [...(Array.isArray(option.graphic) ? option.graphic : []), makeXAxisTitle()].filter(Boolean)
@@ -690,9 +698,8 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const subtitleRich = richBlockStyle(config.subtitleHtml, visibleSubtitle, config.subtitleText, renderedSubtitleBaseSize)
       const noteRich = richBlockStyle(config.noteHtml, visibleNote, config.noteText)
       const sourceRich = richBlockStyle(config.sourceHtml, visibleSource, config.sourceText)
-      // ZRender aligns text inside `style.width`; changing the x coordinate as
-      // well double-applies centre/right alignment and pushes text off-canvas.
-      const textAnchor = (_align: 'left' | 'center' | 'right') => marginLeft
+      // Plain text alignment is relative to its anchor, even with a wrapping width.
+      const textAnchor = (align: 'left' | 'center' | 'right') => marginLeft + (align === 'center' ? availableWidth / 2 : align === 'right' ? availableWidth : 0)
       const titleHits = [
         visibleTitle && { id: 'chart-title-hit', type: 'text', x: textAnchor(config.titleText.align), top: marginTop, z: 20, cursor: 'pointer', style: { text: titleRich?.text ?? wrappedTitle.text, width: availableWidth, fontFamily: config.titleText.fontFamily, fontSize: renderedTitleSize, fontWeight: config.titleText.weight, fontStyle: config.titleText.italic ? 'italic' : 'normal', lineHeight: Math.round(renderedTitleSize * config.titleText.lineHeight / 100), fill: config.titleText.color, align: config.titleText.align, textAlign: config.titleText.align, rich: titleRich?.rich, opacity: config.titleHtml || selectedSettingsSection === 'title' ? 0 : 1, ...(selectedSettingsSection === 'title' ? selectionStyle : {}) }, onclick: () => onSettingsFocus?.('title') },
         visibleSubtitle && { id: 'chart-subtitle-hit', type: 'text', x: textAnchor(config.subtitleText.align), top: subtitleTop, z: 20, cursor: 'pointer', style: { text: subtitleRich?.text ?? wrappedSubtitle.text, width: availableWidth, fontFamily: config.subtitleText.fontFamily, fontSize: renderedSubtitleSize, fontWeight: config.subtitleText.weight, fontStyle: config.subtitleText.italic ? 'italic' : 'normal', lineHeight: Math.round(renderedSubtitleSize * config.subtitleText.lineHeight / 100), fill: config.subtitleText.color, align: config.subtitleText.align, textAlign: config.subtitleText.align, rich: subtitleRich?.rich, opacity: config.subtitleHtml || selectedSettingsSection === 'subtitle' ? 0 : 1, ...(selectedSettingsSection === 'subtitle' ? selectionStyle : {}) }, onclick: () => onSettingsFocus?.('subtitle') },
@@ -914,7 +921,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       }
       let refreshGraphics = Boolean(exactBounds || barGrid.length || exactDisplayDecorations.length)
       if (nativeSelectionHits.length) {
-        const hits = nativeSelectionHits.map((hit, index) => ({ id: `native-selection-hit-${index}`, type: hit.points ? 'polygon' : 'rect', z: 140, cursor: 'pointer', shape: hit.points ? { points: hit.points } : hit.rect, style: hit.info.elementKey === selectedElementKey && hit.info.selectionTarget === selectedElementTarget ? { fill: 'rgba(0,0,0,0)', stroke: '#1677a6', lineWidth: 1 } : { fill: 'rgba(0,0,0,0)' }, onmousedown: (event: { offsetX?: number; offsetY?: number }) => {
+        const hits = nativeSelectionHits.map((hit, index) => ({ id: `native-selection-hit-${index}`, type: hit.points ? 'polygon' : 'rect', z: 140, cursor: 'pointer', shape: hit.points ? { points: hit.points } : hit.rect, style: hit.info.elementKey === selectedElementKey && hit.info.selectionTarget === selectedElementTarget ? { fill: 'rgba(0,0,0,0)', stroke: '#1923e3', lineWidth: 1 } : { fill: 'rgba(0,0,0,0)' }, onmousedown: (event: { offsetX?: number; offsetY?: number }) => {
           const point = hit.info, seriesName = point.sourceSeriesName
           if (plotKind !== 'treemap') return
           const group = { key: `treemap-group:${seriesName}`, seriesName, category: seriesName, value: '', label: seriesName } satisfies ChartElementSelection
@@ -925,8 +932,11 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           const point = hit.info, seriesName = point.sourceSeriesName
           if (plotKind === 'treemap') return
           if (point.selectionTarget === 'category-label') {
+            const section = `${point.axis ?? 'y'}-axis-labels` as ChartSettingsSection
+            if (point.selectionMode === 'axis-label' && selectedSettingsSection !== section) { onSettingsFocus?.(section); return }
+            onClearSettingsFocus?.()
             onSelect?.({ key: point.elementKey, seriesName: '', category: point.displayCategory, value: point.displayValue, target: 'category-label', axis: point.axis })
-            onSettingsFocus?.(`${point.axis ?? 'y'}-axis-labels`)
+            if (point.selectionMode !== 'axis-label') onSettingsFocus?.(section)
             return
           }
           onSelect?.({ key: point.elementKey, seriesName, category: point.displayCategory, value: point.displayValue, label: point.displayLabel, color: point.displayColor, target: point.selectionTarget })
@@ -1239,7 +1249,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           {pickingDecorationText && onDecorationTextPick && <DecorationTextAnchorPicker annotations={config.annotations} heights={textAnchorHeights} width={canvasWidth} height={canvasHeight} onSelect={onDecorationTextPick} onCancel={() => onDecorationPointCancel?.()}/>}
           {pickingDecorationPoint && onDecorationPointPick && <DecorationAnchorPicker points={decorationTargets} width={canvasWidth} height={canvasHeight} onSelect={onDecorationPointPick} onCancel={() => onDecorationPointCancel?.()}/>}
           {renderError && <div className="chart-render-error" role="alert"><strong>Не удалось отрисовать график</strong><span>{renderError}</span></div>}
-          {richDisplays.map(({ field, html, layout, style }) => <CanvasTextDisplay key={field} html={html} style={{ ...style, size: layout.baseSize }} left={layout.left} top={layout.top} width={layout.width} onSelect={() => { onAnnotationSelect?.(''); onSettingsFocus?.(field) }}/>)}
+          {richDisplays.map(({ field, html, layout, style }) => <CanvasTextDisplay key={field} block={exportRichBlock(html, config[field], style, layout)} onSelect={() => { onAnnotationSelect?.(''); onSettingsFocus?.(field) }}/>)}
           {selectedDecoration && onDecorationChange && <DecorationOverlay annotations={config.annotations} targets={decorationTargets} annotationHeights={textAnchorHeights} onPickAnchor={onDecorationAnchorRequest} decoration={selectedDecoration} canvasWidth={canvasWidth} canvasHeight={canvasHeight} plotTop={plotBounds?.top} plotBottom={plotBounds?.bottom} plotLeft={plotBounds?.left} plotRight={plotBounds?.right} onChange={onDecorationChange}/>}
           {config.annotations.filter((annotation) => !annotation.hidden && annotation.id !== selected?.id).map((annotation) => <AnnotationDisplay key={annotation.id} annotation={annotation} canvasBackground={config.canvasBackground} onSelect={() => { if (!annotation.locked) onAnnotationSelect?.(annotation.id) }}/>)}
           <Suspense fallback={null}>

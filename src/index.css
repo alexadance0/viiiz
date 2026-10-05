@@ -4,56 +4,15 @@ body { margin: 0; min-width: 320px; min-height: 100vh; }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
 
-.route-skeleton{
+.route-loading{
   min-height:100vh;
-  background:#fff;
-}
-.route-skeleton header{
-  display:flex;
-  align-items:center;
-  gap:14px;
-  height:78px;
-  padding:0 max(22px,calc((100vw - 1240px)/2));
-  border-bottom:1px solid #d4d4d4;
-}
-.route-skeleton header i{
-  width:32px;
-  height:32px;
-  background:#202027;
-}
-.route-skeleton header span,
-.route-skeleton main>b,
-.route-skeleton main>small,
-.route-skeleton section i{
-  display:block;
-  background:#f3f3f3;
-  animation:route-skeleton-pulse 1.2s ease-in-out infinite alternate;
-}
-.route-skeleton header span:nth-child(2){width:96px;height:12px}
-.route-skeleton header span:nth-child(3){width:72px;height:9px;margin-left:auto}
-.route-skeleton main{
-  max-width:1184px;
-  margin:auto;
-  padding:64px 28px;
-}
-.route-skeleton main>b{width:min(420px,62vw);height:42px}
-.route-skeleton main>small{width:min(560px,74vw);height:14px;margin-top:18px}
-.route-skeleton section{
   display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:18px;
-  margin-top:54px;
+  place-items:center;
+  background:#fff;
+  color:#f3f3f3;
 }
-.route-skeleton section i{height:260px}
-@keyframes route-skeleton-pulse{to{opacity:.42}}
-@media(max-width:700px){
-  .route-skeleton main{padding:40px 18px}
-  .route-skeleton section{grid-template-columns:1fr}
-  .route-skeleton section i{height:160px}
-}
-@media(prefers-reduced-motion:reduce){
-  .route-skeleton header span,
-  .route-skeleton main>b,
-  .route-skeleton main>small,
-  .route-skeleton section i{animation:none}
+.route-loading .brand-logo{
+  display:block;
+  width:clamp(120px,18vw,180px);
+  height:auto;
 }

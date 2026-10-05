@@ -17,7 +17,7 @@ export function SettingsCategoryTabs({ value, chartLabel, showAxes, children, on
   const [matches, setMatches] = useState<number | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const items = [
-    { id: 'chart', label: chartLabel, icon: ChartNoAxesColumnIncreasing, accent: '#1677a6' },
+    { id: 'chart', label: chartLabel, icon: ChartNoAxesColumnIncreasing, accent: '#1923e3' },
     ...(showAxes ? [{ id: 'axes', label: 'Оси и шкалы', icon: Axis3D, accent: '#4568e1' }] : []),
     { id: 'text', label: 'Текст', icon: Type, accent: '#e033ab' },
     { id: 'canvas', label: 'Холст', icon: Frame, accent: '#bd4b12' },

@@ -1,7 +1,7 @@
 import type { ChartConfig } from './types'
 import { isNormalizedStackedChart } from './chartKinds'
 
-type NumberFormatConfig = Pick<ChartConfig, 'kind' | 'valueMode' | 'numberLocale' | 'numberDecimals' | 'numberOperation' | 'numberFactor' | 'numberGrouping' | 'numberZeroLabel' | 'numberPrefix' | 'numberSuffix' | 'yAxisAffixScope' | 'xAxisNumberPrefix' | 'xAxisNumberSuffix' | 'xAxisAffixScope' | 'valueLabelAffixesLinked' | 'valueLabelPrefix' | 'valueLabelSuffix' | 'xAxisStartLabel' | 'xAxisEndLabel'>
+type NumberFormatConfig = Pick<ChartConfig, 'kind' | 'marimekkoMode' | 'valueMode' | 'numberLocale' | 'numberDecimals' | 'numberOperation' | 'numberFactor' | 'numberGrouping' | 'numberZeroLabel' | 'numberPrefix' | 'numberSuffix' | 'yAxisAffixScope' | 'xAxisNumberPrefix' | 'xAxisNumberSuffix' | 'xAxisAffixScope' | 'valueLabelAffixesLinked' | 'valueLabelPrefix' | 'valueLabelSuffix' | 'xAxisStartLabel' | 'xAxisEndLabel'>
 export type AxisTickPosition = 'first' | 'middle' | 'last'
 
 export const axisAffixApplies = (scope: ChartConfig['yAxisAffixScope'], position?: AxisTickPosition) =>
@@ -15,13 +15,13 @@ const formatNumber = (value: unknown, config: NumberFormatConfig, prefix: string
   const scaled = config.numberOperation === 'divide' ? numeric / factor : config.numberOperation === 'multiply' ? numeric * factor : numeric
   const decimals = config.numberDecimals
   const options: Intl.NumberFormatOptions = {
-    notation: 'standard',
+    notation: decimals == null && scaled !== 0 && Math.abs(scaled) < 0.01 ? 'scientific' : 'standard',
     useGrouping: config.numberGrouping ?? true,
     maximumFractionDigits: decimals == null ? 2 : decimals,
     minimumFractionDigits: decimals == null ? 0 : decimals,
   }
   const formatted = new Intl.NumberFormat(config.numberLocale ?? 'ru-RU', options).format(scaled)
-  const percent = config.valueMode === 'percent' || isNormalizedStackedChart(config.kind) ? '%' : ''
+  const percent = config.valueMode === 'percent' || (isNormalizedStackedChart(config.kind) && !(config.kind === 'marimekko' && config.marimekkoMode === 'absolute')) ? '%' : ''
   return `${prefix}${formatted}${percent}${suffix}`
 }
 

@@ -1,8 +1,8 @@
 import type { ChartConfig, DataTable, DataValue } from '../core/types'
 import { slopePositionKey } from '../core/chartScale'
 import { repeatedChartCategories } from '../core/chartData'
-import { isMapChart, mapPresetForKind, unmatchedMapRegions } from '../features/chart-types/map/catalog'
-import { isDistributionChart, isCompositionChart } from '../core/chartKinds'
+import { isMapChart, mapPresetForKind, matchMapRows } from '../features/chart-types/map/catalog'
+import { isScatterChart, isPairedComparisonChart, isPointComparisonChart, isDistributionChart, isCompositionChart } from '../core/chartKinds'
 import { SettingsCheckbox } from './SettingsCheckbox'
 
 interface Props {
@@ -18,7 +18,6 @@ const slopePositions = (table: DataTable, field: string) => [...new Map(table.ro
   return typeof left === 'number' && typeof right === 'number' ? left - right : 0
 }) as Array<[string, DataValue]>
 
-const isScatterChart = (kind: ChartConfig['kind']) => kind === 'scatter' || kind === 'bubble'
 
 export function ChartDataMapping({ table, numericColumns, config, onChange, onToggleField }: Props) {
   const options = numericColumns.length ? numericColumns : table.columns
@@ -44,13 +43,17 @@ export function ChartDataMapping({ table, numericColumns, config, onChange, onTo
   </div>
 
   if (isMapChart(config.kind)) {
-    const preset = mapPresetForKind(config.kind), unmatched = unmatchedMapRegions(table, config.xField, preset)
+    const preset = mapPresetForKind(config.kind), matches = matchMapRows(table, config.xField, preset), { unmatched } = matches
     return <section className="chart-data-section">
       <div><strong>Данные карты</strong><small>Одна строка — одна территория. Поддерживаются русские и английские названия и коды.</small></div>
       <label>{preset === 'russia' ? 'Регион' : preset === 'usa' ? 'Штат' : 'Страна'}<select value={config.xField} onChange={(event) => patch({ xField: event.target.value })}>{table.columns.map((column) => <option key={column}>{column}</option>)}</select></label>
       {select('Показатель для окраски', config.yField, (yField) => patch({ yField, yFields: [yField], seriesField: '' }))}
       <label>Повторяющиеся территории<select value={config.aggregation} onChange={(event) => patch({ aggregation: event.target.value as ChartConfig['aggregation'] })}><option value="none">Без агрегации</option><option value="sum">Сумма</option><option value="average">Среднее</option><option value="min">Минимум</option><option value="max">Максимум</option><option value="count">Количество строк</option></select></label>
-      <small>{preset === 'russia' ? 'Например: Москва, Республика Татарстан, RU-MOW.' : preset === 'usa' ? 'Например: California, Калифорния, CA или US-CA.' : 'Например: Германия, Germany, DE или DEU.'}</small>
+      <small>{preset === 'russia' ? 'Например: г. Москва, Свердловская обл., ХМАО — Югра, RU-MOW или код ОКАТО 45000000000.' : preset === 'usa' ? 'Census и BEA: California, CA, US-CA, FIPS 06, GEO_ID 0400000US06 или GeoFIPS 06000.' : 'Our World in Data и World Bank: Germany, DE, DEU, Iran, Islamic Rep. или OWID_KOS для Косово.'}</small>
+      {!!matches.totals.length && <div className="chart-aggregation-warning" role="status"><strong>Пропущены общие итоги: {matches.totals.length}</strong><small>{matches.totals.slice(0, 8).join(', ')}. {preset === 'russia' ? 'Итоги по России и федеральным округам' : preset === 'usa' ? 'Итоги по США и статистическим регионам' : 'Итоги по миру, континентам и группам стран'} не окрашивают отдельные территории.</small></div>}
+      {!!matches.outside.length && <div className="chart-aggregation-warning" role="status"><strong>За пределами выбранной карты: {matches.outside.length}</strong><small>{matches.outside.slice(0, 8).join(', ')}{matches.outside.length > 8 ? '…' : ''}. Территории распознаны, но их отдельных контуров нет на этой карте. Эти значения не присваиваются соседним или более крупным территориям.</small></div>}
+      {!!matches.historical.length && <div className="chart-aggregation-warning" role="status"><strong>Пропущены исторические территории: {matches.historical.length}</strong><small>{matches.historical.slice(0, 8).join(', ')}. Современная карта не переносит их значения на страны-преемники.</small></div>}
+      {!!matches.inclusive.length && <div className="chart-aggregation-warning" role="status"><strong>Пропущены итоги областей с автономными округами</strong><small>{matches.inclusive.join(', ')}. На карте автономные округа показаны отдельно. Для оставшейся части области используйте строку «без автономных округов»: ОКАТО 71001000000 для Тюменской или 11001000000 для Архангельской области. Общий показатель не делится автоматически.</small></div>}
       {!!unmatched.length && <div className="chart-aggregation-warning" role="status"><strong>Не найдены на карте: {unmatched.length}</strong><small>{unmatched.slice(0, 8).join(', ')}{unmatched.length > 8 ? '…' : ''}. Эти строки не участвуют в окраске. Проверьте названия или выберите другую карту.</small></div>}
       <small>Отсутствующее значение отличается от нуля и показывается отдельным цветом.</small>
     </section>
@@ -65,9 +68,9 @@ export function ChartDataMapping({ table, numericColumns, config, onChange, onTo
   </section>
 
   let measures
-  if (config.kind === 'dumbbell') {
+  if (isPairedComparisonChart(config.kind)) {
     measures = <div className="chart-role-fields">
-      <div><strong>Сравнение двух состояний</strong><small>Точки показывают начало и конец, линия — величину изменения.</small></div>
+      <div><strong>Сравнение двух состояний</strong><small>{config.kind === 'arrow-plot' ? 'Стрелка идёт от начального значения к конечному. Направление показывает рост или падение.' : 'Точки показывают начало и конец, линия — величину изменения.'}</small></div>
       {select('Начальное значение', config.dumbbellStartField, (dumbbellStartField) => patch({ dumbbellStartField: dumbbellStartField || undefined, yFields: [dumbbellStartField, config.dumbbellEndField].filter((field): field is string => Boolean(field)), yField: dumbbellStartField || config.yField }))}
       {select('Конечное значение', config.dumbbellEndField, (dumbbellEndField) => patch({ dumbbellEndField: dumbbellEndField || undefined, yFields: [config.dumbbellStartField, dumbbellEndField].filter((field): field is string => Boolean(field)) }))}
     </div>
@@ -136,6 +139,11 @@ export function ChartDataMapping({ table, numericColumns, config, onChange, onTo
       {sideFields('Левая сторона', 'left', left)}
       {sideFields('Правая сторона', 'right', right)}
     </div>
+  } else if (config.kind === 'marimekko') {
+    measures = <div className="chart-role-fields">
+      {config.seriesField ? select('Объём сегмента', config.yFields[0] ?? config.yField, (yField) => patch({ yField, yFields: [yField] })) : fieldList('Сегменты / числовые показатели')}
+      <label>Сегменты<select value={config.seriesField} onChange={(event) => patch({ seriesField: event.target.value, ...(event.target.value ? { yFields: [config.yFields[0] ?? config.yField] } : {}) })}><option value="">Названия выбранных показателей</option>{table.columns.filter((column) => column !== config.xField && !config.yFields.includes(column)).map((column) => <option key={column}>{column}</option>)}</select></label>
+    </div>
   } else if (config.kind === 'bump') {
     measures = <div className="chart-role-fields">
       <div><strong>Участники рейтинга</strong><small>Каждый числовой столбец — отдельный участник. Для длинной таблицы выберите колонку с названиями.</small></div>
@@ -181,7 +189,7 @@ export function ChartDataMapping({ table, numericColumns, config, onChange, onTo
 
   return <section className="chart-data-section">
     <div><strong>Данные графика</strong><small>Назначьте столбцам понятные роли</small></div>
-    {!isDistributionChart(config.kind) && <label>{config.kind === 'treemap' || isCompositionChart(config.kind) ? 'Категория' : config.kind === 'dumbbell' ? 'Категории' : 'Период / ось X'}<select value={config.xField} onChange={(event) => { const xField = event.target.value; const positions = slopePositions(table, xField); patch({ xField, ...(config.kind === 'treemap' ? { treemapHiddenCategories: [] } : {}), ...(config.kind === 'slope' ? { slopeXValues: positions.length > 1 ? [positions[0][0], positions.at(-1)![0]] : positions.map(([key]) => key) } : {}), ...(config.kind === 'indexed-line' ? { indexBaseXValue: positions[0]?.[0] } : {}), xAxisTitle: config.xAxisTitle === config.xField ? xField : config.xAxisTitle }) }}>{table.columns.map((column) => <option key={column}>{column}</option>)}</select></label>}
+    {!isDistributionChart(config.kind) && <label>{config.kind === 'treemap' || isCompositionChart(config.kind) ? 'Категория' : config.kind === 'marimekko' ? 'Группы / размер полос' : isPointComparisonChart(config.kind) ? 'Категории' : isScatterChart(config.kind) ? 'X / горизонтальная ось' : 'Период / ось X'}<select value={config.xField} onChange={(event) => { const xField = event.target.value; const positions = slopePositions(table, xField); patch({ xField, ...(config.kind === 'treemap' ? { treemapHiddenCategories: [] } : {}), ...(config.kind === 'slope' ? { slopeXValues: positions.length > 1 ? [positions[0][0], positions.at(-1)![0]] : positions.map(([key]) => key) } : {}), ...(config.kind === 'indexed-line' ? { indexBaseXValue: positions[0]?.[0] } : {}), xAxisTitle: config.xAxisTitle === config.xField ? xField : config.xAxisTitle }) }}>{table.columns.map((column) => <option key={column}>{column}</option>)}</select></label>}
     {config.kind === 'treemap' && !!treemapCategories.length && <div className="chart-data-field" role="group" aria-label="Категории Treemap">
       <span className="chart-data-field-label">Какие категории показывать · {visibleTreemapCategories.length} из {treemapCategories.length}</span>
       <div className="y-field-list">{treemapCategories.map((category) => {
@@ -194,6 +202,16 @@ export function ChartDataMapping({ table, numericColumns, config, onChange, onTo
       <label>Подкатегория<select value={config.treemapSubcategoryField ?? ''} onChange={(event) => patch({ treemapSubcategoryField: event.target.value || undefined })}><option value="">Без подкатегорий</option>{table.columns.filter((column) => column !== config.xField && column !== config.yField).map((column) => <option key={column}>{column}</option>)}</select></label>
     </div>}
     {measures}
+    {config.kind === 'marimekko' && <>
+      <label>Значения Mekko<select value={config.marimekkoMode ?? 'normalized'} onChange={(event) => patch({ marimekkoMode: event.target.value as ChartConfig['marimekkoMode'], valueMode: 'absolute' })}><option value="normalized">Доли (100%)</option><option value="absolute">Исходные значения</option></select></label>
+      <label>Ориентация Mekko<select value={config.barOrientation ?? 'vertical'} onChange={(event) => patch({ barOrientation: event.target.value as ChartConfig['barOrientation'], showHorizontalGrid: event.target.value === 'vertical', showVerticalGrid: event.target.value === 'horizontal' })}><option value="vertical">Вертикальная</option><option value="horizontal">Горизонтальная</option></select></label>
+      <small>Используйте объёмы в одинаковых единицах. Размер полосы по оси категорий — сумма группы. {config.marimekkoMode === 'absolute' ? 'Длина сегмента показывает исходное значение, без нормирования.' : 'Длина сегмента показывает его долю; сумма долей в каждой группе — 100%.'} Нулевые группы не отображаются; пропуски не создают сегментов.</small>
+    </>}
+    {config.kind === 'connected-scatter' && <div className="chart-role-fields">
+      <div><strong>Порядок соединения точек</strong><small>Линия соединяет точки каждой группы отдельно. Порядок может отличаться от значений X.</small></div>
+      <label>Порядок точек<select value={config.scatterOrderField ?? ''} onChange={(event) => patch({ scatterOrderField: event.target.value || undefined })}><option value="">Как строки в таблице</option>{table.columns.map((column) => <option key={column}>{column}</option>)}</select></label>
+      <label>Направление порядка<select value={config.scatterOrderDirection ?? 'asc'} onChange={(event) => patch({ scatterOrderDirection: event.target.value as ChartConfig['scatterOrderDirection'] })}><option value="asc">По возрастанию</option><option value="desc">По убыванию</option></select></label>
+    </div>}
     {isScatterChart(config.kind) && <div className="chart-role-fields">
       <div><strong>Цвет по категориям</strong><small>Каждая категория получит свой цвет и элемент легенды.</small></div>
       <label>Категория<select value={config.scatterColorField ?? ''} onChange={(event) => { const scatterColorField = event.target.value || undefined; patch({ scatterColorField, ...(scatterColorField ? { showLegend: true } : {}) }) }}><option value="">Не выделять категории</option>{categoryColumns.map((column) => <option key={column}>{column}</option>)}</select></label>

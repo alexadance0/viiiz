@@ -1,13 +1,20 @@
 import { measureTextWidth } from '../../../core/textMetrics'
 import type { ElementId } from '../../../entities/chart/model/ChartElement'
 import type { NativeButterflyChartScene, ResolvedNativeChartScene } from '../../../entities/chart/model/ChartScene'
+import type { LayoutReservation } from '../../chart-layout/reservations'
 import { resolveNativeCartesianScene } from '../bar/layout'
 
 export type ResolvedButterflyScene = ResolvedNativeChartScene & { plot: NativeButterflyChartScene['plot']; butterflyGeometry: { marks: Record<ElementId, { x: number; y: number; width: number; height: number }>; labels: Record<ElementId, { x: number; y: number; width: number; height: number; align: 'left' | 'center' | 'right'; verticalAlign: 'middle'; inside: boolean }>; categories: Array<{ x: number; y: number; width: number; height: number }> ; centerGap: number } }
 
 export function resolveNativeButterflyScene(source: NativeButterflyChartScene): ResolvedButterflyScene {
   const fake = { ...source, plot: { kind: 'bar' as const, categoryPlacement: 'band' as const, orientation: 'horizontal' as const, stacking: 'stacked' as const, categories: source.plot.categories, categoryAxis: source.plot.categoryAxis, valueAxis: source.plot.valueAxis, valueDomain: source.plot.valueDomain, barWidth: source.plot.barWidth, seriesGap: source.plot.seriesGap, series: source.plot.series } }
-  const base = resolveNativeCartesianScene(fake)
+  const valueRails: LayoutReservation[] = (['left', 'right'] as const).flatMap((side) => {
+    const labels = source.plot.series.filter((series) => series.side === side).flatMap((series) => series.marks.filter((mark) => mark.label.visible && !mark.label.position?.startsWith('inside-') && mark.label.position !== 'bottom').map((mark) => mark.label))
+    if (!labels.length) return []
+    const width = Math.max(...labels.flatMap((label) => label.text.split('\n').map((line) => measureTextWidth(line, label.style.size, label.style.fontFamily, label.style.weight))))
+    return [{ id: `butterfly-values:${side}`, side, size: Math.ceil(width) + 8, gap: 0, mode: 'outside', priority: 60 }]
+  })
+  const base = resolveNativeCartesianScene(fake, valueRails)
   const plot = base.geometry.plot
   const count = Math.max(1, source.plot.categories.length), band = plot.height / count
   const longest = Math.max(0, ...source.plot.categories.map((category) => measureTextWidth(category.label, source.plot.categoryAxis.labels.style.size, source.plot.categoryAxis.labels.style.fontFamily, source.plot.categoryAxis.labels.style.weight)))
@@ -45,5 +52,5 @@ export function resolveNativeButterflyScene(source: NativeButterflyChartScene): 
     })
   })
   const categories = source.plot.categories.map((_category, index) => ({ x: center - centerGap / 2, y: plot.y + band * index, width: centerGap, height: band }))
-  return { ...source, geometry: base.geometry, resolvedReservations: base.resolvedReservations, butterflyGeometry: { marks, labels, categories, centerGap } }
+  return { ...source, plot: { ...source.plot, categoryAxis: base.plot.categoryAxis, valueAxis: base.plot.valueAxis }, geometry: base.geometry, resolvedReservations: base.resolvedReservations, butterflyGeometry: { marks, labels, categories, centerGap } }
 }

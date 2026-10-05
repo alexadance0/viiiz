@@ -7,7 +7,7 @@ const settled = async (page: import('@playwright/test').Page) => {
   await expect(page.locator('.chart-error')).toHaveCount(0)
 }
 
-test('donut keeps the stage navigation at the bottom while settings change and scroll', async ({ page }) => {
+test('donut settings have no floating footer and keep stage navigation available while scrolling', async ({ page }) => {
   await page.goto('/editor')
   await page.locator('.upload-card input').setInputFiles({ name: 'shares.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) })
   await page.getByRole('button', { name: /Выбрать график/ }).click()
@@ -18,12 +18,17 @@ test('donut keeps the stage navigation at the bottom while settings change and s
   await page.getByRole('combobox', { name: 'Положение подписей' }).selectOption('inside')
   await page.getByText('Название категории в подписи', { exact: true }).click()
   const panel = page.locator('.settings-panel')
-  const bottomGap = () => panel.evaluate((element) => Math.abs(element.getBoundingClientRect().bottom - element.querySelector('.settings-footer')!.getBoundingClientRect().bottom))
+  const navigation = page.getByRole('navigation', { name: 'Этапы создания графика' })
+  const checkNavigation = async () => {
+    await expect(panel.locator('.settings-footer')).toHaveCount(0)
+    await expect(navigation.getByRole('button', { name: /Тип графика/ })).toBeVisible()
+    await expect(navigation.getByRole('button', { name: /Проверка данных/ })).toBeVisible()
+  }
   for (const height of [540, 600, 660, 720, 810, 900, 1080]) {
     await page.setViewportSize({ width: 1280, height })
     for (const scrollTop of [0, 150, 10000, 0]) {
       await panel.evaluate((element, top) => { element.scrollTop = top }, scrollTop)
-      await expect.poll(bottomGap).toBeLessThanOrEqual(1)
+      await checkNavigation()
       await expect.poll(() => panel.evaluate((element) => {
         const shell = element.querySelector('.settings-category-shell')!
         const settings = shell.querySelector('.visual-settings')!
@@ -32,9 +37,13 @@ test('donut keeps the stage navigation at the bottom while settings change and s
     }
   }
   await page.getByText('Стиль подписей', { exact: true }).click()
-  await expect.poll(bottomGap).toBeLessThanOrEqual(1)
+  await checkNavigation()
   await page.getByRole('tab', { name: 'Текст', exact: true }).click()
-  await expect.poll(bottomGap).toBeLessThanOrEqual(1)
+  await checkNavigation()
+  await navigation.getByRole('button', { name: /Тип графика/ }).click()
+  await expect(page.getByRole('heading', { name: 'Тип графика', exact: true })).toBeVisible()
+  await navigation.getByRole('button', { name: /Проверка данных/ }).click()
+  await expect(page.locator('.review-table')).toBeVisible()
 })
 
 test('pie and donut support category colors, labels, sector selection and SVG/PNG export', async ({ page }) => {
@@ -48,11 +57,11 @@ test('pie and donut support category colors, labels, sector selection and SVG/PN
   await page.waitForTimeout(300)
   await page.screenshot({ path: '/tmp/viiiz-pie-outside.png', fullPage: true })
   await expect(page.locator('.chart-canvas svg text').filter({ hasText: /^45%$/ })).toHaveCount(1)
-  await expect(page.locator('.chart-canvas svg path[fill="#0072b2"]')).toHaveCount(2) // sector and legend
+  await expect(page.locator('.chart-canvas svg path[fill="#9e0142"]')).toHaveCount(1) // sector; legend is off by default
   await page.getByRole('button', { name: 'Настроить оформление →' }).click()
   await expect(page.getByRole('tab', { name: 'Оси и шкалы', exact: true })).toHaveCount(0)
   await expect(page.locator('.series-style-list')).toContainText('Образование')
-  const sector = page.locator('.chart-canvas svg path[fill="#0072b2"]').first()
+  const sector = page.locator('.chart-canvas svg path[fill="#9e0142"]').first()
   // Pick an interior point in the first sector, whose bounding box includes the center.
   const bounds = await page.locator('.chart-canvas svg').boundingBox()
   if (!bounds) throw new Error('No SVG')
@@ -71,20 +80,20 @@ test('pie and donut support category colors, labels, sector selection and SVG/PN
   await page.getByRole('button', { name: 'Скачать SVG' }).click()
   const svg = await readFile((await (await svgDownload).path())!, 'utf8')
   expect(svg).toContain('45%')
-  expect(svg).toContain('#0072b2')
+  expect(svg).toContain('#9e0142')
   const pngDownload = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Скачать PNG' }).click()
   const png = await readFile((await (await pngDownload).path())!)
   expect(png.subarray(1, 4).toString()).toBe('PNG')
   await page.locator('.export-menu > summary').click()
-  await page.getByRole('button', { name: '← Тип графика', exact: true }).click()
+  await page.getByRole('navigation', { name: 'Этапы создания графика' }).getByRole('button', { name: /Тип графика/ }).click()
   await page.getByRole('button', { name: 'Кольцевая', exact: true }).click()
   await page.getByRole('button', { name: 'Настроить оформление →' }).click()
   if (!(await sliceSettings.evaluate((details) => details.hasAttribute('open')))) await sliceSettings.locator(':scope > summary').click()
   await page.getByRole('spinbutton', { name: 'Размер отверстия, %' }).fill('70')
   await page.getByRole('spinbutton', { name: 'Размер отверстия, %' }).press('Tab')
   await settled(page)
-  const donutPath = await page.locator('.chart-canvas svg path[fill="#0072b2"]').first().getAttribute('d')
+  const donutPath = await page.locator('.chart-canvas svg path[fill="#9e0142"]').first().getAttribute('d')
   expect((donutPath?.match(/A/g) ?? []).length).toBe(2)
   await page.screenshot({ path: '/tmp/viiiz-donut-editor.png', fullPage: true })
   await page.getByRole('tab', { name: 'Текст', exact: true }).click()

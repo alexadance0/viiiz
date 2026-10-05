@@ -32,7 +32,7 @@ export function renderPieScene(scene: ResolvedScene & NativePieChartScene): Reco
         position: scene.plot.labelPosition, alignTo: outside ? 'edge' : undefined,
         edgeDistance: 6, bleedMargin: 0,
         width: outside ? undefined : Math.max(30, radius * (1 - scene.plot.innerRadius)),
-        overflow: outside ? 'break' : 'truncate', ellipsis: '…', ...nativeTextStyle(config.valueText),
+        overflow: outside ? 'none' : 'truncate', ellipsis: '…', ...nativeTextStyle(config.valueText),
       },
       labelLine: { show: outside, length: 12, length2: 8 },
       itemStyle: { borderColor: config.canvasBackground, borderWidth: 2 },

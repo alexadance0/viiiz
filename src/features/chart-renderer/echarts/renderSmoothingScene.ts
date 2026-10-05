@@ -9,6 +9,7 @@ export function renderSmoothingScene(scene: ResolvedSmoothingScene): Record<stri
     ...scene,
     plot: {
       mode: 'line', stacking: 'none', categoryPlacement: scene.plot.categoryPlacement, categories: scene.plot.categories,
+      dateAxis: scene.plot.dateAxis,
       categoryLabelPlan: scene.plot.categoryLabelPlan, categoryAxis: scene.plot.categoryAxis,
       valueAxis: scene.plot.valueAxis, valueDomain: scene.plot.valueDomain, series: scene.plot.layers,
     },
@@ -21,7 +22,7 @@ export function renderSmoothingScene(scene: ResolvedSmoothingScene): Record<stri
     return {
       ...series,
       type: layer.renderMode === 'points' ? 'scatter' : 'line',
-      showSymbol: layer.renderMode === 'points',
+      showSymbol: layer.renderMode === 'points' || (series.data as Array<{ label?: { show?: boolean } }>).some((point) => point.label?.show),
       lineStyle: { ...(series.lineStyle as object), opacity: layer.stroke.opacity },
       itemStyle: { ...(series.itemStyle as object), opacity: layer.role === 'raw' ? layer.presentation?.opacity ?? 1 : 1 },
     }

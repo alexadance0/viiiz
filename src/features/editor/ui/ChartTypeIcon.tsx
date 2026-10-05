@@ -1,15 +1,26 @@
 import type { ReactNode } from 'react'
+import mapIcons from '../../chart-types/map/data/icon-paths.json'
 import type { ChartKind } from '../../../core/types'
+import { isTileMapChart, mapPresetForKind } from '../../chart-types/map/catalog'
+import { tileGrid } from '../../chart-types/map/tiles'
 
 const line = (points: string, key = 'line') => <polyline key={key} points={points} fill="none"/>
 const dots = (points: Array<[number, number, number?]>, defaultRadius = 2) => points.map(([cx, cy, radius], index) => <circle key={`${cx}-${cy}-${index}`} cx={cx} cy={cy} r={radius ?? defaultRadius}/>)
 
 function glyph(kind: ChartKind): ReactNode {
+  if (isTileMapChart(kind)) {
+    const tiles = Object.values(tileGrid(mapPresetForKind(kind)))
+    const columns = Math.max(...tiles.map((tile) => tile.column)) + 1, rows = Math.max(...tiles.map((tile) => tile.row)) + 1
+    const size = Math.min(36 / columns, 24 / rows), dx = (40 - columns * size) / 2, dy = (28 - rows * size) / 2
+    return <>{tiles.map((tile, index) => <rect key={index} className={`tone-${index % 3 + 1}`} x={dx + tile.column * size} y={dy + tile.row * size} width={size * .84} height={size * .84} style={{ stroke: 'none' }}/>)}</>
+  }
   switch (kind) {
-    case 'map-russia':
-    case 'map-usa':
-    case 'map-europe': return <><path className="soft-fill" d="M4 8l8-5 8 4 9-3 7 6-5 7-7 3-5 5-6-4-7 1z"/><path d="M12 3l2 10-8 9m8-9 10 7m-4-13 4 6 12-3m-12 3v7" fill="none"/></>
-    case 'waffle': return <>{Array.from({ length: 24 }, (_, i) => <rect key={i} className={`tone-${i < 14 ? 1 : i < 20 ? 2 : 3}`} x={4 + i % 6 * 5.5} y={3 + Math.floor(i / 6) * 5.5} width={4} height={4}/>)}</>
+    case 'marimekko': return <>{[[4, 7, 7], [12, 15, 12], [28, 8, 5]].flatMap(([x, width, split]) => [<rect key={`${x}-a`} className="tone-1" x={x} y={4 + split} width={width} height={20 - split}/>, <rect key={`${x}-b`} className="tone-2" x={x} y="4" width={width} height={split}/>])}</>
+    case 'map-world': return <path d={mapIcons.world} fill="currentColor" fillRule="evenodd" style={{ stroke: 'none' }}/>
+    case 'map-russia': return <path d={mapIcons.russia} fill="currentColor" fillRule="evenodd" style={{ stroke: 'none' }}/>
+    case 'map-usa': return <path d={mapIcons.usa} fill="currentColor" fillRule="evenodd" style={{ stroke: 'none' }}/>
+    case 'map-europe': return <path d={mapIcons.europe} fill="currentColor" fillRule="evenodd" style={{ stroke: 'none' }}/>
+    case 'waffle': return <>{Array.from({ length: 16 }, (_, index) => <rect key={index} x={9.2 + index % 4 * 5.8} y={3.2 + (3 - Math.floor(index / 4)) * 5.8} width="4.2" height="4.2" style={{ fill: index < 10 ? 'currentColor' : 'none', strokeWidth: 1 }}/>)}</>
     case 'pie': return <><path className="tone-1" d="M20 14V3a11 11 0 1 0 11 11z"/><path className="tone-2" d="M22 12V2a10 10 0 0 1 10 10z"/></>
     case 'donut': return <><path className="tone-1" d="M20 3a11 11 0 1 0 11 11h-5a6 6 0 1 1-6-6z"/><path className="tone-2" d="M22 2a10 10 0 0 1 10 10h-5a5 5 0 0 0-5-5z"/></>
     case 'bar': return <>{[8, 15, 22, 29].map((x, index) => <rect key={x} x={x} y={[15, 8, 12, 4][index]} width="5" height={[9, 16, 12, 20][index]}/>)}</>
@@ -22,7 +33,9 @@ function glyph(kind: ChartKind): ReactNode {
     case 'butterfly': return <><rect className="tone-1" x="7" y="4" width="11" height="4"/><rect className="tone-2" x="22" y="4" width="8" height="4"/><rect className="tone-1" x="3" y="12" width="15" height="4"/><rect className="tone-2" x="22" y="12" width="15" height="4"/><rect className="tone-1" x="10" y="20" width="8" height="4"/><rect className="tone-2" x="22" y="20" width="11" height="4"/></>
     case 'lollipop': return <>{[8, 18, 29].map((x, index) => <g key={x}><path d={`M${x} 24V${[16, 10, 5][index]}`}/><circle cx={x} cy={[16, 10, 5][index]} r="2.5"/></g>)}</>
     case 'horizontal-lollipop': return <>{[7, 14, 21].map((y, index) => <g key={y}><path d={`M5 ${y}H${[23, 32, 27][index]}`}/><circle cx={[23, 32, 27][index]} cy={y} r="2.5"/></g>)}</>
-    case 'dumbbell': return <>{[7, 14, 21].map((y, index) => <g key={y}><path d={`M${[7, 11, 5][index]} ${y}H${[30, 34, 25][index]}`}/><circle cx={[7, 11, 5][index]} cy={y} r="2.4"/><circle cx={[30, 34, 25][index]} cy={y} r="2.4"/></g>)}</>
+    case 'dot-plot': return <>{[[6, [6, 18, 31]], [14, [11, 25, 34]], [22, [5, 15, 27]]].flatMap(([y, positions]) => (positions as number[]).map((x, index) => <circle key={`${y}-${x}`} className={`tone-${index + 1}`} cx={x} cy={y as number} r="2.2"/>))}</>
+    case 'dumbbell': return <>{[[6,6,25],[14,13,34],[22,5,19]].map(([y, start, end]) => <g key={y}><path d={`M${start + 2.3} ${y}H${end - 2.3}`}/><circle cx={start} cy={y} r="2.3" style={{ fill: 'none' }}/><circle cx={end} cy={y} r="2.3"/></g>)}</>
+    case 'arrow-plot': return <>{[[6,5,34],[14,29,9],[22,8,25]].map(([y, start, end]) => { const direction = end > start ? 1 : -1; return <g key={y}><path d={`M${start} ${y}H${end}`} fill="none"/><polyline points={`${end - direction * 5},${y - 2.5} ${end},${y} ${end - direction * 5},${y + 2.5}`} fill="none"/></g> })}</>
     case 'line': return <>{line('4,21 11,15 18,17 26,8 36,4')}{dots([[4,21],[11,15],[18,17],[26,8],[36,4]], 1.4)}</>
     case 'spline': return <path d="M4 21C10 21 9 10 16 13s7 1 10-4 6-5 10-5" fill="none"/>
     case 'step-line': return <polyline points="4,21 12,21 12,15 21,15 21,9 30,9 30,4 36,4" fill="none"/>
@@ -38,6 +51,8 @@ function glyph(kind: ChartKind): ReactNode {
     case 'area': return <><path className="soft-fill" d="M4 24v-4c6-2 8-11 14-9s8 7 13-2c2-3 3-3 5-3v18z"/><path d="M4 20c6-2 8-11 14-9s8 7 13-2c2-3 3-3 5-3" fill="none"/></>
     case 'stacked-area': return <><path className="tone-3" d="M4 24V11c6-4 10-5 16-3s9-5 16-3v19z"/><path className="tone-2" d="M4 24V15c6-3 10-2 16-1s9-6 16-4v14z"/><path className="tone-1" d="M4 24v-5c6-2 10 1 16-1s10-4 16-2v8z"/></>
     case 'normalized-stacked-area': return <><path className="tone-3" d="M4 4h32v20H4z"/><path className="tone-2" d="M4 24V12c6-3 10 2 16 0s10-4 16-2v14z"/><path className="tone-1" d="M4 24v-5c6-3 10 1 16-1s10-4 16-2v8z"/></>
+    case 'stream-graph': return <><path className="tone-3" d="M4 12C12 2 22 3 36 10V15C22 8 12 7 4 15Z"/><path className="tone-2" d="M4 15C12 7 22 8 36 15V20C22 13 12 12 4 18Z"/><path className="tone-1" d="M4 18C12 12 22 13 36 20V23C22 21 12 24 4 20Z"/></>
+    case 'connected-scatter': return <>{line('7,21 14,16 11,9 24,5 32,12 22,18')}{dots([[7,21],[14,16],[11,9],[24,5],[32,12],[22,18]], 1.8)}</>
     case 'scatter': return <>{dots([[5,21],[9,16],[13,22],[16,11],[20,18],[24,7],[28,14],[32,4],[36,10]],1.45)}</>
     case 'bubble': return <>{dots([[7,20,3],[15,14,4.5],[25,17,2.5],[31,7,6],[36,21,2]])}</>
     case 'boxplot': return <><path d="M5 10v8m30-8v8M5 14h8m14 0h8"/><rect className="box" x="13" y="9" width="14" height="10"/></>

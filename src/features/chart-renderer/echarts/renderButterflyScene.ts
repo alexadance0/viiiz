@@ -1,10 +1,10 @@
+import { contrastText } from '../../../core/color'
 import type { ChartTextStyle } from '../../../core/types'
 import { formatXAxisNumber } from '../../../core/numberFormat'
 import type { ResolvedButterflyScene } from '../../chart-types/butterfly/layout'
 import { renderNativeBarScene } from './renderBarScene'
 
 const text = (style: ChartTextStyle) => ({ fill: style.color, fontFamily: style.fontFamily, fontSize: style.size, fontWeight: style.weight, fontStyle: style.italic ? 'italic' : 'normal', lineHeight: Math.round(style.size * style.lineHeight / 100) })
-const contrast = (color: string) => { const match = color.match(/^#([\da-f]{6})$/i); if (!match) return '#fff'; const rgb = [0, 2, 4].map((offset) => parseInt(match[1].slice(offset, offset + 2), 16)); return (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000 > 150 ? '#202027' : '#fff' }
 
 export function renderButterflyScene(scene: ResolvedButterflyScene): Record<string, unknown> {
   const fake = { ...scene, plot: { kind: 'bar' as const, categoryPlacement: 'band' as const, orientation: 'horizontal' as const, stacking: 'stacked' as const, categories: scene.plot.categories, categoryAxis: scene.plot.categoryAxis, valueAxis: scene.plot.valueAxis, valueDomain: scene.plot.valueDomain, barWidth: scene.plot.barWidth, seriesGap: scene.plot.seriesGap, series: scene.plot.series } }
@@ -23,7 +23,7 @@ export function renderButterflyScene(scene: ResolvedButterflyScene): Record<stri
     const label = scene.butterflyGeometry.labels[mark.id]
     if (!label) return []
     const info = { elementId: mark.id, datumId: mark.datumId, seriesId: mark.seriesId, elementKey: mark.legacyKey, sourceSeriesName: item.name, displayCategory: mark.displayCategory, displayValue: mark.displayValue, displayColor: mark.style.color, selectionTarget: 'value-label' as const }
-    return [{ id: `value-label:${mark.id}`, type: 'text', z: 50, cursor: 'pointer', info, style: { x: label.x, y: label.y, text: mark.label.text, ...text(mark.label.style), fill: label.inside && mark.label.autoContrast ? contrast(mark.style.color) : mark.label.style.color, align: label.align, verticalAlign: label.verticalAlign } }]
+    return [{ id: `value-label:${mark.id}`, sourceSeriesName: item.name, type: 'text', z: 50, cursor: 'pointer', info, style: { x: label.x, y: label.y, text: mark.label.text, ...text(mark.label.style), fill: label.inside && mark.label.autoContrast ? contrastText(mark.style.color, 4.5, mark.style.opacity, scene.compatibilityConfig.canvasBackground) : mark.label.style.color, align: label.align, verticalAlign: label.verticalAlign } }]
   }))
   const categoryInfo = (category: typeof scene.plot.categories[number]) => ({ elementId: `category-label:${category.id}`, elementKey: `category-label:y:${category.coordinate}`, sourceSeriesName: '', displayCategory: category.coordinate, displayValue: category.label, selectionTarget: 'category-label' as const, axis: 'y' as const })
   const centerLabels = scene.plot.categoryPlacement === 'center' ? scene.plot.categories.map((category, index) => ({ id: `category-label:${category.id}`, type: 'text', z: 50, cursor: 'pointer', style: { x: scene.butterflyGeometry.categories[index].x + scene.butterflyGeometry.categories[index].width / 2, y: scene.butterflyGeometry.categories[index].y + scene.butterflyGeometry.categories[index].height / 2, text: category.label, ...text(scene.plot.categoryAxis.labels.style), align: 'center', verticalAlign: 'middle' }, info: categoryInfo(category) })) : []
@@ -48,7 +48,7 @@ export function renderButterflyScene(scene: ResolvedButterflyScene): Record<stri
   if (!centered) return { ...base, nativeSelectionHits, nativeCategoryLayouts, xAxis, yAxis, series, graphic: [...((base.graphic as unknown[]) ?? []), ...centerLabels, ...valueLabels] }
   const plot = scene.geometry.plot, half = (plot.width - scene.butterflyGeometry.centerGap) / 2, extent = scene.plot.valueDomain.max
   const centerMask = { id: 'butterfly-center-mask', type: 'rect', silent: true, z: 2, shape: { x: plot.x + half, y: plot.y, width: scene.butterflyGeometry.centerGap, height: plot.height }, style: { fill: scene.document.canvas.background } }
-  const grids = [{ left: plot.x, top: plot.y, width: half, height: plot.height, containLabel: false }, { left: plot.x + half + scene.butterflyGeometry.centerGap, top: plot.y, width: half, height: plot.height, containLabel: false }]
+  const grids = [{ left: plot.x, top: plot.y, width: half, height: plot.height, containLabel: false, outerBoundsMode: 'none' }, { left: plot.x + half + scene.butterflyGeometry.centerGap, top: plot.y, width: half, height: plot.height, containLabel: false, outerBoundsMode: 'none' }]
   const leftAxis = { ...xAxis, gridIndex: 0, min: 0, max: extent, inverse: true }, rightAxis = { ...xAxis, gridIndex: 1, min: 0, max: extent, inverse: false }
   const leftCategory = { ...yAxis, gridIndex: 0, position: 'right', axisLine: { ...((yAxis.axisLine as object) ?? {}), show: false } }, rightCategory = { ...yAxis, gridIndex: 1, position: 'left', axisLine: { ...((yAxis.axisLine as object) ?? {}), show: false } }
   return { ...base, nativeSelectionHits, nativeCategoryLayouts, grid: grids, xAxis: [leftAxis, rightAxis], yAxis: [leftCategory, rightCategory], series, graphic: [...((base.graphic as unknown[]) ?? []), centerMask, ...centerLabels, ...valueLabels] }

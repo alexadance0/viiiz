@@ -1,9 +1,11 @@
-import type { ChartTextStyle } from '../../core/types'
+import { measureTextWidth } from '../../core/textMetrics'
+import type { ChartConfig, ChartTextStyle } from '../../core/types'
 import type { Rect } from './geometry'
 import type { LayoutReservation } from './reservations'
 
 export type AxisPlacement = { kind: 'side'; side: 'top' | 'right' | 'bottom' | 'left' } | { kind: 'internal'; anchor: 'center' | 'zero' }
 export interface AxisSpec {
+  calendarTicks?: Array<{ value: number; label: string; position: number }>
   id: string
   channel: 'category' | 'value' | 'lane' | 'x' | 'y'
   orientation: 'horizontal' | 'vertical'
@@ -25,8 +27,14 @@ export function resolveLogicalAxes(orientation: 'vertical' | 'horizontal', categ
 export function axisReservation(axis: AxisSpec, priority = 50): LayoutReservation | undefined {
   if (axis.placement.kind === 'internal') return undefined
   const label = axis.labels.visible ? axis.labels.size + axis.labels.gap : 0
-  const ticks = axis.ticks.visible ? axis.ticks.length : 0
+  const ticks = axis.ticks.visible ? Math.max(0, axis.ticks.length - (axis.labels.visible ? axis.labels.gap : 0)) : 0
   const title = axis.title?.visible && axis.title.text ? axis.title.size + axis.title.gap : 0
   const size = label + ticks + title
   return size ? { id: `axis:${axis.id}`, side: axis.placement.side, size, gap: 0, mode: 'outside', priority } : undefined
+}
+
+// Keep manual positive angles; zero also falls back to rotation when text cannot fit.
+export function categoryLabelRotation(labels: string[], style: ChartTextStyle, slots: number[], requested: ChartConfig['xAxisLabelRotate']) {
+  if (typeof requested === 'number' && requested > 0) return requested
+  return labels.some((label, index) => Math.max(0, ...label.split('\n').map((line) => measureTextWidth(line, style.size, style.fontFamily, style.weight))) > Math.max(1, slots[index] ?? 0) * .92) ? 90 : 0
 }

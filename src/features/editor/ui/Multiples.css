@@ -66,7 +66,6 @@
 .has-multiples .canvas-floating-menu{z-index:5}
 .multiples-controls :where(button,input,select,summary):focus-visible,.composition-mode button:focus-visible,.multiples-cell button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 @media(max-width:760px){
-  .has-multiples .settings-panel .settings-footer{position:static}
   .multiples-panel-actions button{width:34px}
   .multiples-picker-shell{overflow:visible;border-right:0}
   .multiples-picker-shell .chart-picker{display:block!important}

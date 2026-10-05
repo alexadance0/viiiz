@@ -26,7 +26,8 @@ const fontRequests = (svg: SVGSVGElement) => [...svg.querySelectorAll<SVGElement
   if (!webFontFamilies.has(family)) return requests
   const weight = element.getAttribute('font-weight') ?? style.match(/font-weight:\s*([^;]+)/i)?.[1]?.trim() ?? '400'
   const italic = element.getAttribute('font-style') === 'italic' || /font-style:\s*italic/i.test(style)
-  requests.add(`${family}|${italic ? 1 : 0}|${weight}`)
+  const hasItalicFace = Array.from(document.fonts).some((face) => face.family.replace(/["']/g, '') === family && face.style === 'italic')
+  requests.add(`${family}|${italic && hasItalicFace ? 1 : 0}|${weight}`)
   return requests
 }, new Set<string>())
 
@@ -38,42 +39,51 @@ const textWidth = (value: string, run: ExportTextRun, fallback: ChartTextStyle) 
 }
 
 export const appendStyledText = (svg: SVGSVGElement, blocks: ExportTextBlock[]) => {
+  let bottom = 0
   blocks.forEach((block) => {
-    const lineHeight = Math.round(block.style.size * block.style.lineHeight / 100)
-    const lines: Array<Array<{ text: string; run: ExportTextRun; width: number }>> = [[]]
+    type Part = { text: string; run: ExportTextRun; width: number }
+    const lines: Part[][] = [[]]
     let lineWidth = 0
+    const add = (text: string, run: ExportTextRun) => {
+      const width = textWidth(text, run, block.style)
+      if (lineWidth && lineWidth + width > block.width) { lines.push([]); lineWidth = 0 }
+      if (/^\s+$/.test(text) && !lineWidth) return
+      lines.at(-1)!.push({ text, run, width }); lineWidth += width
+    }
     block.runs.forEach((run) => run.text.split(/(\n|[^\S\n]+)/).forEach((text) => {
       if (!text) return
       if (text === '\n') { lines.push([]); lineWidth = 0; return }
-      const width = textWidth(text, run, block.style)
-      const isWhitespace = /^\s+$/.test(text)
-      if (!isWhitespace && lineWidth && lineWidth + width > block.width) { lines.push([]); lineWidth = 0 }
-      if (isWhitespace && !lineWidth) return
-      lines.at(-1)!.push({ text, run, width }); lineWidth += width
+      if (textWidth(text, run, block.style) <= block.width) { add(text, run); return }
+      // Match overflow-wrap:anywhere for words wider than the entire text rail.
+      Array.from(text).forEach((character) => add(character, run))
     }))
-    lines.forEach((line, index) => {
+    let y = block.top
+    lines.forEach((line) => {
+      while (line.length && /^\s+$/.test(line.at(-1)!.text)) line.pop()
+      const size = Math.max(block.style.size, ...line.map(({ run }) => run.fontSize ?? block.style.size))
+      const lineHeight = Math.round(size * block.style.lineHeight / 100)
+      const baseline = y + (lineHeight - size) / 2 + size * .8
       const width = line.reduce((total, part) => total + part.width, 0)
       let x = block.left + (block.style.align === 'center' ? (block.width - width) / 2 : block.style.align === 'right' ? block.width - width : 0)
-      const y = block.top + index * lineHeight
       line.forEach(({ text, run, width: partWidth }) => {
-        const size = run.fontSize ?? block.style.size
-        const family = run.fontFamily ?? block.style.fontFamily
-        const weight = run.fontWeight ?? block.style.weight
         if (run.backgroundColor && run.backgroundColor !== 'transparent') {
           const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
           rect.setAttribute('x', String(x)); rect.setAttribute('y', String(y)); rect.setAttribute('width', String(partWidth)); rect.setAttribute('height', String(lineHeight)); rect.setAttribute('fill', run.backgroundColor)
           svg.append(rect)
         }
         const node = document.createElementNS('http://www.w3.org/2000/svg', 'text')
-        node.setAttribute('x', String(x)); node.setAttribute('y', String(y + (lineHeight - size) / 2 + size * .8)); node.setAttribute('fill', run.color); node.setAttribute('font-family', family); node.setAttribute('font-size', String(size)); node.setAttribute('font-weight', String(weight))
+        node.setAttribute('x', String(x)); node.setAttribute('y', String(baseline)); node.setAttribute('fill', run.color); node.setAttribute('font-family', run.fontFamily ?? block.style.fontFamily); node.setAttribute('font-size', String(run.fontSize ?? block.style.size)); node.setAttribute('font-weight', String(run.fontWeight ?? block.style.weight))
         if (run.italic) node.setAttribute('font-style', 'italic')
         if (run.underline) node.setAttribute('text-decoration', 'underline')
         node.textContent = text
         svg.append(node)
         x += partWidth
       })
+      y += lineHeight
     })
+    bottom = Math.max(bottom, y)
   })
+  return bottom
 }
 
 const embedGoogleFonts = async (svg: SVGSVGElement) => {
@@ -117,6 +127,7 @@ const prepareSvg = async (svg: SVGSVGElement, config: Pick<ChartConfig, 'canvasW
   const width = Math.round(svg.viewBox?.baseVal.width || Math.min(1000, config.canvasWidth ?? svg.clientWidth))
   const height = Math.round(svg.viewBox?.baseVal.height || Math.min(1000, config.canvasHeight ?? svg.clientHeight))
   const exported = svg.cloneNode(true) as SVGSVGElement
+  exported.style.fontSynthesis = 'style'
   exported.setAttribute('viewBox', svg.getAttribute('viewBox') ?? `0 0 ${svg.clientWidth} ${svg.clientHeight}`)
   exported.setAttribute('width', String(width * scale))
   exported.setAttribute('height', String(height * scale))

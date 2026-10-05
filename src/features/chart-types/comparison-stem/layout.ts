@@ -37,7 +37,7 @@ export function resolveNativeComparisonStemScene(sourceScene: NativeComparisonSt
     const visiblePoints = series.points.filter((point) => point.value != null && point.label.visible)
     const width = Math.max(0, ...visiblePoints.map((point) => measureTextWidth(point.label.text, point.label.style.size, point.label.style.fontFamily, point.label.style.weight)))
     const height = Math.max(0, ...visiblePoints.map((point) => Math.round(point.label.style.size * point.label.style.lineHeight / 100)))
-    const stride = scene.plot.variant === 'lollipop' ? denseValueLabelStride(horizontal, band, width, height, scene.compatibilityConfig.valueLabelHideOverlap ?? false) : 1
+    const stride = scene.plot.variant === 'lollipop' || scene.plot.variant === 'dot' ? denseValueLabelStride(horizontal, band, width, height, scene.compatibilityConfig.valueLabelHideOverlap ?? false) : 1
     series.points.forEach((point) => {
       if (point.value == null) return
       const value = valueCoordinate(point.value)
@@ -107,8 +107,12 @@ export function resolveNativeComparisonStemScene(sourceScene: NativeComparisonSt
     directLabels[candidate.item.seriesId] = { pointId: candidate.point.id, anchorX: candidate.resolved.x, anchorY: candidate.resolved.y, x, y, width: candidate.width, height: candidate.height, noteY: candidate.item.note ? y + candidate.lineHeight / 2 + 3 : undefined, align: candidate.initial.align, verticalAlign: candidate.initial.verticalAlign, collision: candidate.initial.collision, displacement, leader }
   })
   const requestedStep = Math.max(1, Math.round(scene.compatibilityConfig.xAxisStep ?? 1))
-  const categoryGridLines = !horizontal && scene.compatibilityConfig.showVerticalGrid
-    ? scene.plot.categories.flatMap((category, index) => category.label && index % requestedStep === 0 ? [{ x1: categoryCoordinate(index), y1: plot.y, x2: categoryCoordinate(index), y2: plot.y + plot.height }] : [])
+  const showCategoryGrid = horizontal ? scene.compatibilityConfig.showHorizontalGrid : scene.compatibilityConfig.showVerticalGrid
+  const categoryGridLines = showCategoryGrid
+    ? scene.plot.categories.flatMap((category, index) => category.label && index % requestedStep === 0 ? [horizontal
+      ? { x1: plot.x, y1: categoryCoordinate(index), x2: plot.x + plot.width, y2: categoryCoordinate(index) }
+      : { x1: categoryCoordinate(index), y1: plot.y, x2: categoryCoordinate(index), y2: plot.y + plot.height }] : [])
     : []
+
   return { ...scene, comparisonGeometry: { points, connectors, directLabels, categoryGridLines } }
 }

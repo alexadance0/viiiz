@@ -56,6 +56,24 @@ describe('native ECharts smoothing adapter', () => {
     expect(registry).not.toMatch(/const smoothing\s*=|function movingAverage|export const movingAverage/)
   })
 
+  it('anchors direct labels after leading gaps to a valid endpoint during animation', () => {
+    const source = config('moving-average-line', { showDirectLabels: true, showValues: true })
+    const scene = getChartPlugin(source.kind).compile(table, source)
+    const option = renderScene(scene) as { series: Array<{ showSymbol?: boolean; endLabel?: unknown; data: Array<{ value: number | null; label?: { show: boolean; position: string }; directLegendLabel?: boolean }> }> }
+    const average = option.series[1]
+    expect(average.endLabel).toBeUndefined()
+    expect(average.showSymbol).toBe(true)
+    expect(average.data.slice(0, 2).every((point) => !point.label?.show)).toBe(true)
+    expect(average.data.at(-1)).toMatchObject({ value: 3, label: { show: true, position: 'top' } })
+    expect(option.series.some((series) => series.data.some((point) => point.directLegendLabel && point.label?.position === 'right'))).toBe(true)
+    const single = renderScene(getChartPlugin(source.kind).compile(table, { ...source, movingAverageWindow: 4 })) as typeof option
+    expect(single.series[1].data.at(-1)).toMatchObject({ value: 2.5, label: { position: 'top' } })
+    expect(single.series.some((series) => series.data.some((point) => point.directLegendLabel && point.label?.position === 'right'))).toBe(true)
+    const empty = renderScene(getChartPlugin(source.kind).compile(table, { ...source, movingAverageWindow: 10 })) as typeof option
+    expect(empty.series[1].endLabel).toBeUndefined()
+    expect(empty.series[1].data.every((point) => !point.label?.show)).toBe(true)
+  })
+
   it('keeps semantic layer order deterministic across multiple source series', () => {
     const multiple: DataTable = { name: 'multiple', columns: ['period', 'a', 'b'], rows: [1, 2, 3, 4].map((period) => ({ period, a: period, b: period * 2 })) }
     const source = config('moving-average-line', { yFields: ['a', 'b'] })

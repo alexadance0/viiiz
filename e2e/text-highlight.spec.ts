@@ -87,7 +87,8 @@ for (const scope of ['composition', 'panel', 'annotation', 'single'] as const) {
     }
     await page.getByRole('button', { name: 'Снять выделение', exact: true }).click()
     const display = scope === 'annotation' ? page.locator('.annotation-display .annotation-content') : page.locator('.canvas-rich-text-display')
-    await expect(display.filter({ hasText: 'Полупрозрачный фон' }).locator('span[style]').first()).toHaveCSS('background-color', scope === 'composition' ? 'rgba(54, 164, 118, 0.5)' : 'rgba(219, 90, 90, 0.5)')
+    if (scope === 'single' || scope === 'panel') await expect(display.filter({ hasText: 'Полупрозрачный фон' }).locator('rect[fill]').first()).toHaveAttribute('fill', 'rgba(219, 90, 90, 0.5)')
+    else await expect(display.filter({ hasText: 'Полупрозрачный фон' }).locator('span[style]').first()).toHaveCSS('background-color', scope === 'composition' ? 'rgba(54, 164, 118, 0.5)' : 'rgba(219, 90, 90, 0.5)')
     await page.locator('.export-menu > summary').click()
     const download = page.waitForEvent('download')
     await page.getByRole('button', { name: 'Скачать SVG', exact: true }).click()

@@ -46,7 +46,7 @@ export function compileNativeBumpScene(table: DataTable, config: ChartConfig): N
     numberDecimals: 0, numberOperation: 'none', numberFactor: 1, numberPrefix: '', numberSuffix: '',
     seriesStyles: Object.fromEntries(prepared.series.map((item) => [item.name, { showMarker: true, ...config.seriesStyles[item.name] }])),
   }
-  if (config.showDirectLabels && (config.bumpShowStartLabels ?? true) && config.yAxisPosition === 'left') {
+  if (config.showDirectLabels && (config.bumpShowStartLabels ?? false) && config.yAxisPosition === 'left') {
     const labelWidth = Math.max(0, ...prepared.series.map((item) => {
       const style = config.seriesStyles[item.name]
       const text = style?.directLabelText ?? config.directLabelText ?? config.legendText
@@ -54,7 +54,7 @@ export function compileNativeBumpScene(table: DataTable, config: ChartConfig): N
     }))
     effective.yAxisLabelGap = labelWidth + (config.directLabelGap ?? 14) + 12
   }
-  const scene = compilePreparedPointScene(table, effective, 'line', ranked, { directSide: 'right' }) as NativeLineChartScene
+  const scene = compilePreparedPointScene(table, effective, config.bumpSmooth ? 'spline' : 'line', ranked, { directSide: 'right' }) as NativeLineChartScene
   scene.document = chartDocumentFromLegacy(table, config)
   scene.plot.valueAxisInverse = true
   const maximum = Math.max(2, ...ranked.series.flatMap((item) => item.data.filter((value): value is number => value != null)))
@@ -64,6 +64,6 @@ export function compileNativeBumpScene(table: DataTable, config: ChartConfig): N
     point.displayValue = point.value == null ? 'пропуск' : `${point.value} место${config.bumpMode === 'rank' || source == null ? '' : ` · ${formatChartNumber(source, config)}`}`
   }))
   const direct = scene.guides.find((guide) => guide.kind === 'direct-series')
-  if (direct && (config.bumpShowStartLabels ?? true)) scene.guides.push({ ...direct, id: 'bump-start', side: 'left' })
+  if (direct && (config.bumpShowStartLabels ?? false)) scene.guides.push({ ...direct, id: 'bump-start', side: 'left' })
   return scene
 }

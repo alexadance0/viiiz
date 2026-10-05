@@ -85,6 +85,13 @@ describe('reversible column type conversion', () => {
     expect(edited.imputedCells?.value).toBeUndefined()
   })
 
+  it.each(['YYYY-MM-DD', 'MM.DD.YYYY', 'YYYY'])('accepts calendar edits independently of the import mask %s', (format) => {
+    const table = { name: 'dates', columns: ['date'], rows: [{ date: new Date(1990, 0, 1) }], dateRules: { date: { format, twoDigitYearPivot: 50, invalid: 'keep' as const } } }
+    expect(editCell(table, 0, 'date', '01.02.2000', 'date').rows[0].date).toEqual(new Date(2000, 1, 1))
+    expect(editCell(table, 0, 'date', '29.02.2000', 'date').rows[0].date).toEqual(new Date(2000, 1, 29))
+    expect(editCell(table, 0, 'date', '31.02.2000', 'date').rows[0].date).toBe('31.02.2000')
+  })
+
   it('validates edited dates and supports clearing a cell', () => {
     const table = normalizeImportedTable({ name: 'data.csv', columns: ['date'], rows: [{ date: '2024-01-01' }] })
     expect(editCell(table, 0, 'date', '31.02.2024', 'date').rows[0].date).toBe('31.02.2024')

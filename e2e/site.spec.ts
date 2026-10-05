@@ -1,7 +1,24 @@
 import { expect, test } from '@playwright/test'
 
-test('home intro expands the brand mark after the page assets are ready', async ({ page }) => {
-  await page.goto('/')
+test('home intro plays on the first visit and stays skipped on return visits', async ({ page }) => {
+  await page.addInitScript(() => {
+    const state = window as typeof window & { homeSkeletonShown?: boolean }
+    state.homeSkeletonShown = false
+    new MutationObserver(() => {
+      if (location.pathname === '/' && document.querySelector('.route-skeleton')) state.homeSkeletonShown = true
+    }).observe(document, { childList: true, subtree: true })
+  })
+  let release!: () => void
+  const loading = new Promise<void>((resolve) => { release = resolve })
+  await page.route('**/src/pages/HomePage.tsx', async (route) => { await loading; await route.continue() }, { times: 1 })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  try {
+    const loader = page.getByRole('status', { name: 'Загрузка страницы' })
+    await expect(loader).toBeVisible()
+    await expect(loader.locator('.brand-logo--mark')).toBeVisible()
+    await expect(loader).toHaveCSS('color', 'rgb(243, 243, 243)')
+    await expect(loader.locator('header, main, section')).toHaveCount(0)
+  } finally { release() }
 
   const intro = page.locator('.home-intro')
   const heroWordmark = page.locator('.hero-wordmark')
@@ -22,6 +39,20 @@ test('home intro expands the brand mark after the page assets are ready', async 
   await expect(intro).toHaveCount(0, { timeout: 3_000 })
   await expect(heroWordmark).toBeVisible()
   await expect(page.getByText('Из таблицы — в ясный график.')).toHaveCount(0)
+  await page.reload()
+  await expect(page.locator('.marketing-page')).toHaveAttribute('aria-busy', 'false')
+  await expect(intro).toHaveCount(0)
+  await expect(heroWordmark).toBeVisible()
+  expect(await page.evaluate(() => (window as typeof window & { homeSkeletonShown?: boolean }).homeSkeletonShown)).toBe(false)
+  await page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('link', { name: 'Галерея', exact: true }).click()
+  await page.getByRole('link', { name: 'виииз — главная', exact: true }).click()
+  await expect(page.locator('.marketing-page')).toHaveAttribute('aria-busy', 'false')
+  await expect(intro).toHaveCount(0)
+  const secondTab = await page.context().newPage()
+  await secondTab.goto('/')
+  await expect(secondTab.locator('.marketing-page')).toHaveAttribute('aria-busy', 'false')
+  await expect(secondTab.locator('.home-intro')).toHaveCount(0)
+  await secondTab.close()
 })
 
 test('editorial redesign keeps the gallery and animated trails', async ({ page }) => {
@@ -37,11 +68,23 @@ test('editorial redesign keeps the gallery and animated trails', async ({ page }
   await expect(page.locator('.site-header .brand-logo-added-stem')).toHaveCount(4)
   await expect(page.locator('.site-header .brand-logo-added-stem').first()).toHaveCSS('display', 'none')
   await expect(page.getByRole('link', { name: /Создать график/ }).first()).toHaveCSS('background-color', 'rgb(32, 32, 39)')
-  await expect(page.getByRole('link', { name: 'Создать график' })).toHaveCount(2)
+  await expect(page.getByRole('link', { name: 'Создать график' })).toHaveCount(1)
 })
 
 test('gallery page exposes examples and animated navigation states', async ({ page }) => {
-  await page.goto('/gallery')
+  let release!: () => void
+  const loading = new Promise<void>((resolve) => { release = resolve })
+  await page.route('**/src/pages/GalleryPage.tsx', async (route) => { await loading; await route.continue() })
+  await page.goto('/gallery', { waitUntil: 'domcontentloaded' })
+  try {
+    const loader = page.getByRole('status', { name: 'Загрузка страницы' })
+    await expect(loader).toBeVisible()
+    await expect(loader.locator('.brand-logo--mark')).toBeVisible()
+    await expect(loader.locator('.brand-logo-letter')).toHaveCount(3)
+    await expect(loader).toHaveCSS('color', 'rgb(243, 243, 243)')
+    await expect(loader.locator('header, main, section')).toHaveCount(0)
+  } finally { release() }
+  await expect(page.locator('.route-loading')).toHaveCount(0)
 
   await expect(page.getByRole('heading', { name: 'Галерея', level: 1 })).toBeVisible()
   await expect(page.locator('.gallery-grid .chart-gallery-card')).toHaveCount(15)
@@ -55,7 +98,7 @@ test('gallery page exposes examples and animated navigation states', async ({ pa
   await blogLink.hover()
   await expect(blogLink).toHaveCSS('color', 'rgb(224, 51, 171)')
   await expect.poll(() => blogLink.evaluate((element) => getComputedStyle(element, '::after').transform)).toContain('1, 0, 0, 1')
-  await expect(page.getByRole('link', { name: 'Создать график' })).toHaveText('Создать график')
+  await expect(page.getByRole('link', { name: 'Поддержать проект' })).toBeVisible()
 })
 
 test('blog replaces projects and keeps the editorial card grid responsive', async ({ page }) => {

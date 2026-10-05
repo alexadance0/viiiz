@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { axisReservation, resolveLogicalAxes, type AxisSpec } from './axisLayout'
+import { axisReservation, categoryLabelRotation, resolveLogicalAxes, type AxisSpec } from './axisLayout'
 import { resolveFrame } from './frameLayout'
 import { layoutText, plainTextDocument } from './textLayout'
 import { defaultChartTextStyle } from '../../entities/chart/model/defaults'
@@ -40,7 +40,17 @@ describe('axis layout contracts', () => {
   const axis = (side: 'top' | 'right' | 'bottom' | 'left'): AxisSpec => ({ id: 'category', channel: 'category', orientation: side === 'top' || side === 'bottom' ? 'horizontal' : 'vertical', placement: { kind: 'side', side }, line: { visible: true }, ticks: { visible: true, length: 6 }, labels: { visible: true, size: 22, gap: 8, style }, title: { visible: true, text: 'Title', size: 24, gap: 14, style } })
 
   it.each(['top', 'right', 'bottom', 'left'] as const)('reserves the resolved %s rail', (side) => {
-    expect(axisReservation(axis(side))).toMatchObject({ id: 'axis:category', side, size: 74, mode: 'outside' })
+    expect(axisReservation(axis(side))).toMatchObject({ id: 'axis:category', side, size: 68, mode: 'outside' })
+  })
+
+  it('fits each category slot and rotates an explicit zero angle when necessary', () => {
+    expect(categoryLabelRotation(['США', 'Великобритания'], style, [200, 200], 'auto')).toBe(0)
+    expect(categoryLabelRotation(['США', 'Великобритания'], style, [400, 40], 0)).toBe(90)
+    expect(categoryLabelRotation(['США', 'Великобритания'], style, [400, 40], 'auto')).toBe(90)
+    expect(categoryLabelRotation(['США', 'Великобритания'], style, [400, 40], 45)).toBe(45)
+    const spec = axis('left')
+    spec.ticks.length = 16
+    expect(axisReservation(spec)?.size).toBe(76)
   })
 
   it('removes hidden label/title rails and keeps internal butterfly axes inside', () => {

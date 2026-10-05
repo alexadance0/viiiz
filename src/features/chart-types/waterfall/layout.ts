@@ -53,5 +53,5 @@ export function resolveNativeWaterfallScene(source: NativeWaterfallChartScene): 
     const y = project(connector.value)
     return [connector.id, { x1: plot.x + band * (index + .5) + width(fromMark) / 2, y1: y, x2: plot.x + band * (index + 1.5) - width(toMark) / 2, y2: y }]
   }))
-  return { ...source, geometry: base.geometry, resolvedReservations: base.resolvedReservations, waterfallGeometry: { marks, connectors } }
+  return { ...source, plot: { ...source.plot, categoryAxis: base.plot.categoryAxis, valueAxis: base.plot.valueAxis }, geometry: base.geometry, resolvedReservations: base.resolvedReservations, waterfallGeometry: { marks, connectors } }
 }

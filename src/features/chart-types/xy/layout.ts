@@ -1,7 +1,7 @@
 import { formatXAxisNumber, formatYAxisNumber } from '../../../core/numberFormat'
 import { measureTextWidth } from '../../../core/textMetrics'
 import type { NativeXYChartScene, ResolvedSceneGeometry } from '../../../entities/chart/model/ChartScene'
-import { axisReservation, type AxisSpec } from '../../chart-layout/axisLayout'
+import { axisReservation, categoryLabelRotation, type AxisSpec } from '../../chart-layout/axisLayout'
 import { resolveFrame } from '../../chart-layout/frameLayout'
 import type { Rect } from '../../chart-layout/geometry'
 import { guideReservation } from '../../chart-layout/guides/types'
@@ -22,11 +22,12 @@ function measureAxis(scene: NativeXYChartScene, source: AxisSpec, estimatedPlot:
   const config = scene.compatibilityConfig
   const scale = source.channel === 'x' ? scene.plot.xScale : scene.plot.yScale
   const minimum = scale.minimum ?? scale.automaticDomain.minimum, maximum = scale.maximum ?? scale.automaticDomain.maximum
-  const values = numericTicks(minimum, maximum, scale.step)
+  const values = scale.calendarTicks?.map((tick) => tick.value) ?? numericTicks(minimum, maximum, scale.step)
   const labels = values.map((value, index) => source.channel === 'x'
-    ? scale.type === 'time' ? formatNativeXYDateTick(new Date(value), scale.timeProfile, scale.dateLabelFormat, index === 0) : formatXAxisNumber(value, config)
+    ? scale.calendarTicks ? scale.calendarTicks[index].label : scale.type === 'time' ? formatNativeXYDateTick(new Date(value), scale.timeProfile, scale.dateLabelFormat, index === 0) : formatXAxisNumber(value, config)
     : formatYAxisNumber(value, config))
-  const rotation = source.orientation === 'horizontal' ? source.labels.rotation ?? 0 : 0
+  const slots = values.map((value, index) => Math.min(index ? value - values[index - 1] : Infinity, index + 1 < values.length ? values[index + 1] - value : Infinity) / Math.max(1, maximum - minimum) * estimatedPlot.width)
+  const rotation = source.orientation !== 'horizontal' ? 0 : scale.calendarTicks ? typeof config.xAxisLabelRotate === 'number' && config.xAxisLabelRotate > 0 ? config.xAxisLabelRotate : categoryLabelRotation(labels, source.labels.style, slots, 'auto') ? 45 : 0 : source.labels.rotation ?? 0
   const layouts = labels.map((label) => layoutText({ document: plainTextDocument(label, source.labels.style), maxWidth: estimatedPlot.width, rotation }))
   const size = Math.ceil(Math.max(0, ...layouts.map((layout) => source.orientation === 'horizontal' ? layout.rotatedSize.height : layout.rotatedSize.width)))
   const title = source.title && { ...source.title, size: Math.ceil(layoutText({ document: plainTextDocument(source.title.text, source.title.style), maxWidth: Math.max(1, source.orientation === 'horizontal' ? estimatedPlot.width : estimatedPlot.height), rotation: source.orientation === 'vertical' ? 90 : 0 }).rotatedSize[source.orientation === 'horizontal' ? 'height' : 'width']) }
@@ -55,8 +56,7 @@ export function resolveNativeXYScene(scene: NativeXYChartScene): ResolvedXYScene
       if (reservation) reservations.push(reservation)
     }
   }
-  const layoutAxis = (value: AxisSpec) => value.labels.visible && value.ticks.visible ? { ...value, ticks: { ...value.ticks, length: Math.max(0, value.ticks.length - value.labels.gap) } } : value
-  const xReservation = axisReservation(layoutAxis(xAxis), 50), yReservation = axisReservation(layoutAxis(yAxis), 50)
+  const xReservation = axisReservation(xAxis, 50), yReservation = axisReservation(yAxis, 50)
   if (xReservation) reservations.push(xReservation)
   if (yReservation) reservations.push(yReservation)
   if (yAxis.labels.visible) reservations.push({ id: 'axis:y-edge-top', side: 'top', size: Math.ceil(lineHeight(yAxis.labels.style) / 2), gap: 0, mode: 'outside', priority: 55 })

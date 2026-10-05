@@ -54,14 +54,24 @@ describe('bump chart', () => {
   })
 
   it('reserves both endpoint rails and renders first place at the top through the shared line renderer', () => {
-    const resolved = resolveNativeScene(compileNativeBumpScene(table, config))
+    const resolved = resolveNativeScene(compileNativeBumpScene(table, { ...config, bumpShowStartLabels: true }))
     expect(resolved.geometry.reservations['guide:bump-start']?.width).toBeGreaterThan(0)
     expect(resolved.geometry.reservations['guide:direct-series']?.width).toBeGreaterThan(0)
     const option = renderScene(resolved) as { yAxis: { inverse: boolean }; series: Array<{ name: string; endLabel?: { show: boolean }; data: Array<{ label: { position: string }; displayValue: string }> }> }
     expect(option.yAxis.inverse).toBe(true)
     expect(option.series[0].endLabel?.show).toBe(true)
-    expect(option.series[0].data[0].label.position).toBe('left')
-    const hidden = resolveNativeScene(compileNativeBumpScene(table, { ...config, bumpShowStartLabels: false }))
+    expect(option.series[0].data[0].label.position).toBe('top')
+    expect(option.series.find((series) => series.name.startsWith('__point-direct-label:'))?.data[0].label.position).toBe('left')
+    const hidden = resolveNativeScene(compileNativeBumpScene(table, config))
     expect(hidden.geometry.reservations['guide:bump-start']).toBeUndefined()
   })
+  it('keeps ranking points unchanged when using smooth interpolation', () => {
+    const straight = compileNativeBumpScene(table, config)
+    const smooth = compileNativeBumpScene(table, { ...config, bumpSmooth: true })
+    expect(smooth.plot.series.map((series) => series.points)).toEqual(straight.plot.series.map((series) => series.points))
+    expect(smooth.plot.series.every((series) => series.interpolation === 'spline')).toBe(true)
+    const option = renderScene(resolveNativeScene(smooth)) as { series: Array<{ smooth?: number; smoothMonotone?: string }> }
+    expect(option.series[0]).toMatchObject({ smooth: .45, smoothMonotone: 'x' })
+  })
+
 })

@@ -1,6 +1,7 @@
 import type { NativeIntervalChartScene, ResolvedSceneGeometry } from '../../../entities/chart/model/ChartScene'
 import type { ResolvedReservation } from '../../chart-layout/reservations'
 import { renderCartesianPointBase, type ResolvedCartesianPointRenderModel } from './renderLineAreaScene'
+import { missingCalendarPeriod } from '../../../core/chartDateAxis'
 
 export type ResolvedIntervalScene = NativeIntervalChartScene & { geometry: ResolvedSceneGeometry; resolvedReservations: ResolvedReservation[] }
 
@@ -10,6 +11,7 @@ export function renderIntervalScene(scene: ResolvedIntervalScene): Record<string
     ...scene,
     plot: {
       mode: 'line', stacking: 'none', categoryPlacement: scene.plot.categoryPlacement, categories: scene.plot.categories,
+      dateAxis: scene.plot.dateAxis,
       categoryLabelPlan: scene.plot.categoryLabelPlan, categoryAxis: scene.plot.categoryAxis,
       valueAxis: scene.plot.valueAxis, valueDomain: scene.plot.valueDomain, series: visibleSeries,
     },
@@ -21,6 +23,7 @@ export function renderIntervalScene(scene: ResolvedIntervalScene): Record<string
     renderItem: (params: { dataIndex: number; coordSys: { x: number; y: number; width: number; height: number } }, api: { coord(value: unknown[]): [number, number] }) => {
       const cell = band.cells[params.dataIndex]
       if (!cell) return null
+      if (scene.compatibilityConfig.missingMode === 'gap' && missingCalendarPeriod(scene.plot.categories[cell.fromCategoryIndex]?.value, scene.plot.categories[cell.toCategoryIndex]?.value, scene.plot.dateAxis?.frequency)) return null
       const from = scene.plot.categories[cell.fromCategoryIndex]?.coordinate
       const to = scene.plot.categories[cell.toCategoryIndex]?.coordinate
       const fromBottom = api.coord([from, cell.startBottom]), fromTop = api.coord([from, cell.startTop])

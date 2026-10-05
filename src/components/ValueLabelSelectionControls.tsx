@@ -1,6 +1,6 @@
-import { isMapChart } from '../features/chart-types/map/catalog'
+import { isMapChart, isTileMapChart } from '../features/chart-types/map/catalog'
 import type { ChartConfig, ChartElementSelection } from '../core/types'
-import { isDistributionChart } from '../core/chartKinds'
+import { isScatterChart, isDistributionChart } from '../core/chartKinds'
 import { StyleTransferActions } from './StyleTransferActions'
 import { TextStyleEditor } from './TextStyleEditor'
 import { SettingsCheckbox } from './SettingsCheckbox'
@@ -31,13 +31,13 @@ export function ValueLabelFields({ config, element, onChange }: FieldsProps) {
   const map = isMapChart(config.kind)
   const waterfall = config.kind === 'waterfall'
   const treemapGroup = treemap && element.key.startsWith('treemap-group:')
-  const pointChart = config.kind === 'scatter' || config.kind === 'bubble' || isDistributionChart(config.kind)
-  const globallyVisible = config.kind === 'scatter' || config.kind === 'bubble' ? config.scatterShowLabels ?? config.showValues : pointChart ? config.distributionShowLabels ?? false : config.showValues
-  const globalPosition = config.kind === 'scatter' || config.kind === 'bubble' ? config.scatterLabelPosition ?? 'right' : config.distributionLabelPosition ?? ((config.distributionOrientation ?? 'horizontal') === 'horizontal' ? 'right' : 'top')
+  const pointChart = isScatterChart(config.kind) || isDistributionChart(config.kind)
+  const globallyVisible = isScatterChart(config.kind) ? config.scatterShowLabels ?? config.showValues : pointChart ? config.distributionShowLabels ?? false : config.showValues
+  const globalPosition = isScatterChart(config.kind) ? config.scatterLabelPosition ?? 'right' : config.distributionLabelPosition ?? ((config.distributionOrientation ?? 'horizontal') === 'horizontal' ? 'right' : 'top')
   return <>
     {map ? <>
-      <SettingsCheckbox isSelected={override?.showLabel !== false && (override?.showName ?? config.mapShowNames ?? false)} onChange={(showName) => onChange({ showName, showLabel: undefined })}>Показывать название</SettingsCheckbox>
-      <SettingsCheckbox isSelected={override?.showLabel !== false && (override?.showValue ?? (config.showValues || (override?.showLabel === true && !(override?.showName ?? config.mapShowNames))))} onChange={(showValue) => onChange({ showValue, showLabel: undefined })}>Показывать значение</SettingsCheckbox>
+      <SettingsCheckbox isSelected={override?.showLabel !== false && (override?.showName ?? config.mapShowNames ?? isTileMapChart(config.kind))} onChange={(showName) => onChange({ showName, showLabel: undefined })}>Показывать название</SettingsCheckbox>
+      <SettingsCheckbox isSelected={override?.showLabel !== false && (override?.showValue ?? (config.showValues || (override?.showLabel === true && !(override?.showName ?? config.mapShowNames ?? isTileMapChart(config.kind)))))} onChange={(showValue) => onChange({ showValue, showLabel: undefined })}>Показывать значение</SettingsCheckbox>
     </> : treemap ? <>
       <SettingsCheckbox isSelected={override?.showName ?? (treemapGroup ? config.treemapShowGroupLabels ?? true : config.treemapShowLeafLabels ?? true)} onChange={(showName) => onChange({ showName, ...(!showName ? { showValue: false } : {}) })}>Показывать название</SettingsCheckbox>
       <SettingsCheckbox isSelected={override?.showValue ?? (treemapGroup ? config.treemapShowGroupValues ?? config.showValues : config.treemapShowLeafValues ?? config.showValues)} onChange={(showValue) => onChange({ showValue })}>Показывать значение</SettingsCheckbox>

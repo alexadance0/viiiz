@@ -40,7 +40,7 @@ describe('native ECharts line and area adapter', () => {
     const scene = getChartPlugin(source.config.kind).compile(source.table, source.config)
     const resolved = resolveNativeCartesianScene(scene)
     const option = renderScene(resolved) as { grid: Record<string, number | boolean>; xAxis: { boundaryGap: boolean }; series: Array<{ areaStyle?: unknown }> }
-    expect(option.grid).toEqual({ left: resolved.geometry.plot.x, top: resolved.geometry.plot.y, right: resolved.geometry.canvas.width - resolved.geometry.plot.x - resolved.geometry.plot.width, bottom: resolved.geometry.canvas.height - resolved.geometry.plot.y - resolved.geometry.plot.height, containLabel: false })
+    expect(option.grid).toEqual({ left: resolved.geometry.plot.x, top: resolved.geometry.plot.y, right: resolved.geometry.canvas.width - resolved.geometry.plot.x - resolved.geometry.plot.width, bottom: resolved.geometry.canvas.height - resolved.geometry.plot.y - resolved.geometry.plot.height, containLabel: false, outerBoundsMode: resolved.plot.categories.every((category) => typeof category.value === 'string') ? 'none' : 'auto' })
     expect(option.xAxis.boundaryGap).toBe(false)
     expect(option.series[0].areaStyle).toBeTruthy()
   })
@@ -81,13 +81,22 @@ describe('native ECharts line and area adapter', () => {
     expect(scene.geometry.plot.x).toBe(reference.geometry.plot.x)
   })
 
+  it('keeps a stacked left guide at the cumulative endpoint without replacing values', () => {
+    const fixture = lineAreaFixtures[0]
+    const table: DataTable = { name: 'stack', columns: ['period', 'first', 'second'], rows: [{ period: 'Alpha', first: 10, second: 20 }] }
+    const config: ChartConfig = { ...fixture.config, kind: 'stacked-area', yFields: ['first', 'second'], showValues: true, showDirectLabels: true, yAxisPosition: 'right' }
+    const option = renderScene(getChartPlugin('stacked-area').compile(table, config)) as { series: Array<{ name: string; data: Array<{ value: unknown; label?: { formatter: string } }> }> }
+    expect(option.series.find((series) => series.name === 'second')?.data[0].value).toBe(20)
+    expect(option.series.find((series) => series.name.startsWith('__point-direct-label:second'))?.data[0].value).toEqual(['0:Alpha', 30])
+  })
+
   it('uses the same shared edge contract for Area and keeps value labels rail-aligned', () => {
     for (const kind of ['line', 'area'] as const) {
       const scene = resolve(kind, ['Long first category', 'Middle', 'Long last category'])
       const option = renderScene(scene) as { grid: { left: number }; yAxis: { axisLabel: { align: string } } }
       expect(scene.geometry.axes.value.x).toBe(scene.geometry.content.x)
       expect(option.grid.left).toBe(scene.geometry.plot.x)
-      expect(option.yAxis.axisLabel.align).toBe('right')
+      expect(option.yAxis.axisLabel.align).toBe('left')
     }
   })
 
@@ -103,7 +112,7 @@ describe('native ECharts line and area adapter', () => {
     const scene = getChartPlugin('indexed-line').compile(indexedTrendTable, { ...indexedTrendConfig, showValues: true, showZeroLine: true })
     const option = renderScene(scene) as { series: Array<{ name: string; markLine?: unknown; data: Array<{ value?: number | null; displayValue?: string; label?: { formatter?: string } }> }> }
     const series = option.series.find((item) => item.name === 'value')!
-    expect(series.data.map((point) => point.value)).toEqual([100, 150, null, 50])
+    expect(series.data.map((point) => Array.isArray(point.value) ? point.value[1] : point.value)).toEqual([100, 150, null, 50])
     expect(series.data[0]).toMatchObject({ displayValue: '100', label: { formatter: '100' } })
     expect(series.markLine).toBeTruthy()
   })

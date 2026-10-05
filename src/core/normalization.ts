@@ -229,6 +229,11 @@ export function normalizeImportedTable(table: DataTable, locale = 'ru-RU', onPro
   const observationFlags: Record<string, Record<number, string[]>> = {}
 
   table.columns.forEach((column, columnIndex) => {
+    if (table.textColumns?.includes(column)) {
+      rows.forEach((row) => { if (row[column] != null) row[column] = String(row[column]) })
+      onProgress?.(columnIndex + 1, table.columns.length)
+      return
+    }
     const indexed = rows.map((row, index) => ({ value: row[column], index }))
     const strings = indexed.filter(({ value }) => typeof value === 'string').map(({ value }) => cleanText(value))
 
@@ -292,6 +297,7 @@ export function normalizeImportedTable(table: DataTable, locale = 'ru-RU', onPro
     onProgress?.(columnIndex + 1, table.columns.length)
   })
   const timeProfiles = Object.fromEntries(table.columns.flatMap((column) => {
+    if (table.textColumns?.includes(column)) return []
     const profile = inferTimeProfile(rawRows.map((row) => row[column]), rows.map((row) => row[column]))
     return profile ? [[column, profile]] : []
   }))

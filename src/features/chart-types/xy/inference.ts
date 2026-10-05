@@ -11,3 +11,7 @@ export function inferScatterLabelField(table: DataTable, xField: string, yFields
   return table.columns.find((field) => field !== xField && !yFields.includes(field) && field !== sizeField && field !== colorField
     && table.rows.some((row) => typeof row[field] === 'string' && String(row[field]).trim()))
 }
+
+export function inferScatterOrderField(table: DataTable, xField: string, yFields: string[]) {
+  return table.columns.find((field) => field !== xField && !yFields.includes(field) && table.rows.some((row) => row[field] instanceof Date && Number.isFinite((row[field] as Date).getTime())))
+}

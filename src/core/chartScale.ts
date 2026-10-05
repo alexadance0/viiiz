@@ -1,6 +1,6 @@
 import { chartDataValueKey, prepareChartData } from './chartData'
 import type { ChartConfig, DataTable, DataValue } from './types'
-import { isBarChart, isNormalizedStackedChart } from './chartKinds'
+import { isBarChart, isNormalizedStackedChart, isLineLikeChart } from './chartKinds'
 
 export const axisValue = (value?: string) => {
   const parsed = value?.trim() ? Number(value) : Number.NaN
@@ -19,6 +19,9 @@ export const orderedBounds = (min?: number | null, max?: number | null): [number
 
 const applyCategoryRange = (prepared: ReturnType<typeof prepareChartData>, config: ChartConfig) => {
   const dateAxis = prepared.categories.some((value) => value instanceof Date)
+  // Continuous axes clip geometry at their bounds; removing observations
+  // would lose the segment crossing the boundary and reset the axis extent.
+  if (dateAxis && (config.kind === 'indexed-line' || isLineLikeChart(config.kind) && config.kind !== 'bump' && config.kind !== 'slope')) return prepared
   const [min, max] = orderedBounds(
     dateAxis ? dateValue(config.xAxisMin) : axisValue(config.xAxisMin),
     dateAxis ? dateValue(config.xAxisMax) : axisValue(config.xAxisMax),

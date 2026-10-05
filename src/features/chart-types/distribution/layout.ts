@@ -2,7 +2,7 @@ import { formatYAxisNumber } from '../../../core/numberFormat'
 import { measureTextWidth } from '../../../core/textMetrics'
 import type { ElementId } from '../../../entities/chart/model/ChartElement'
 import type { DistributionBarcodeMarkScene, DistributionBoxMarkScene, DistributionCountMarkScene, DistributionGroupId, DistributionHistogramBinScene, DistributionObservationScene, LayerId, NativeDistributionChartScene, ResolvedSceneGeometry } from '../../../entities/chart/model/ChartScene'
-import { axisReservation, type AxisSpec } from '../../chart-layout/axisLayout'
+import { axisReservation, categoryLabelRotation, type AxisSpec } from '../../chart-layout/axisLayout'
 import { resolveFrame } from '../../chart-layout/frameLayout'
 import type { Rect } from '../../chart-layout/geometry'
 import { guideReservation } from '../../chart-layout/guides/types'
@@ -43,11 +43,11 @@ const lineHeight = (style: AxisSpec['labels']['style']) => Math.round(style.size
 function measuredAxis(scene: NativeDistributionChartScene, source: AxisSpec, estimated: Rect): AxisSpec {
   const domain = source.id === 'frequency' ? scene.plot.frequencyDomain ?? scene.plot.laneDomain : scene.plot.valueDomain
   const labels = source.channel === 'lane' ? scene.plot.lanes.map((lane) => lane.label) : numericTicks(domain.min, domain.max, 'step' in domain ? domain.step : domain.interval).map((value) => formatYAxisNumber(value, scene.compatibilityConfig))
-  const rotation = source.orientation === 'horizontal' ? source.labels.rotation ?? 0 : 0
-  const layouts = labels.map((label) => layoutText({ document: plainTextDocument(label, source.labels.style), maxWidth: Math.max(1, estimated.width), rotation }))
+  const rotation = source.orientation !== 'horizontal' ? 0 : source.channel === 'lane' ? categoryLabelRotation(labels, source.labels.style, labels.map(() => estimated.width / Math.max(1, scene.plot.laneDomain.max - scene.plot.laneDomain.min) - 8), scene.compatibilityConfig.xAxisLabelRotate) : source.labels.rotation ?? 0
+  const layouts = labels.map((label) => layoutText({ document: plainTextDocument(label, source.labels.style), maxWidth: Math.max(1, estimated.width), rotation, wrap: false }))
   const size = Math.ceil(Math.max(0, ...layouts.map((layout) => source.orientation === 'horizontal' ? layout.rotatedSize.height : layout.rotatedSize.width)))
   const title = source.title && { ...source.title, size: Math.ceil(layoutText({ document: plainTextDocument(source.title.text, source.title.style), maxWidth: Math.max(1, source.orientation === 'horizontal' ? estimated.width : estimated.height), rotation: source.orientation === 'vertical' ? 90 : 0 }).rotatedSize[source.orientation === 'horizontal' ? 'height' : 'width']) }
-  return { ...source, labels: { ...source.labels, size }, title }
+  return { ...source, labels: { ...source.labels, size, rotation }, title }
 }
 
 function reservations(scene: NativeDistributionChartScene, estimated: ReturnType<typeof resolveFrame>, valueAxis: AxisSpec, laneAxis: AxisSpec) {
@@ -61,8 +61,7 @@ function reservations(scene: NativeDistributionChartScene, estimated: ReturnType
     const widths = legend.items.filter((item) => item.visible).map((item) => measureTextWidth(item.label, scene.compatibilityConfig.legendText.size, scene.compatibilityConfig.legendText.fontFamily, scene.compatibilityConfig.legendText.weight) + 38)
     if (widths.length) { const horizontal = legend.position === 'top' || legend.position === 'bottom'; let rows = 1, occupied = 0; if (horizontal) widths.forEach((width) => { if (occupied && occupied + width > estimated.content.width) { rows++; occupied = width } else occupied += width }); const size = horizontal ? rows * lineHeight(scene.compatibilityConfig.legendText) + (rows - 1) * 7 : sideLegendWidth(legend.items.filter((item) => item.visible).map((item) => item.label), scene.compatibilityConfig.legendText, estimated.content); const reservation = guideReservation(legend, size, composition.legendPlot, 20); if (reservation) result.push(reservation) }
   }
-  const laneLayoutAxis = laneAxis.labels.visible && laneAxis.ticks.visible ? { ...laneAxis, ticks: { ...laneAxis.ticks, length: Math.max(0, laneAxis.ticks.length - laneAxis.labels.gap) } } : laneAxis
-  for (const item of [valueAxis, laneLayoutAxis]) { const reservation = axisReservation(item, 50); if (reservation) result.push(reservation) }
+  for (const item of [valueAxis, laneAxis]) { const reservation = axisReservation(item, 50); if (reservation) result.push(reservation) }
   if (valueAxis.orientation === 'horizontal' && valueAxis.labels.visible) {
     const edge = Math.ceil(Math.max(...[scene.plot.valueDomain.min, scene.plot.valueDomain.max].map((value) => measureTextWidth(formatYAxisNumber(value, scene.compatibilityConfig), valueAxis.labels.style.size, valueAxis.labels.style.fontFamily, valueAxis.labels.style.weight))) / 2) + 10
     const laneSide = laneAxis.placement.kind === 'side' ? laneAxis.placement.side : 'left'
@@ -76,8 +75,13 @@ const project = (value: number, min: number, max: number, start: number, length:
 
 export function resolveNativeDistributionScene(scene: NativeDistributionChartScene): ResolvedDistributionScene {
   const initial = resolveFrame({ canvas: scene.document.canvas, spacing: scene.document.composition })
-  const valueAxis = measuredAxis(scene, scene.plot.valueAxis, initial.plot), laneAxis = measuredAxis(scene, scene.plot.laneAxis, initial.plot)
-  const frame = resolveFrame({ canvas: scene.document.canvas, spacing: scene.document.composition, reservations: reservations(scene, initial, valueAxis, laneAxis) })
+  const valueAxis = measuredAxis(scene, scene.plot.valueAxis, initial.plot)
+  let laneAxis = measuredAxis(scene, scene.plot.laneAxis, initial.plot)
+  let frame = resolveFrame({ canvas: scene.document.canvas, spacing: scene.document.composition, reservations: reservations(scene, initial, valueAxis, laneAxis) })
+  if (laneAxis.orientation === 'horizontal' && laneAxis.channel === 'lane') {
+    laneAxis = measuredAxis(scene, scene.plot.laneAxis, frame.plot)
+    frame = resolveFrame({ canvas: scene.document.canvas, spacing: scene.document.composition, reservations: reservations(scene, initial, valueAxis, laneAxis) })
+  }
   const reservationGeometry = Object.fromEntries(frame.resolvedReservations.map(({ reservation, bounds }) => [reservation.id, bounds]))
   const axes = { value: reservationGeometry['axis:value'] ?? frame.plot, [laneAxis.id]: reservationGeometry[`axis:${laneAxis.id}`] ?? frame.plot }
   const horizontal = scene.plot.orientation === 'horizontal', { min, max } = scene.plot.valueDomain, laneDomain = scene.plot.laneDomain

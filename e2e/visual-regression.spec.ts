@@ -203,7 +203,7 @@ test('native comparison and stem charts preserve both orientations and dense cha
   await updateChart(page, canvas, () => setCheckbox(page.getByRole('checkbox', { name: 'Скрывать пересекающиеся подписи' }), true))
   await expectCanvasScreenshot(canvas, 'native-lollipop-vertical-dense.png')
 
-  await page.getByRole('button', { name: '← Тип графика' }).click()
+  await page.getByRole('navigation', { name: 'Этапы создания графика' }).getByRole('button', { name: /Тип графика/ }).click()
   await updateChart(page, canvas, () => page.getByRole('button', { name: 'Леденцовая горизонтальная', exact: true }).click())
   await expect(canvas).toHaveAttribute('data-plot-kind', 'comparison-stem')
   await expectCanvasScreenshot(canvas, 'native-lollipop-horizontal-dense.png')
@@ -303,7 +303,7 @@ test('native Distribution statistical shapes stay visually stable', async ({ pag
   await expectCanvasScreenshot(canvas, 'distribution-boxplot-all-points.png')
 
   const choose = async (name: string) => {
-    await page.getByRole('button', { name: '← Тип графика' }).click()
+    await page.getByRole('navigation', { name: 'Этапы создания графика' }).getByRole('button', { name: /Тип графика/ }).click()
     await updateChart(page, canvas, () => page.getByRole('button', { name, exact: true }).click())
     await openDesign(page)
     await openSettings(page, 'Форма распределения')
@@ -344,7 +344,7 @@ test('native Distribution frequency semantics stay visually stable', async ({ pa
   await updateChart(page, canvas, () => page.getByLabel('Количество интервалов').fill('7'))
   await expectCanvasScreenshot(canvas, 'distribution-histogram-seven-bins.png')
 
-  await page.getByRole('button', { name: '← Тип графика' }).click()
+  await page.getByRole('navigation', { name: 'Этапы создания графика' }).getByRole('button', { name: /Тип графика/ }).click()
   await updateChart(page, canvas, () => page.getByRole('button', { name: 'KDE plot', exact: true }).click())
   await expectCanvasScreenshot(canvas, 'distribution-kde-grouped.png')
   await updateChart(page, canvas, () => page.getByLabel('Разбить цветом по категории').selectOption(''))
@@ -374,7 +374,7 @@ test('native Scatter and Bubble semantics stay visually stable', async ({ page }
   await updateChart(page, canvas, () => setSettingsCheckbox(scatter, 'Доверительная полоса 95%', true))
   await expectCanvasScreenshot(canvas, 'scatter-trend-band.png')
 
-  await page.getByRole('button', { name: '← Тип графика' }).click()
+  await page.getByRole('navigation', { name: 'Этапы создания графика' }).getByRole('button', { name: /Тип графика/ }).click()
   await updateChart(page, canvas, () => page.getByRole('button', { name: 'Пузырьковая диаграмма' }).click())
   await openDesign(page)
   await openSettings(page, 'Точки и зависимости')
@@ -446,7 +446,7 @@ test('native interval semantics stay visually stable', async ({ page }) => {
   await updateChart(page, canvas, () => range.locator('label').filter({ hasText: /^Цвет заливки/ }).locator('select').selectOption('custom'))
   await expectCanvasScreenshot(canvas, 'range-line-custom-fill.png')
 
-  await page.getByRole('button', { name: '← Тип графика' }).click()
+  await page.getByRole('navigation', { name: 'Этапы создания графика' }).getByRole('button', { name: /Тип графика/ }).click()
   await updateChart(page, canvas, () => page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Ступенчатый диапазон$/ }) }).click())
   await expect(canvas).toHaveAttribute('data-chart-kind', 'step-range-line')
   await openDesign(page)
@@ -458,7 +458,7 @@ test('native interval semantics stay visually stable', async ({ page }) => {
   await updateChart(page, canvas, () => step.getByLabel('Переход между значениями').selectOption('end'))
   await expectCanvasScreenshot(canvas, 'step-range-end.png')
 
-  await page.getByRole('button', { name: '← Тип графика' }).click()
+  await page.getByRole('navigation', { name: 'Этапы создания графика' }).getByRole('button', { name: /Тип графика/ }).click()
   await updateChart(page, canvas, () => page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Линия с интервалом$/ }) }).click())
   await expect(canvas).toHaveAttribute('data-chart-kind', 'confidence-line')
   await openDesign(page)
@@ -577,7 +577,7 @@ test('native Slope semantics stay visually stable', async ({ page }) => {
   await setCheckbox(scale, true)
   await expectCanvasScreenshot(canvas, 'slope-y-scale.png')
 
-  await page.getByRole('button', { name: '← Тип графика' }).click()
+  await page.getByRole('navigation', { name: 'Этапы создания графика' }).getByRole('button', { name: /Тип графика/ }).click()
   for (const measure of ['orders', 'profit', 'plan']) await setCheckbox(page.getByRole('checkbox', { name: measure, exact: true }), true)
   await page.locator('.chart-choice-grid button').filter({ has: page.locator('b').filter({ hasText: /^Наклонный график$/ }) }).click()
   await waitForLayout(page)
@@ -590,7 +590,7 @@ test('native Slope semantics stay visually stable', async ({ page }) => {
   await expectCanvasScreenshot(canvas, 'slope-date-axis-top.png')
   await expectCanvasScreenshot(canvas, 'slope-x-label-centered.png')
 
-  await page.getByRole('button', { name: '← Тип графика' }).click()
+  await page.getByRole('navigation', { name: 'Этапы создания графика' }).getByRole('button', { name: /Тип графика/ }).click()
   const positions = page.getByRole('group', { name: 'Позиции по оси X' }).getByRole('button')
   for (const index of [0, 35]) if (await positions.nth(index).getAttribute('aria-pressed') === 'true') await positions.nth(index).click()
   await positions.nth(3).click()
@@ -612,7 +612,7 @@ test('native Slope semantics stay visually stable', async ({ page }) => {
   await expectCanvasScreenshot(canvas, 'slope-crossing-lines.png')
 
   await slopeSettings.getByRole('button', { name: 'Сбросить изменение' }).click()
-  await page.getByRole('button', { name: '← Тип графика' }).click()
+  await page.getByRole('navigation', { name: 'Этапы создания графика' }).getByRole('button', { name: /Тип графика/ }).click()
   const restoredPositions = page.getByRole('group', { name: 'Позиции по оси X' }).getByRole('button')
   for (const index of [3, 9]) if (await restoredPositions.nth(index).getAttribute('aria-pressed') === 'true') await restoredPositions.nth(index).click()
   await restoredPositions.nth(0).click()
@@ -678,7 +678,7 @@ test('normalized and horizontal bars keep their label geometry', async ({ page }
   expect(overlaps, JSON.stringify(valueLabels)).toEqual([])
   await expectCanvasScreenshot(page.locator('.chart-canvas-shell'), 'normalized-bar-absorbed-direct.png')
 
-  await page.getByRole('button', { name: '← Тип графика' }).click()
+  await page.getByRole('navigation', { name: 'Этапы создания графика' }).getByRole('button', { name: /Тип графика/ }).click()
   await page.getByRole('button', { name: 'Линейчатая', exact: true }).click()
   await openDesign(page)
   await openSettings(page, 'Легенда')
@@ -689,7 +689,7 @@ test('normalized and horizontal bars keep their label geometry', async ({ page }
   await page.getByLabel('Положение подписей').selectOption('inside-top')
   await expectCanvasScreenshot(page.locator('.chart-canvas-shell'), 'horizontal-bar-direct-inside.png')
 
-  await page.getByRole('button', { name: '← Тип графика' }).click()
+  await page.getByRole('navigation', { name: 'Этапы создания графика' }).getByRole('button', { name: /Тип графика/ }).click()
   await page.getByRole('button', { name: 'Леденцовая', exact: true }).click()
   await openDesign(page)
   await openSettings(page, 'Подписи значений')

@@ -1,7 +1,7 @@
 import { renderToString } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
-import App, { chartModeDefaults, chartModeState, compatibleMeasureSelection, designChangeKey, moveTreemapItem, rememberDataSelection, shouldHideXAxisTitle } from './App'
+import App, { resetChartPresentation, chartModeDefaults, chartModeState, compatibleMeasureSelection, designChangeKey, moveTreemapItem, rememberDataSelection, shouldHideXAxisTitle } from './App'
 import { chartRegistry } from './core/chartRegistry'
 import { createDefaultChartConfig } from './entities/chart/model/defaultChartConfig'
 import { chartTransitionMode } from './components/ChartCanvas'
@@ -11,6 +11,10 @@ describe('editor startup', () => {
     const html = renderToString(<MemoryRouter><App/></MemoryRouter>)
     expect(html).toContain('Добавьте данные')
     expect(html).toContain('Трудности бизнеса')
+  })
+
+  it.each(['horizontal-bar', 'horizontal-stacked-bar', 'horizontal-normalized-stacked-bar', 'horizontal-lollipop', 'butterfly', 'dumbbell'] as const)('%s starts with a vertical value grid', (kind) => {
+    expect(chartModeDefaults(kind)).toMatchObject({ showHorizontalGrid: false, showVerticalGrid: true })
   })
 
   it('keeps chart-specific preview settings isolated by chart type', () => {
@@ -31,6 +35,14 @@ describe('editor startup', () => {
     customized.showLegend = true
     customized.showVerticalGrid = true
     expect(chartModeState(customized)).toMatchObject({ showValues: true, showLegend: true, showVerticalGrid: true })
+  })
+
+  it('resets the entire chart presentation while retaining the document and mapping', () => {
+    const previous = { ...createDefaultChartConfig(), kind: 'marimekko' as const, title: 'Мой график', canvasWidth: 1200, yFields: ['a', 'b'], xAxisLabelRotate: 0 as const, xAxisLabelOverflow: 'wrap' as const, showValues: true, showLegend: true, showVerticalGrid: true, yAxisPosition: 'right' as const, legendPosition: 'right' as const, yAxisMin: 10, elementStyles: { a: { color: '#ffffff' } }, butterflyCategoryPosition: 'right' as const }
+    const next = resetChartPresentation(previous)
+    expect(next).toMatchObject({ title: 'Мой график', canvasWidth: 1200, yFields: ['a', 'b'], xAxisLabelRotate: 'auto', xAxisLabelOverflow: 'auto', showValues: false, showLegend: false, showVerticalGrid: false, yAxisPosition: 'left', legendPosition: 'top', yAxisMin: null, elementStyles: {} })
+    expect(next.butterflyCategoryPosition).toBeUndefined()
+    expect(previous.showValues).toBe(true)
   })
 
   it('hides date-axis titles before a non-scatter chart is first rendered', () => {

@@ -47,9 +47,9 @@
 .annotation-anchor-value{display:flex;align-items:center;gap:8px;min-width:0;color:#55515e;font-size:11px}
 .annotation-anchor-value>span{flex:1;min-width:0;overflow-wrap:anywhere}
 .annotation-anchor-value>button{display:grid;place-items:center;flex:none;width:28px;height:28px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
-.annotation-anchor-outline{fill:none;stroke:#1677a6;stroke-width:1;stroke-dasharray:4 4;pointer-events:none}
+.annotation-anchor-outline{fill:none;stroke:#1923e3;stroke-width:1;stroke-dasharray:4 4;pointer-events:none}
 .annotation-anchor-target,.decoration-attached-anchor{cursor:pointer;outline:none;pointer-events:auto}
-.annotation-anchor-target:is(:hover,:focus-visible) .annotation-anchor-dot{fill:#1677a6;stroke:#fff;stroke-width:2.5}
-.decoration-attached-anchor:is(:hover,:focus-visible) circle:last-child{r:6;stroke:#1677a6;fill:#fff;stroke-width:2}
+.annotation-anchor-target:is(:hover,:focus-visible) .annotation-anchor-dot{fill:#1923e3;stroke:#fff;stroke-width:2.5}
+.decoration-attached-anchor:is(:hover,:focus-visible) circle:last-child{r:6;stroke:#1923e3;fill:#fff;stroke-width:2}
 
 .settings-panel .annotation-pick-point:not([aria-pressed=true]):hover:not(:disabled){background:#f7f7f7;color:var(--ink)}

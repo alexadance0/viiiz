@@ -10,7 +10,7 @@ export function resolveNativeHeatmapScene(scene: NativeHeatmapChartScene): Resol
   const rowStyle = scene.plot.rowAxis.labels.style
   const rowLabelWidth = scene.plot.rowAxis.labels.visible ? Math.ceil(Math.max(0, ...scene.plot.rows.map((row) => measureTextWidth(row.name, rowStyle.size, rowStyle.fontFamily, rowStyle.weight)))) : 0
   const outerAligned = scene.compatibilityConfig.categoryAxisLabelAlignment === 'outer'
-  const rowWidth = rowLabelWidth ? rowLabelWidth + scene.plot.rowAxis.labels.gap + (outerAligned && scene.plot.rowAxis.ticks.visible ? scene.plot.rowAxis.ticks.length : 0) : 0
+  const rowWidth = rowLabelWidth ? rowLabelWidth + scene.plot.rowAxis.labels.gap + (scene.plot.rowAxis.ticks.visible ? Math.max(0, scene.plot.rowAxis.ticks.length - scene.plot.rowAxis.labels.gap) : 0) : 0
   const rowAxis = { ...scene.plot.rowAxis, labels: { ...scene.plot.rowAxis.labels, size: rowLabelWidth } }
   const reservations: LayoutReservation[] = []
   if (rowWidth && scene.plot.rowAxis.placement.kind === 'side') reservations.push({ id: 'axis:row', side: scene.plot.rowAxis.placement.side, size: rowWidth, gap: 0, mode: 'outside', priority: 50 })

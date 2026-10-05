@@ -10,9 +10,9 @@ export function measureTextWidth(value: string, size: number, fontFamily: string
   return context.measureText(value).width
 }
 
-export function wrapMeasuredText(value: string, size: number, width: number, fontFamily: string, weight = 400) {
+export function wrapMeasuredText(value: string, size: number, width: number, fontFamily: string, weight = 400, breakWords = true) {
   if (!value) return { text: '', lines: 0 }
-  const result = layoutText({ document: plainTextDocument(value, style(size, fontFamily, weight)), maxWidth: width })
+  const result = layoutText({ document: plainTextDocument(value, style(size, fontFamily, weight)), maxWidth: width, breakWords })
   return { text: result.lines.join('\n'), lines: result.lines.length }
 }
 

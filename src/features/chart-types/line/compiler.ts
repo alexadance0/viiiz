@@ -1,10 +1,9 @@
-import { effectiveDateStepUnit, moveDateContextToVisibleLabels, planCategoryDateLabels } from '../../../core/chartDateAxis'
+import { moveDateContextToVisibleLabels, planCategoryDateLabels, planDateAxisTicks } from '../../../core/chartDateAxis'
 import type { PreparedChartData, PreparedSeries } from '../../../core/chartData'
 import { niceNumericScale, orderedBounds, prepareVisibleChartData } from '../../../core/chartScale'
 import { formatChartNumber } from '../../../core/numberFormat'
 import { SEASONAL_OTHERS_LEGEND_ITEM_ID, SEASONAL_OTHERS_LEGEND_LABEL, seriesLegendItemId } from '../../../core/legend'
 import { formatTimeValue } from '../../../core/timeFrequency'
-import { isoWeekParts } from '../../../core/timeFrequency'
 import type { ChartConfig, ChartKind, DataTable, DataValue } from '../../../core/types'
 import { chartDocumentFromLegacy } from '../../../entities/chart/model/legacyChartConfigAdapter'
 import { aggregateDatumId, markElementId, rawDatumId, seriesId, syntheticDatumId, type ChartElement } from '../../../entities/chart/model/ChartElement'
@@ -21,7 +20,7 @@ export const isNativeLineKind = (kind: ChartKind): kind is NativeLineKind => (NA
 export const isNativeAreaKind = (kind: ChartKind): kind is NativeAreaKind => (NATIVE_AREA_KINDS as readonly ChartKind[]).includes(kind)
 export const isNativePointKind = (kind: ChartKind): kind is NativePointKind => isNativeLineKind(kind) || isNativeAreaKind(kind)
 
-const paletteFallback = ['#1677a6', '#168a72', '#e56b45', '#d0a52b', '#3f8fba', '#a45ca4', '#6f9d45', '#c64f70']
+const paletteFallback = ['#1923e3', '#168a72', '#e56b45', '#d0a52b', '#3f8fba', '#a45ca4', '#6f9d45', '#c64f70']
 const seriesColor = (config: ChartConfig, name: string, index: number) => config.seriesStyles[name]?.color ?? (config.palette?.length ? config.palette : [config.color, ...paletteFallback.slice(1)])[index % Math.max(1, config.palette?.length ?? paletteFallback.length)]
 const typed = (value: DataValue) => value instanceof Date ? `date:${value.toISOString()}` : `${typeof value}:${String(value ?? '')}`
 export const legacyPointElementKey = (series: string, category: DataValue) => `${series}\u001f${category instanceof Date ? category.toISOString() : typed(category)}`
@@ -51,35 +50,22 @@ interface PreparedLinePolicy {
 }
 
 export function categoryLabelPlan(values: DataValue[], labels: string[], config: ChartConfig) {
-  const dateCategories = values.some((value) => value instanceof Date)
-  const calendarStep = dateCategories && effectiveDateStepUnit(config)
+  const fontSize = (config.xAxisLabelText ?? config.axisLabelText).size
+  if (values.some((value) => value instanceof Date)) {
+    // Calendar labels are already selected by the shared planner. A year step
+    // must never be applied again as an observation/row stride.
+    const interval = (index: number) => Boolean(labels[index])
+    return { labels: moveDateContextToVisibleLabels(labels, values, config.dateLabelFormat, interval), interval, fontSize, rotation: typeof config.xAxisLabelRotate === 'number' ? config.xAxisLabelRotate : 0, hideOverlap: false, showMaxLabel: undefined }
+  }
   const categoricalText = values.length > 0 && values.every((value) => typeof value === 'string' || typeof value === 'boolean' || value == null)
-  const anchorTime = config.dateAxisAnchor ? new Date(`${config.dateAxisAnchor}T00:00:00`).getTime() : Number.NaN
-  const anchorIndex = Number.isFinite(anchorTime) ? values.findIndex((value) => value instanceof Date && value.getTime() >= anchorTime) : -1
   const requestedStep = Math.max(1, Math.round(config.xAxisStep ?? 1))
-  const requestedLabels = labels.filter((label, index) => label && (calendarStep || anchorIndex >= 0 ? index >= anchorIndex && (index - anchorIndex) % requestedStep === 0 : config.xAxisStep == null || index % requestedStep === 0))
-  const widest = (label: string) => Math.max(0, ...label.split('\n').map((line) => line.length))
   const available = Math.max(80, (config.canvasWidth ?? 1000) - (config.canvasMarginLeft ?? 32) - (config.canvasMarginRight ?? 24) - 50)
+  const requestedLabels = labels.filter((label, index) => label && (config.xAxisStep == null || index % requestedStep === 0))
   const slot = available / Math.max(1, requestedLabels.length)
-  const longest = requestedLabels.reduce((result, label) => Math.max(result, widest(label)), 0)
-  const baseSize = (config.xAxisLabelText ?? config.axisLabelText).size
-  const fitted = longest ? Math.floor((slot - 5) / (longest * .58)) : baseSize
-  const fontSize = dateCategories && (config.xAxisStep != null || anchorIndex >= 0) ? Math.max(8, Math.min(baseSize, fitted)) : baseSize
-  const labelWidth = longest * fontSize * .58
-  const rotation = typeof config.xAxisLabelRotate === 'number' ? config.xAxisLabelRotate : categoricalText && labelWidth > slot * .92 ? 90 : dateCategories && (config.xAxisStep != null || anchorIndex >= 0) && labelWidth > slot * 1.08 ? 45 : 0
-  const visibleIndices = labels.flatMap((label, index) => label ? [index] : [])
-  const minimumGap = visibleIndices.slice(1).reduce((gap, index, position) => Math.min(gap, index - visibleIndices[position]), Number.POSITIVE_INFINITY)
-  const naturalGap = Number.isFinite(minimumGap) ? minimumGap : Math.max(1, values.length)
-  const step = available / Math.max(1, values.length)
-  const longestWidth = labels.reduce((width, label) => Math.max(width, widest(label) * baseSize * .58), 0)
-  const automaticStride = Math.max(1, Math.ceil((longestWidth + 10) / Math.max(1, step * naturalGap)))
-  const weekly = config.dateLabelFormat?.startsWith('week-') || config.dateLabelFormat?.startsWith('year-week-')
-  const automaticVisible = new Set(visibleIndices.filter((index, ordinal) => ordinal % automaticStride === 0 || weekly && values[index] instanceof Date && isoWeekParts(values[index] as Date).week === 1))
-  const visible = (index: number) => Boolean(labels[index])
-  const anchored = (index: number) => index >= anchorIndex && (index - anchorIndex) % requestedStep === 0
-  const interval: 'auto' | number | ((index: number) => boolean) = categoricalText && config.xAxisStep == null ? 0 : calendarStep ? config.xAxisStep == null && anchorIndex < 0 ? (index) => automaticVisible.has(index) : visible : anchorIndex >= 0 ? anchored : config.xAxisStep == null ? dateCategories ? automaticStride - 1 : 'auto' : requestedStep - 1
-  const displayed = typeof interval === 'function' ? interval : typeof interval === 'number' ? (index: number) => index % (interval + 1) === 0 : () => true
-  return { labels: moveDateContextToVisibleLabels(labels, values, config.dateLabelFormat, displayed), interval, fontSize, rotation, hideOverlap: categoricalText || dateCategories ? false : config.xAxisStep == null && anchorIndex < 0, showMaxLabel: categoricalText || config.xAxisAffixScope != null && config.xAxisAffixScope !== 'all' ? true : undefined }
+  const longest = requestedLabels.reduce((result, label) => Math.max(result, ...label.split('\n').map((line) => line.length)), 0)
+  const rotation = typeof config.xAxisLabelRotate === 'number' ? config.xAxisLabelRotate : categoricalText && longest * fontSize * .58 > slot * .92 ? 90 : 0
+  const interval = categoricalText && config.xAxisStep == null ? 0 : config.xAxisStep == null ? 'auto' as const : requestedStep - 1
+  return { labels, interval, fontSize, rotation, hideOverlap: !categoricalText && config.xAxisStep == null, showMaxLabel: categoricalText || config.xAxisAffixScope != null && config.xAxisAffixScope !== 'all' ? true : undefined }
 }
 
 export function compilePreparedPointScene(table: DataTable, config: ChartConfig, kind: NativePointKind, prepared: PreparedChartData, policy: PreparedLinePolicy = {}): NativeChartScene {
@@ -88,6 +74,7 @@ export function compilePreparedPointScene(table: DataTable, config: ChartConfig,
     return config.categoryLabelOverrides?.x?.[key] ?? label
   })
   const planned = categoryLabelPlan(prepared.categories, initialLabels, config)
+  const dateAxis = prepared.categories.length && prepared.categories.every((value) => value instanceof Date) ? planDateAxisTicks(prepared.categories, table, config) : undefined
   const categories = prepared.categories.map((value, index) => {
     const key = coordinate(value, index)
     return { id: policy.categoryId?.(value, index) ?? syntheticDatumId('category', typed(value)), value, coordinate: key, label: planned.labels[index] ?? String(value ?? '') }
@@ -174,8 +161,8 @@ export function compilePreparedPointScene(table: DataTable, config: ChartConfig,
     .filter(([, text], index) => Boolean(text) && (index === 0 ? config.showTitle !== false : index === 1 ? config.showSubtitle !== false : index === 2 ? config.showNote !== false : config.showSource !== false))
     .map(([role, text, style]) => ({ id: `frame:${role}`, role, text, style }))
   const plot = area
-    ? { kind: 'area', categoryPlacement: 'point', stacking: stack, categories, categoryLabelPlan: planned, categoryAxis, valueAxis, valueDomain, series: series as AreaSeriesScene[] } satisfies CartesianAreaPlotScene
-    : { kind: 'line', categoryPlacement: 'point', categories, categoryLabelPlan: planned, categoryAxis, valueAxis, valueDomain, series: series as LineSeriesScene[] } satisfies CartesianLinePlotScene
+    ? { kind: 'area', categoryPlacement: 'point', stacking: stack, categories, dateAxis, categoryLabelPlan: planned, categoryAxis, valueAxis, valueDomain, series: series as AreaSeriesScene[] } satisfies CartesianAreaPlotScene
+    : { kind: 'line', categoryPlacement: 'point', categories, dateAxis, categoryLabelPlan: planned, categoryAxis, valueAxis, valueDomain, series: series as LineSeriesScene[] } satisfies CartesianLinePlotScene
   return { document: chartDocumentFromLegacy(table, config), compatibilityConfig: config, elements, guides, frameElements, plot }
 }
 

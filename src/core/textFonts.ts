@@ -7,6 +7,7 @@ export interface FontCatalogEntry {
   source: 'local' | 'remote' | 'system'
   weights: readonly number[]
   selectable?: boolean
+  italic?: boolean
 }
 
 export interface LocalFontFace {
@@ -21,14 +22,14 @@ export const fontCatalog: readonly FontCatalogEntry[] = [
   { value: 'Wix Madefor Text, sans-serif', label: 'Wix Madefor Text', family: 'Wix Madefor Text', source: 'local', weights, selectable: false },
   { value: 'Wix Madefor Display, sans-serif', label: 'Wix Madefor Display', family: 'Wix Madefor Display', source: 'local', weights, selectable: false },
   { value: 'Onest, sans-serif', label: 'Onest', family: 'Onest', source: 'local', weights, selectable: true },
-  { value: 'Golos Text, sans-serif', label: 'Golos Text', family: 'Golos Text', source: 'remote', weights, selectable: true },
+  { value: 'Golos Text, sans-serif', label: 'Golos Text', family: 'Golos Text', source: 'remote', weights, selectable: true, italic: false },
   { value: 'Inter, sans-serif', label: 'Inter', family: 'Inter', source: 'remote', weights },
   { value: 'Lato, sans-serif', label: 'Lato', family: 'Lato', source: 'remote', weights },
   { value: 'Roboto, sans-serif', label: 'Roboto', family: 'Roboto', source: 'remote', weights },
   { value: 'Open Sans, sans-serif', label: 'Open Sans', family: 'Open Sans', source: 'remote', weights },
   { value: 'Montserrat, sans-serif', label: 'Montserrat', family: 'Montserrat', source: 'remote', weights },
   { value: 'PT Sans, sans-serif', label: 'PT Sans', family: 'PT Sans', source: 'remote', weights },
-  { value: 'Source Sans 3, sans-serif', label: 'Source Sans 3', family: 'Source Sans 3', source: 'remote', weights },
+  { value: '"Source Sans 3", sans-serif', label: 'Source Sans 3', family: 'Source Sans 3', source: 'remote', weights },
   { value: 'Nunito, sans-serif', label: 'Nunito', family: 'Nunito', source: 'remote', weights },
   { value: 'IBM Plex Sans, sans-serif', label: 'IBM Plex Sans', family: 'IBM Plex Sans', source: 'remote', weights },
   { value: 'Arial, sans-serif', label: 'Arial', family: 'Arial', source: 'system', weights },
@@ -56,6 +57,19 @@ export const localFontFaces: readonly LocalFontFace[] = [
 ] as const
 
 export const fontFamilyName = (value: string) => value.replace(/["']/g, '').split(',')[0].trim()
+
+// Numeric family names must be quoted in CSS, including names saved by older versions.
+export function normalizeFontFamilies<T>(value: T): T {
+  if (!value || typeof value !== 'object' || value instanceof Date) return value
+  if (Array.isArray(value)) return value.map(normalizeFontFamilies) as T
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => {
+    if (key === 'fontFamily' && typeof child === 'string') {
+      const [family, ...fallbacks] = child.split(',')
+      if (/\d/.test(family) && !/^\s*["']/.test(family)) return [key, [JSON.stringify(family.trim()), ...fallbacks].join(',')]
+    }
+    return [key, normalizeFontFamilies(child)]
+  })) as T
+}
 
 export function collectFontFamilies(value: unknown) {
   const result = new Set<string>()
@@ -90,15 +104,17 @@ const loadLocalFace = (face: LocalFontFace) => {
 }
 
 const loadRemoteFamily = (entry: FontCatalogEntry) => {
-  if (!remoteLoads.has(entry.family)) remoteLoads.set(entry.family, new Promise<void>((resolve) => {
+  if (!remoteLoads.has(entry.family)) remoteLoads.set(entry.family, Promise.all((entry.italic === false ? [false] : [false, true]).map((italic) => new Promise<void>((resolve) => {
     const link = document.createElement('link')
     link.rel = 'stylesheet'
-    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(entry.family).replace(/%20/g, '+')}:wght@${entry.weights.join(';')}&display=swap`
+    // Load styles separately: families without italics must still load upright faces.
+    const axis = italic ? `ital,wght@${entry.weights.map((weight) => `1,${weight}`).join(';')}` : `wght@${entry.weights.join(';')}`
+    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(entry.family).replace(/%20/g, '+')}:${axis}&display=swap`
     link.dataset.chartFont = entry.family
-    link.onload = () => { void Promise.all(entry.weights.map((weight) => document.fonts.load(`${weight} 12px "${entry.family}"`, 'AaБб123'))).then(() => resolve(), () => resolve()) }
+    link.onload = () => { void Promise.all(entry.weights.map((weight) => document.fonts.load(`${italic ? 'italic ' : ''}${weight} 12px "${entry.family}"`, 'AaБб123'))).then(() => resolve(), () => resolve()) }
     link.onerror = () => resolve()
     document.head.append(link)
-  }))
+  }))).then(() => undefined))
   return remoteLoads.get(entry.family)!
 }
 

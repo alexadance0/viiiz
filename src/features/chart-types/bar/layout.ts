@@ -1,7 +1,7 @@
 import { formatXAxisNumber, formatYAxisNumber } from '../../../core/numberFormat'
 import { measureTextWidth } from '../../../core/textMetrics'
 import type { CartesianAreaPlotScene, CartesianBarPlotScene, CartesianIntervalPlotScene, CartesianLinePlotScene, CartesianSmoothingPlotScene, ComparisonStemPlotScene, NativeChartScene, ResolvedScene } from '../../../entities/chart/model/ChartScene'
-import { axisReservation, type AxisSpec } from '../../chart-layout/axisLayout'
+import { axisReservation, categoryLabelRotation, type AxisSpec } from '../../chart-layout/axisLayout'
 import { resolveFrame } from '../../chart-layout/frameLayout'
 import type { Rect } from '../../chart-layout/geometry'
 import { guideReservation } from '../../chart-layout/guides/types'
@@ -22,21 +22,55 @@ const railRect = (plot: Rect, side: 'top' | 'right' | 'bottom' | 'left'): Rect =
 function measuredAxis(scene: NativeCartesianScene, source: AxisSpec, estimatedPlot: Rect): AxisSpec {
   const config = scene.compatibilityConfig
   if (source.channel === 'category') {
+    const dateAxis = 'dateAxis' in scene.plot ? scene.plot.dateAxis : undefined
+    const calendarTicks = source.calendarTicks
+    if (dateAxis || calendarTicks) {
+      const labels = (dateAxis?.ticks ?? calendarTicks!).map((tick) => tick.label)
+      const length = source.orientation === 'horizontal' ? estimatedPlot.width : estimatedPlot.height
+      const positions = dateAxis ? dateAxis.ticks.map((tick) => length * (tick.value - dateAxis.min) / Math.max(1, dateAxis.max - dateAxis.min)) : calendarTicks!.map((tick) => length * (tick.position + .5) / Math.max(1, scene.plot.categories.length))
+      const slots = positions.map((position, index) => Math.min(index ? position - positions[index - 1] : Infinity, index + 1 < positions.length ? positions[index + 1] - position : Infinity))
+      const rotation = source.orientation !== 'horizontal' ? 0 : typeof config.xAxisLabelRotate === 'number' && config.xAxisLabelRotate > 0 ? config.xAxisLabelRotate : categoryLabelRotation(labels, source.labels.style, slots, 'auto') ? 45 : 0
+      const size = Math.ceil(Math.max(0, ...labels.map((label) => layoutText({ document: plainTextDocument(label, source.labels.style), maxWidth: estimatedPlot.width, rotation }).rotatedSize[source.orientation === 'horizontal' ? 'height' : 'width'])))
+      const title = source.title && { ...source.title, size: Math.ceil(layoutText({ document: plainTextDocument(source.title.text, source.title.style), maxWidth: length, rotation: source.orientation === 'vertical' ? 90 : 0 }).rotatedSize[source.orientation === 'horizontal' ? 'height' : 'width']) }
+      return { ...source, labels: { ...source.labels, size, rotation }, title }
+    }
     const slot = (source.orientation === 'horizontal' ? estimatedPlot.width : estimatedPlot.height) / Math.max(1, scene.plot.categories.length)
     const naturalWidth = Math.max(0, ...scene.plot.categories.flatMap((category) => category.label.split('\n').map((line) => measureTextWidth(line, source.labels.style.size, source.labels.style.fontFamily, source.labels.style.weight))))
     const dateCategories = scene.plot.categories.some((category) => category.value instanceof Date)
     const requestedStride = Math.max(1, Math.round(config.xAxisStep ?? 1))
-    const automaticRotation = source.orientation === 'horizontal' && config.xAxisLabelRotate === 'auto'
-      ? dateCategories ? config.xAxisStep != null && naturalWidth > slot * requestedStride * 1.08 ? 45 : 0 : naturalWidth > slot * .92 ? 90 : 0
-      : 0
-    const rotation = source.orientation === 'horizontal' ? typeof config.xAxisLabelRotate === 'number' ? config.xAxisLabelRotate : automaticRotation : 0
-    const maxWidth = config.xAxisLabelOverflow === 'wrap' ? Math.max(20, slot - 8) : Math.max(naturalWidth, 1)
-    const layouts = scene.plot.categories.map((category) => layoutText({ document: plainTextDocument(category.label, source.labels.style), maxWidth, rotation, wrap: config.xAxisLabelOverflow === 'wrap' }))
-    const size = Math.ceil(Math.max(0, ...layouts.map((layout) => source.orientation === 'horizontal' ? layout.rotatedSize.height : layout.rotatedSize.width)))
+    const displayed = scene.plot.categories.flatMap((category, index) => {
+      if (!category.label) return []
+      const interval = 'categoryLabelPlan' in scene.plot ? scene.plot.categoryLabelPlan.interval : undefined
+      return typeof interval === 'function' && !interval(index) || typeof interval === 'number' && index % (interval + 1) !== 0 ? [] : [index]
+    })
+    const dateSlots = new Map(displayed.map((index, ordinal) => {
+      const previous = ordinal ? index - displayed[ordinal - 1] : Infinity
+      const next = ordinal + 1 < displayed.length ? displayed[ordinal + 1] - index : Infinity
+      const gap = Math.min(previous, next)
+      return [index, Number.isFinite(gap) ? slot * gap : estimatedPlot.width]
+    }))
+    const slots = scene.plot.categories.map((category, index) => ('span' in category && category.span ? (source.orientation === 'horizontal' ? estimatedPlot.width : estimatedPlot.height) * (category.span.end - category.span.start) / 100 : dateCategories ? dateSlots.get(index) ?? estimatedPlot.width : slot * requestedStride) - 8)
+    const rotation = source.orientation !== 'horizontal' ? 0
+      : dateCategories && (config.xAxisLabelRotate == null || config.xAxisLabelRotate === 'auto')
+        ? categoryLabelRotation(scene.plot.categories.map((category, index) => dateSlots.has(index) ? category.label : ''), source.labels.style, slots, 'auto') ? 45 : 0
+        : categoryLabelRotation(scene.plot.categories.map((category, index) => 'span' in category && slots[index] < lineHeight(source.labels.style) ? '' : category.label), source.labels.style, slots, config.xAxisLabelRotate)
+    const constrained = config.xAxisLabelOverflow === 'wrap' || config.xAxisLabelOverflow === 'truncate'
+    const wordWidth = Math.max(0, ...scene.plot.categories.flatMap((category) => category.label.split(/\s+/).map((word) => measureTextWidth(word, source.labels.style.size, source.labels.style.fontFamily, source.labels.style.weight))))
+    const sideWidth = Math.max(20, wordWidth + 4, Math.min(naturalWidth + 4, estimatedPlot.width * .32))
+    const maxWidth = !constrained || rotation ? Math.max(naturalWidth + 4, 1)
+      : source.orientation === 'vertical' ? sideWidth : Math.max(20, slot - 8)
+    const layouts = scene.plot.categories.map((category, index) => {
+      const span = scene.plot.kind === 'bar' && source.orientation === 'horizontal' ? scene.plot.categories[index].span : undefined
+      const width = span && config.xAxisLabelOverflow === 'wrap' ? Math.max(1, estimatedPlot.width * (span.end - span.start) / 100 - 8) : maxWidth
+      const label = span && estimatedPlot.width * (span.end - span.start) / 100 - 8 < lineHeight(source.labels.style) ? '' : category.label
+      const layout = layoutText({ document: plainTextDocument(label, source.labels.style), maxWidth: width, rotation, wrap: config.xAxisLabelOverflow === 'wrap' && !rotation, breakWords: false })
+      return span && !rotation ? { ...layout, rotatedSize: { ...layout.rotatedSize, height: Math.min(layout.rotatedSize.height, lineHeight(source.labels.style) * 3) } } : layout
+    })
+    const size = source.orientation === 'vertical' && constrained ? maxWidth : Math.ceil(Math.max(0, ...layouts.map((layout) => source.orientation === 'horizontal' ? layout.rotatedSize.height : layout.rotatedSize.width)))
     const title = source.title && { ...source.title, size: Math.ceil(layoutText({ document: plainTextDocument(source.title.text, source.title.style), maxWidth: Math.max(1, source.orientation === 'horizontal' ? estimatedPlot.width : estimatedPlot.height), rotation: source.orientation === 'vertical' ? 90 : 0 }).rotatedSize[source.orientation === 'horizontal' ? 'height' : 'width']) }
     return { ...source, labels: { ...source.labels, size, rotation }, title }
   }
-  const formatter = orientation(scene) === 'horizontal' ? formatXAxisNumber : formatYAxisNumber
+  const formatter = orientation(scene) === 'horizontal' && !(config.kind === 'marimekko' && scene.plot.kind === 'bar' && scene.plot.stacking === 'normalized') ? formatXAxisNumber : formatYAxisNumber
   const labels = numericTicks(scene.plot.valueDomain.min, scene.plot.valueDomain.max, scene.plot.valueDomain.step).map((value) => formatter(value, config))
   const size = source.orientation === 'horizontal'
     ? lineHeight(source.labels.style)
@@ -50,7 +84,7 @@ export function resolveNativeCartesianScene(sourceScene: NativeChartScene, extra
   const scene = sourceScene as NativeCartesianScene
   const config = scene.compatibilityConfig
   const initial = resolveFrame({ canvas: scene.document.canvas, spacing: scene.document.composition })
-  const categoryAxis = measuredAxis(scene, scene.plot.categoryAxis, initial.plot)
+  let categoryAxis = measuredAxis(scene, scene.plot.categoryAxis, initial.plot)
   let valueAxis = measuredAxis(scene, scene.plot.valueAxis, initial.plot)
   const directGuide = scene.guides.find((guide) => guide.kind === 'direct-series')
   if (orientation(scene) === 'horizontal' && directGuide?.visible && valueAxis.placement.kind === 'side' && valueAxis.placement.side === 'top') {
@@ -95,31 +129,23 @@ export function resolveNativeCartesianScene(sourceScene: NativeChartScene, extra
       }
     }
   }
-  // ECharts measures label margin from the axis line, so ticks that fit inside
-  // that margin do not consume another rail of their own.
-  const categoryLayoutAxis = categoryAxis.labels.visible && categoryAxis.ticks.visible
-    ? { ...categoryAxis, ticks: { ...categoryAxis.ticks, length: Math.max(0, categoryAxis.ticks.length - categoryAxis.labels.gap) } }
-    : categoryAxis
-  const categoryReservation = axisReservation(categoryLayoutAxis, 50)
+  const categoryReservation = axisReservation(categoryAxis, 50)
   const valueReservation = axisReservation(valueAxis, 50)
   if (categoryReservation) reservations.push(categoryReservation)
   if (valueReservation) reservations.push(valueReservation)
-  if (orientation(scene) === 'vertical' && valueAxis.labels.visible && valueAxis.placement.kind === 'side') {
-    reservations.push({ id: 'axis:value-label-safety', side: valueAxis.placement.side, size: 2, gap: 0, mode: 'outside', priority: 51 })
-  }
   if (orientation(scene) === 'vertical' && valueAxis.labels.visible) {
     reservations.push({ id: 'axis:value-edge-top', side: 'top', size: Math.ceil(lineHeight(valueAxis.labels.style) / 2), gap: 0, mode: 'outside', priority: 55 })
   }
   if (orientation(scene) === 'horizontal' && valueAxis.labels.visible) {
-    const formatter = scene.plot.kind === 'area' && scene.plot.stacking === 'normalized' ? formatYAxisNumber : formatXAxisNumber
+    const formatter = config.kind === 'marimekko' && scene.plot.kind === 'bar' && scene.plot.stacking === 'normalized' || scene.plot.kind === 'area' && scene.plot.stacking === 'normalized' ? formatYAxisNumber : formatXAxisNumber
     const edge = Math.ceil(Math.max(...[scene.plot.valueDomain.min, scene.plot.valueDomain.max].map((value) => measureTextWidth(formatter(value, config), valueAxis.labels.style.size, valueAxis.labels.style.fontFamily, valueAxis.labels.style.weight))) / 2) + 10
     const categorySide = categoryAxis.placement.kind === 'side' ? categoryAxis.placement.side : undefined
     if (categorySide !== 'left') reservations.push({ id: 'axis:value-edge-left', side: 'left', size: edge, gap: 0, mode: 'outside', priority: 55 })
     if (categorySide !== 'right') reservations.push({ id: 'axis:value-edge-right', side: 'right', size: edge, gap: 0, mode: 'outside', priority: 55 })
   }
-  if (scene.plot.kind === 'bar' && config.showValues && config.barValueLabelAbsorption && !(config.valueLabelPosition ?? '').startsWith('inside-')) {
+  if (scene.plot.kind === 'bar' && config.kind !== 'butterfly' && config.kind !== 'marimekko' && (config.barValueLabelAbsorption || scene.plot.orientation === 'horizontal' && scene.plot.stacking === 'normalized') && scene.plot.series.some((series) => series.marks.some((mark) => mark.label.visible)) && !(config.valueLabelPosition ?? '').startsWith('inside-')) {
     const values = scene.plot.series.flatMap((series) => series.marks.map((mark) => mark.value))
-    const amount = lineHeight(config.valueText) + 8
+    const amount = (scene.plot.orientation === 'horizontal' ? Math.max(0, ...scene.plot.series.flatMap((series) => series.marks.filter((mark) => mark.label.visible).map((mark) => measureTextWidth(mark.label.text, mark.label.style.size, mark.label.style.fontFamily, mark.label.style.weight)))) : lineHeight(config.valueText)) + 8
     const positiveSide = scene.plot.orientation === 'horizontal' ? 'right' : 'top'
     const negativeSide = scene.plot.orientation === 'horizontal' ? 'left' : 'bottom'
     if (values.some((value) => value != null && value >= 0)) reservations.push({ id: 'value-labels:positive', side: positiveSide, size: amount, gap: 0, mode: 'outside', priority: 60 })
@@ -133,13 +159,21 @@ export function resolveNativeCartesianScene(sourceScene: NativeChartScene, extra
       if (categorySide !== 'right') reservations.push({ id: 'value-labels:right', side: 'right', size: amount, gap: 0, mode: 'outside', priority: 60 })
     } else {
       reservations.push({ id: 'value-labels:top', side: 'top', size: amount, gap: 0, mode: 'outside', priority: 60 })
-      if (scene.plot.variant === 'dumbbell') reservations.push({ id: 'value-labels:bottom', side: 'bottom', size: amount, gap: 0, mode: 'outside', priority: 60 })
+      if (scene.plot.variant === 'dumbbell' || scene.plot.variant === 'arrow') reservations.push({ id: 'value-labels:bottom', side: 'bottom', size: amount, gap: 0, mode: 'outside', priority: 60 })
     }
   } else if (scene.plot.kind !== 'bar' && config.showValues && !(config.valueLabelPosition ?? '').startsWith('inside-')) {
     const side = config.valueLabelPosition === 'bottom' ? 'bottom' : 'top'
     reservations.push({ id: `value-labels:${side}`, side, size: lineHeight(config.valueText) + 8, gap: 0, mode: 'outside', priority: 60 })
   }
-  const frame = resolveFrame({ canvas: scene.document.canvas, spacing: scene.document.composition, reservations })
+  let frame = resolveFrame({ canvas: scene.document.canvas, spacing: scene.document.composition, reservations })
+  // Rotation and wrapping depend on the space left after guides and axes.
+  for (let pass = 0; categoryAxis.orientation === 'horizontal' && pass < 2; pass += 1) {
+    categoryAxis = measuredAxis(scene, scene.plot.categoryAxis, frame.plot)
+    const revised = axisReservation(categoryAxis, 50)
+    const index = reservations.findIndex((item) => item.id === 'axis:category')
+    if (index >= 0 && revised) reservations[index] = revised
+    frame = resolveFrame({ canvas: scene.document.canvas, spacing: scene.document.composition, reservations })
+  }
   const reservationGeometry = Object.fromEntries(frame.resolvedReservations.map(({ reservation, bounds }) => [reservation.id, bounds]))
   const axes = {
     category: reservationGeometry['axis:category'] ?? railRect(frame.plot, categoryAxis.placement.kind === 'side' ? categoryAxis.placement.side : 'bottom'),
@@ -150,20 +184,24 @@ export function resolveNativeCartesianScene(sourceScene: NativeChartScene, extra
   scene.plot.categories.forEach((category, index) => {
     if (orientation(scene) === 'vertical') {
       if (scene.plot.categoryPlacement === 'point') {
-        const center = frame.plot.x + (scene.plot.categories.length === 1 ? frame.plot.width / 2 : frame.plot.width * index / (scene.plot.categories.length - 1))
+        const dateAxis = 'dateAxis' in scene.plot ? scene.plot.dateAxis : undefined
+        const center = frame.plot.x + (scene.plot.categories.length === 1 ? frame.plot.width / 2 : dateAxis ? frame.plot.width * (Number(category.value) - dateAxis.min) / Math.max(1, dateAxis.max - dateAxis.min) : frame.plot.width * index / (scene.plot.categories.length - 1))
         const width = Math.min(frame.content.width, Math.ceil(layoutText({ document: plainTextDocument(category.label, categoryAxis.labels.style), maxWidth: frame.content.width, rotation: categoryAxis.labels.rotation }).rotatedSize.width))
         const x = Math.max(frame.content.x, Math.min(center - width / 2, frame.content.x + frame.content.width - width))
         elements[`category-label:${category.id}`] = { x, y: categoryRail.y, width, height: categoryRail.height }
         return
       }
       const width = frame.plot.width / Math.max(1, scene.plot.categories.length)
-      elements[`category-label:${category.id}`] = { x: frame.plot.x + index * width, y: categoryRail.y, width, height: categoryRail.height }
+      const span = scene.plot.kind === 'bar' ? scene.plot.categories[index].span : undefined
+      elements[`category-label:${category.id}`] = { x: frame.plot.x + (span ? span.start / 100 * frame.plot.width : index * width), y: categoryRail.y, width: span ? (span.end - span.start) / 100 * frame.plot.width : width, height: categoryRail.height }
     } else {
       const height = frame.plot.height / Math.max(1, scene.plot.categories.length)
-      elements[`category-label:${category.id}`] = { x: categoryRail.x, y: frame.plot.y + index * height, width: categoryRail.width, height }
+      const span = scene.plot.kind === 'bar' ? scene.plot.categories[index].span : undefined
+      const start = span ? (config.categoryAxisInverse ?? true) ? span.start : 100 - span.end : 0
+      elements[`category-label:${category.id}`] = { x: categoryRail.x, y: frame.plot.y + (span ? start / 100 * frame.plot.height : index * height), width: categoryRail.width, height: span ? (span.end - span.start) / 100 * frame.plot.height : height }
     }
   })
-  return { ...scene, plot: { ...scene.plot, categoryAxis, valueAxis }, resolvedReservations: frame.resolvedReservations, geometry: { canvas: frame.canvas, content: frame.content, plot: frame.plot, reservations: reservationGeometry, axes, elements, guides: {} } }
+  return { ...scene, plot: { ...scene.plot, categoryAxis, valueAxis, ...('categoryLabelPlan' in scene.plot ? { categoryLabelPlan: { ...scene.plot.categoryLabelPlan, rotation: categoryAxis.labels.rotation ?? 0 } } : {}) }, resolvedReservations: frame.resolvedReservations, geometry: { canvas: frame.canvas, content: frame.content, plot: frame.plot, reservations: reservationGeometry, axes, elements, guides: {} } }
 }
 
 export const resolveNativeBarScene = resolveNativeCartesianScene

@@ -1,4 +1,4 @@
-import { planCategoryDateLabels } from '../../../core/chartDateAxis'
+import { planCategoryDateLabels, planCategoryDateTicks } from '../../../core/chartDateAxis'
 import { prepareVisibleChartData, niceNumericScale, orderedBounds } from '../../../core/chartScale'
 import { formatChartNumber } from '../../../core/numberFormat'
 import { seriesLegendItemId } from '../../../core/legend'
@@ -17,7 +17,7 @@ export const isNativeBarKind = (kind: ChartKind): kind is NativeBarKind => (NATI
 const typed = (value: DataValue) => value instanceof Date ? `date:${value.toISOString()}` : `${typeof value}:${String(value ?? '')}`
 export const legacyBarElementKey = (series: string, category: DataValue) => `${series}\u001f${category instanceof Date ? category.toISOString() : typed(category)}`
 const coordinate = (value: DataValue, index: number) => value instanceof Date ? value.toISOString() : `${index}:${String(value ?? '')}`
-const paletteFallback = ['#1677a6', '#168a72', '#e56b45', '#d0a52b', '#3f8fba', '#a45ca4', '#6f9d45', '#c64f70']
+const paletteFallback = ['#1923e3', '#168a72', '#e56b45', '#d0a52b', '#3f8fba', '#a45ca4', '#6f9d45', '#c64f70']
 export const nativeBarSeriesColor = (config: ChartConfig, name: string, index: number) => config.seriesStyles[name]?.color ?? config.barFillColor ?? (config.palette?.length ? config.palette : [config.color, ...paletteFallback.slice(1)])[index % Math.max(1, config.palette?.length ?? paletteFallback.length)]
 
 const stacking = (kind: NativeBarKind) => kind.includes('normalized') ? 'normalized' : kind.includes('stacked') ? 'stacked' : 'none'
@@ -95,6 +95,7 @@ export function compileNativeBarScene(table: DataTable, sourceConfig: ChartConfi
   const categoryTitleStyle = config.xAxisTitleText ?? config.axisTitleText
   const valueTitleStyle = config.yAxisTitleText ?? config.axisTitleText
   const categoryAxis = axis({ id: 'category', channel: 'category', orientation: orientation === 'vertical' ? 'horizontal' : 'vertical', placement: { kind: 'side', side: categorySide }, line: { visible: config.showXAxisLine }, ticks: { visible: config.showXTicks, length: config.tickLength }, labels: { visible: config.showXAxisLabels ?? true, size: 0, gap: config.xAxisLabelGap ?? 8, rotation: orientation === 'vertical' && typeof config.xAxisLabelRotate === 'number' ? config.xAxisLabelRotate : 0, style: categoryStyle }, title: { visible: config.showXAxisTitle, text: config.xAxisTitle, size: 0, gap: config.xAxisTitleGap, style: categoryTitleStyle } })
+  categoryAxis.calendarTicks = planCategoryDateTicks(prepared.categories, table, config)
   const valueAxis = axis({ id: 'value', channel: 'value', orientation: orientation === 'vertical' ? 'vertical' : 'horizontal', placement: { kind: 'side', side: valueSide }, line: { visible: config.showYAxisLine }, ticks: { visible: config.showYTicks, length: config.tickLength }, labels: { visible: config.showYAxisLabels ?? true, size: 0, gap: config.yAxisLabelGap ?? 8, style: valueStyle }, title: { visible: config.showYAxisTitle, text: config.yAxisTitle, size: 0, gap: config.yAxisTitleGap, style: valueTitleStyle } })
   const guides: GuideSpec[] = [
     { id: 'legend', kind: 'categorical-legend', visible: config.showLegend && !config.showDirectLabels && series.some((item) => config.seriesStyles[item.name]?.showLegendItem !== false), coordinateSpace: 'content', position: config.legendPosition ?? 'top', items: series.map((item) => ({ id: seriesLegendItemId(item.id), label: config.seriesStyles[item.name]?.legendLabel?.trim() || item.name, visible: config.seriesStyles[item.name]?.showLegendItem ?? true, color: item.color, target: { kind: 'series' as const, seriesId: item.id } })) },

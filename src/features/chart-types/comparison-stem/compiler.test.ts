@@ -19,6 +19,51 @@ const table: DataTable = {
 const config = (kind: ChartConfig['kind']): ChartConfig => ({ ...createDefaultChartConfig(), kind, xField: 'category', yField: 'value', yFields: ['value'], aggregation: 'none' })
 
 describe('native comparison/stem compiler', () => {
+  it.each(['horizontal', 'vertical'] as const)('dot plots keep editable values, negative values and gaps without stems: %s', (dumbbellOrientation) => {
+    const source = { ...config('dot-plot'), dumbbellOrientation, yFields: ['before', 'after'], showValues: true }
+    const scene = getChartPlugin('dot-plot').compile({ ...table, rows: [...table.rows, { category: 'Negative', value: -2, before: -4, after: 0 }] }, source) as NativeComparisonStemChartScene
+    expect(scene.plot.variant).toBe('dot')
+    expect(scene.plot.orientation).toBe(dumbbellOrientation)
+    expect(scene.document.chart).toMatchObject({ family: 'dot-plot', orientation: dumbbellOrientation })
+    expect(scene.plot.connectors).toEqual([])
+    expect(scene.plot.series[0].points.map((point) => point.value)).toContain(-4)
+    expect(scene.plot.series[1].points).toHaveLength(4)
+    expect(scene.elements.filter((element) => element.role === 'mark')).toHaveLength(9)
+    expect(scene.plot.valueDomain.min).toBeLessThanOrEqual(-4)
+    expect(() => renderScene(scene)).not.toThrow()
+  })
+
+  it.each(['horizontal', 'vertical'] as const)('arrow plots keep pair semantics and point arrowheads toward the end value: %s', (dumbbellOrientation) => {
+    const source = { ...config('arrow-plot'), dumbbellOrientation, dumbbellStartField: 'before', dumbbellEndField: 'after', dumbbellColorByChange: true, dumbbellShowDifference: true, showValues: true }
+    const scene = getChartPlugin('arrow-plot').compile({ ...table, rows: [...table.rows, { category: 'Equal', value: 0, before: 0, after: 0 }] }, source) as NativeComparisonStemChartScene
+    expect(scene.plot.variant).toBe('arrow')
+    expect(scene.document.chart).toMatchObject({ family: 'arrow-plot', orientation: dumbbellOrientation })
+    expect(scene.plot.categories.map((category) => category.value)).toEqual(['A', 'B', 'C', 'Equal'])
+    expect(scene.plot.connectors.map((connector) => [connector.fromValue, connector.toValue])).toEqual([[10, 14], [20, 18], [8, 17], [0, 0]])
+    const resolved = resolveNativeComparisonStemScene(scene)
+    const option = renderScene(resolved) as { series: Array<{ renderItem(params: { dataIndex: number }): { children: Array<{ type: string; shape: { points?: number[][] }; style: { stroke: string; opacity: number } }> } }> }
+    const ends = option.series[1]
+    for (const index of [0, 1]) {
+      const head = ends.renderItem({ dataIndex: index }).children[0]
+      expect(head.type).toBe('polyline')
+      const geometry = resolved.comparisonGeometry.points[scene.plot.series[1].points[index].id]
+      expect(head.shape.points![1]).toEqual([geometry.x, geometry.y])
+      const dimension = dumbbellOrientation === 'horizontal' ? 0 : 1
+      const direction = (scene.plot.connectors[index].toValue - scene.plot.connectors[index].fromValue) * (dumbbellOrientation === 'horizontal' ? 1 : -1)
+      expect((head.shape.points![1][dimension] - head.shape.points![0][dimension]) * direction).toBeGreaterThan(0)
+      expect(head.style.stroke).toBe(scene.plot.connectors[index].stroke.color)
+    }
+    expect(ends.renderItem({ dataIndex: 3 }).children[0].type).toBe('circle')
+    expect(option.series[0].renderItem({ dataIndex: 0 }).children.every((child) => child.type === 'text')).toBe(true)
+  })
+
+  it('validates arrow pairs and places all three chart types in their own category', () => {
+    expect(getChartPlugin('arrow-plot').validate(table, config('arrow-plot')).ok).toBe(false)
+    expect(getChartPlugin('arrow-plot').validate(table, { ...config('arrow-plot'), dumbbellStartField: 'before', dumbbellEndField: 'before' }).ok).toBe(false)
+    expect(getChartPlugin('arrow-plot').validate(table, { ...config('arrow-plot'), dumbbellStartField: 'before', dumbbellEndField: 'after' }).ok).toBe(true)
+    for (const kind of ['dot-plot', 'dumbbell', 'arrow-plot'] as const) expect(getChartPlugin(kind).category).toBe('point-comparison')
+  })
+
   it.each(['lollipop', 'horizontal-lollipop'] as const)('%s emits editable source points and derived stable stems', (kind) => {
     const plugin = getChartPlugin(kind), source = config(kind)
     const scene = plugin.compile(table, source)
@@ -111,6 +156,19 @@ describe('native comparison/stem compiler', () => {
     expect(resolved.comparisonGeometry.categoryGridLines).toHaveLength(scene.plot.categories.length)
     const option = renderScene(resolved) as { graphic: Array<{ id?: string }> }
     expect(option.graphic.filter((item) => item.id?.startsWith('comparison-category-grid:'))).toHaveLength(scene.plot.categories.length)
+  })
+
+  it.each(['horizontal-lollipop', 'dumbbell'] as const)('%s independently renders both grid directions', (kind) => {
+    for (const showHorizontalGrid of [false, true]) for (const showVerticalGrid of [false, true]) {
+      const source = { ...config(kind), yFields: kind === 'dumbbell' ? ['before', 'after'] : ['value'], showHorizontalGrid, showVerticalGrid }
+      const scene = getChartPlugin(kind).compile(table, source) as NativeComparisonStemChartScene
+      const resolved = resolveNativeComparisonStemScene(scene)
+      const option = renderScene(resolved) as { xAxis: { splitLine: { show: boolean } }; graphic: Array<{ id?: string; shape?: { x1: number; x2: number; y1: number; y2: number } }> }
+      const lines = option.graphic.filter((item) => item.id?.startsWith('comparison-category-grid:'))
+      expect(lines).toHaveLength(showHorizontalGrid ? scene.plot.categories.length : 0)
+      expect(lines.every((line) => line.shape?.y1 === line.shape?.y2 && line.shape!.x1 < line.shape!.x2)).toBe(true)
+      expect(option.xAxis.splitLine.show).toBe(showVerticalGrid)
+    }
   })
 
   it('preserves custom mark/stem interaction styling and fully resolved direct guides', () => {

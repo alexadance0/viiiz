@@ -28,6 +28,14 @@ describe('native Butterfly compiler and layout', () => {
     expect(left.x + left.width).toBeLessThanOrEqual(right.x)
   })
 
+  it.each(['left', 'right'] as const)('passes measured %s labels to the renderer and keeps values outside their rail', (placement) => {
+    const resolved = resolveNativeButterflyScene(compileNativeButterflyScene({ ...table, rows: table.rows.map((row, index) => ({ ...row, group: index ? 'Ноутбуки' : 'Смартфоны' })) }, config({ butterflyCategoryPosition: placement, xAxisLabelOverflow: 'wrap', showValues: true })))
+    expect(resolved.plot.categoryAxis.labels.size).toBeGreaterThan(20)
+    const option = renderButterflyScene(resolved) as { yAxis: { axisLabel: { formatter(value: string, index: number): string } } }
+    expect(option.yAxis.axisLabel.formatter('', 0)).toBe(resolved.plot.categories[0].label)
+    expect(resolved.geometry.reservations[`butterfly-values:${placement}`].width).toBeGreaterThan(10)
+  })
+
   it('stacks same-side segments in one row with touching cumulative edges', () => {
     const resolved = resolveNativeButterflyScene(compileNativeButterflyScene(table, config()))
     const [leftA, leftB, rightA, rightB] = resolved.plot.series.map((series) => resolved.butterflyGeometry.marks[series.marks[0].id])
@@ -61,7 +69,7 @@ describe('native Butterfly compiler and layout', () => {
     expect(resolved.butterflyGeometry.labels[right.id]).toMatchObject({ align: 'center', inside: true })
     const option = renderButterflyScene(resolved) as { graphic: Array<{ id?: string; shape?: { x: number; width: number }; style?: { fill?: string } }>; nativeSelectionHits: Array<{ info: { selectionTarget?: string; axis?: string; elementKey: string } }>; nativeCategoryLayouts: Array<{ category: string; width: number }> }
     expect(option.graphic.find((item) => item.id === `value-label:${left.id}`)?.style?.fill).toBe('#202027')
-    expect(option.graphic.find((item) => item.id === `value-label:${right.id}`)?.style?.fill).toBe('#fff')
+    expect(option.graphic.find((item) => item.id === `value-label:${right.id}`)?.style?.fill).toBe('#ffffff')
     expect(option.nativeSelectionHits.some((hit) => hit.info.selectionTarget === 'category-label' && hit.info.axis === 'y' && hit.info.elementKey.startsWith('category-label:y:'))).toBe(true)
     expect(option.nativeCategoryLayouts.every((layout) => layout.width > 0)).toBe(true)
     expect(option.graphic.find((item) => item.id === 'butterfly-center-mask')).toMatchObject({

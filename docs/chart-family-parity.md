@@ -29,6 +29,7 @@ Wave 3 started from `57a9357`; native Waterfall/Butterfly implementation complet
 | area | area | native | shared native Cartesian frame/axes | native point metadata → callback adapter | existing SVG/PNG boundary | no |
 | stacked-area | area | native | shared native Cartesian frame/axes | native point metadata → callback adapter | existing SVG/PNG boundary | no |
 | normalized-stacked-area | area | native | shared native Cartesian frame/axes | native point metadata → callback adapter | existing SVG/PNG boundary | no |
+| stream-graph | area / stream transform | native weighted wiggle or centered baseline | shared native Cartesian frame/axes | native ribbon and midpoint metadata → callback adapter | existing SVG/PNG boundary | no |
 | slope | specialized comparison | native | dedicated native Slope layout inside shared frame | native endpoint metadata → callback adapter | shared SVG/PNG boundary | no |
 | lollipop / horizontal-lollipop | comparison stem | native | shared native Cartesian frame/axes + resolved stems/grid/direct guides | native endpoint and guide metadata | shared SVG/PNG boundary | no |
 | dumbbell | paired comparison stem | native | shared native Cartesian frame/axes + resolved pair/change geometry | native endpoint and guide metadata; connectors derived | shared SVG/PNG boundary | no |
@@ -44,7 +45,8 @@ Wave 3 started from `57a9357`; native Waterfall/Butterfly implementation complet
 | violinplot / raincloud / ridgeline | statistical density shapes | native | dedicated lane/value density geometry | raw observations editable; derived density excluded | shared SVG/PNG boundary | no |
 | histogram / kde-plot | distribution frequency/density | native semantic frequency layers | native continuous value × frequency/density axes | stable bins and source observations | shared SVG/PNG boundary | no |
 | heatmap | matrix | native | resolved cells and four-sided color guide | native custom renderer | semantic compiler/layout/renderer | yes |
-| map-russia / map-usa / map-europe | choropleth geography | native, bundled Natural Earth polygons | fitted projected paths, inset states and shared color guide | stable territory metadata → callback adapter | shared SVG/PNG boundary | no |
+| map-russia / map-usa / map-europe / map-world | choropleth geography | native, bundled Natural Earth polygons | fitted projected paths, inset states and shared color guide | stable territory metadata → callback adapter | shared SVG/PNG boundary | no |
+| tilemap-russia / tilemap-usa / tilemap-europe / tilemap-world | square tile geography | native, fixed grids with complete preset coverage | equal squares, centered short labels, wrapped full names, gutters and shared color guide | stable territory metadata → callback adapter | shared SVG/PNG boundary | no |
 | treemap | hierarchy | native | resolved hierarchy rectangles and label bands | native custom renderer | semantic compiler/layout/renderer | yes |
 
 ## Bar characterization coverage
@@ -165,3 +167,10 @@ Every registry entry compiles a semantic scene and renders through the same reso
 Bump reuses the native Line scene, layout, selection and export pipeline with an explicit inverted value axis. Values are aggregated before per-period competition ranking (`1, 1, 3` for ties); ascending and descending ranking, wide measures and long participant tables are supported. Supplied places remain unchanged and must be positive integers. Percent conversion, logarithmic scales and zero filling do not affect ranks; missing observations remain missing.
 
 Stable source point IDs survive rank direction and series-order changes. Tooltips identify both the place and original value in calculated mode. Two direct-series guides reserve endpoint label space, and the value-label rail stays outside the initial names. Rank axes use an automatic integer domain and step. A four-brand sample is available from the editor's data examples.
+
+
+## Marimekko: group volume and composition
+
+Marimekko reuses native Bar identities, aggregation, category/series ordering, styles, frame layout, selection and export. Category spans store original group totals and cumulative width percentages; segment heights show their within-group shares. Segment area is proportional to original volume across the full chart. Wide measures and long group/segment/value tables are supported. Negative input is rejected, zero-total groups are omitted, and missing observations create no segment. Inherited percent mode cannot change group widths.
+
+Category label bounds follow the weighted spans; labels wrap to the actual group width. Segment labels use fixed font sizes, automatic contrast and hide when they cannot fit. Tooltips show original values and shares. The width/orientation controls are unavailable because changing them would invalidate the encoding. Both axes use linear scales, and the share axis stays at 0–100%. A four-market demo is available from the editor's examples.

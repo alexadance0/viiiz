@@ -1,5 +1,7 @@
+import { compileStreamScene, validateStreamMapping } from '../features/chart-types/stream/compiler'
+import { compileMarimekkoScene, validateMarimekkoMapping } from '../features/chart-types/marimekko/compiler'
 import { compileNativeMapScene, validateMapMapping } from '../features/chart-types/map/compiler'
-import { inferMapRegionField, isMapChart, mapPresets, mapPresetForKind } from '../features/chart-types/map/catalog'
+import { inferMapRegionField, isMapChart, isTileMapChart, mapChartPresets, mapPresetForKind } from '../features/chart-types/map/catalog'
 import { compileNativeBumpScene, validateBumpMapping } from '../features/chart-types/bump/compiler'
 import { compileNativeSankeyScene, validateNativeSankeyMapping } from '../features/chart-types/sankey/compiler'
 import type { NativeChartScene } from '../entities/chart/model/ChartScene'
@@ -30,7 +32,7 @@ import { compileNativeTreemapScene, validateNativeTreemapMapping } from '../feat
 import { compileNativeWaterfallScene } from '../features/chart-types/waterfall/compiler'
 import { compileNativeXYScene, isNativeXYKind, validateNativeXYMapping } from '../features/chart-types/xy/compiler'
 import { repeatedChartCategories } from './chartData'
-import { isAreaChart, isBarChart, isNormalizedStackedChart } from './chartKinds'
+import { isScatterChart, isPairedComparisonChart, isAreaChart, isBarChart, isNormalizedStackedChart } from './chartKinds'
 import { slopePositionKey } from './chartScale'
 import type { ChartConfig, ChartElementSelection, ChartKind, ChartPlugin, DataTable } from './types'
 
@@ -53,7 +55,7 @@ const validateMapping = (table: DataTable, config: ChartConfig) => {
   if (!config.xField || !table.columns.includes(config.xField)) errors.push({ field: 'xField', message: 'Выберите колонку для оси X.' })
   const yFields = config.yFields.length ? config.yFields : [config.yField]
   if (!yFields.some(numeric)) errors.push({ field: 'yField', message: 'Выберите числовую колонку для значения.' })
-  if (config.kind === 'dumbbell' && (!numeric(config.dumbbellStartField) || !numeric(config.dumbbellEndField) || config.dumbbellStartField === config.dumbbellEndField)) errors.push({ field: 'dumbbellFields', message: 'Выберите две разные числовые колонки для гантельной диаграммы.' })
+  if (isPairedComparisonChart(config.kind) && (!numeric(config.dumbbellStartField) || !numeric(config.dumbbellEndField) || config.dumbbellStartField === config.dumbbellEndField)) errors.push({ field: 'dumbbellFields', message: config.kind === 'arrow-plot' ? 'Выберите две разные числовые колонки для стрелочной диаграммы.' : 'Выберите две разные числовые колонки для гантельной диаграммы.' })
   if ((config.kind === 'range-line' || config.kind === 'step-range-line') && (!numeric(config.rangeLowerField) || !numeric(config.rangeUpperField) || config.rangeLowerField === config.rangeUpperField)) errors.push({ field: 'rangeFields', message: 'Выберите две разные числовые границы диапазона.' })
   if (config.kind === 'confidence-line' && !(config.intervalGroups?.some((group) => new Set([group.main, group.lower, group.upper]).size === 3 && numeric(group.main) && numeric(group.lower) && numeric(group.upper)) || config.yFields.length >= 3 && new Set(config.yFields.slice(0, 3)).size === 3 && config.yFields.slice(0, 3).every(numeric))) errors.push({ field: 'intervalGroups', message: 'Настройте три разных числовых поля: основное значение и две границы.' })
   if (config.aggregation === 'none' && repeatedChartCategories(table, config).length) errors.push({ field: 'aggregation', message: 'Для повторяющихся значений X выберите способ агрегации.' })
@@ -67,13 +69,15 @@ const genericSettings = (id: ChartKind, category: ChartPlugin['category']): Char
 })
 
 const capabilities = (id: ChartKind): ChartPlugin['capabilities'] => {
+  if (id === 'stream-graph') return { coordinateSystem: 'cartesian', axes: { category: { placements: ['side'] }, value: { scaleTypes: ['linear'] } }, guides: ['legend', 'direct-series'], valueLabels: true, markers: false, stacking: ['stacked'] }
+  if (id === 'marimekko') return { coordinateSystem: 'cartesian', axes: { category: { placements: ['side'] }, value: { scaleTypes: ['linear'] } }, guides: ['legend'], valueLabels: true, markers: false, orientation: ['vertical', 'horizontal'], stacking: ['stacked', 'normalized'] }
   if (id === 'waffle') return { coordinateSystem: 'matrix', axes: {}, guides: ['legend'], valueLabels: true, markers: false }
   if (isPieChart(id)) return { coordinateSystem: 'radial', axes: {}, guides: ['legend'], valueLabels: true, markers: false }
   if (isMapChart(id)) return { coordinateSystem: 'custom', axes: {}, guides: ['color-scale'], valueLabels: true, markers: false }
   if (id === 'sankey') return { coordinateSystem: 'custom', axes: {}, guides: [], valueLabels: true, markers: false }
   if (id === 'treemap') return { coordinateSystem: 'hierarchy', axes: {}, guides: [], valueLabels: true, markers: false }
   if (id === 'heatmap') return { coordinateSystem: 'matrix', axes: { category: { placements: ['side'] }, lane: { placements: ['side'] } }, guides: ['color-scale'], valueLabels: true, markers: false }
-  if (id === 'scatter' || id === 'bubble') return { coordinateSystem: 'cartesian', axes: { x: { scaleTypes: ['linear', 'date'] }, y: { scaleTypes: ['linear', 'log'] } }, guides: id === 'bubble' ? ['legend', 'size-scale'] : ['legend'], valueLabels: true, markers: true }
+  if (isScatterChart(id)) return { coordinateSystem: 'cartesian', axes: { x: { scaleTypes: ['linear', 'date'] }, y: { scaleTypes: ['linear', 'log'] } }, guides: id === 'bubble' ? ['legend', 'size-scale'] : ['legend'], valueLabels: true, markers: true }
   if (isNativeDistributionKind(id)) return { coordinateSystem: 'cartesian', axes: { lane: { placements: ['side'] }, value: { scaleTypes: ['linear'] } }, guides: ['legend'], valueLabels: true, markers: true, orientation: ['horizontal', 'vertical'] }
   if (id === 'butterfly') return { coordinateSystem: 'cartesian', axes: { category: { placements: ['side', 'internal'] }, value: { scaleTypes: ['linear'] } }, guides: ['legend'], valueLabels: true, markers: false, orientation: ['horizontal'], stacking: ['stacked'] }
   if (id === 'waterfall') return { coordinateSystem: 'cartesian', axes: { category: { placements: ['side'] }, value: { scaleTypes: ['linear', 'log'] } }, guides: [], valueLabels: true, markers: false, orientation: ['vertical'], stacking: ['none', 'stacked', 'normalized'] }
@@ -84,6 +88,7 @@ const capabilities = (id: ChartKind): ChartPlugin['capabilities'] => {
 
 const compile = (table: DataTable, config: ChartConfig): NativeChartScene => {
   const id = config.kind
+  if (id === 'marimekko') return compileMarimekkoScene(table, config)
   if (isMapChart(id)) return compileNativeMapScene(table, config)
   if (id === 'bump') return compileNativeBumpScene(table, config)
   if (id === 'waffle') return compileNativeWaffleScene(table, config)
@@ -96,6 +101,7 @@ const compile = (table: DataTable, config: ChartConfig): NativeChartScene => {
   if (isNativeComparisonStemKind(id)) return compileNativeComparisonStemScene(table, config)
   if (isNativeBarKind(id)) return compileNativeBarScene(table, config)
   if (isNativeLineKind(id)) return compileNativeLineScene(table, config)
+  if (id === 'stream-graph') return compileStreamScene(table, config)
   if (isNativeAreaKind(id)) return compileNativeAreaScene(table, config)
   if (id === 'slope') return compileNativeSlopeScene(table, config)
   if (isNativeSmoothingKind(id)) return compileNativeSmoothingScene(table, config)
@@ -149,18 +155,20 @@ const heatmapSettings: ChartPlugin['settings'] = { sections: ['annotations', 'gr
 const treemapSettings: ChartPlugin['settings'] = { sections: ['series', 'annotations', 'text', 'headings', 'legend-values', 'credits'], series: ['color'], features: { directLabels: false, barLayout: false, dataPreparation: false, normalizedStack: false, areaLayout: false, scatterLayout: false, distributionLayout: false, lineVariant: false } }
 
 const descriptors: Descriptor[] = [
+  { id: 'marimekko', label: 'Marimekko', category: 'composition', defaultConfig: { kind: 'marimekko', marimekkoMode: 'normalized', barOrientation: 'vertical', aggregation: 'sum', showValues: true, showLegend: true, showDirectLabels: false, showXAxisTitle: false, showYAxisTitle: false, yAxisScaleType: 'linear', xAxisLabelRotate: 0, xAxisLabelOverflow: 'wrap' }, settings: { ...genericSettings('bar', 'composition'), features: { ...genericSettings('bar', 'composition').features, directLabels: false, barLayout: false, normalizedStack: true } } },
   ...barChartDefinitions.map(([id, label, category]) => ({ id, label, category, settings: barSettings(id, category) })),
-  { id: 'dumbbell', label: 'Гантельная', category: 'comparison', settings: { ...genericSettings('bar', 'comparison'), series: ['color', 'markers'], features: { ...genericSettings('bar', 'comparison').features, directLabels: false, barLayout: false, lineVariant: true } } },
-  ...lineChartDefinitions.map(([id, label]) => ({ id, label, category: 'trend' as const, settings: lineSettings(id), ...(id === 'bump' ? { defaultConfig: { kind: id, bumpMode: 'value' as const, showDirectLabels: true, showLegend: false } } : {}) })),
+  ...([['dumbbell', 'Гантельная'], ['dot-plot', 'Dot Plot'], ['arrow-plot', 'Arrow Plot']] as const).map(([id, label]) => ({ id, label, category: 'point-comparison' as const, defaultConfig: { kind: id, dumbbellOrientation: 'horizontal' as const, showHorizontalGrid: false, showVerticalGrid: true, ...(id === 'arrow-plot' ? { dumbbellConnectorColor: '#1923e3', showLegend: false } : {}) }, settings: { ...genericSettings(id, 'point-comparison'), series: ['color', 'markers'] as ChartPlugin['settings']['series'], features: { ...genericSettings(id, 'point-comparison').features, directLabels: false, barLayout: false, lineVariant: true } } })),
+  ...lineChartDefinitions.map(([id, label]) => ({ id, label, category: 'trend' as const, settings: lineSettings(id), ...(id === 'bump' ? { defaultConfig: { kind: id, bumpMode: 'value' as const, bumpShowStartLabels: false, showDirectLabels: true, showLegend: false } } : {}) })),
   ...smoothingChartDefinitions.map(([id, label]) => ({ id, label, category: 'smoothing' as const, settings: genericSettings(id, 'smoothing') })),
   ...intervalChartDefinitions.map(([id, label]) => ({ id, label, category: 'trend' as const, settings: { ...genericSettings('line', 'trend'), features: { ...genericSettings('line', 'trend').features, lineVariant: true } } })),
+  { id: 'stream-graph', label: 'Stream Graph', category: 'area', defaultConfig: { kind: 'stream-graph', aggregation: 'sum', missingMode: 'zero', areaFillOpacity: .85, showLegend: true, showYAxisLabels: false, showYAxisLine: false, showYTicks: false, showYAxisTitle: false, showHorizontalGrid: false, showZeroLine: false, yAxisScaleType: 'linear' }, settings: { ...genericSettings('stream-graph', 'area'), features: { ...genericSettings('stream-graph', 'area').features, lineVariant: true } } },
   ...areaChartDefinitions.map(([id, label]) => ({ id, label, category: 'area' as const, settings: genericSettings(id, 'area') })),
-  ...relationshipChartDefinitions.map(([id, label]) => ({ id, label, category: 'relationship' as const, settings: relationshipSettings })),
+  ...relationshipChartDefinitions.map(([id, label]) => ({ id, label, category: 'relationship' as const, settings: relationshipSettings, ...(id === 'connected-scatter' ? { defaultConfig: { kind: id, aggregation: 'none' as const, missingMode: 'gap' as const, scatterOrderDirection: 'asc' as const } } : {}) })),
   ...distributionChartDefinitions.map(([id, label]) => ({ id, label, category: 'distribution' as const, settings: distributionSettings })),
   { id: heatmapChartDefinitions[0][0], label: heatmapChartDefinitions[0][1], category: 'heatmap', defaultConfig: { kind: 'heatmap', showYAxisTitle: false, showLegend: false, showDirectLabels: false, showValues: false }, settings: heatmapSettings },
-  ...([['pie', 'Круговая'], ['donut', 'Кольцевая'], ['waffle', 'Вафельная']] as const).map(([id, label]) => ({ id, label, category: 'composition' as const, settings: treemapSettings, defaultConfig: { kind: id, aggregation: 'sum' as const, showValues: true, showLegend: true, showDirectLabels: false } })),
+  ...([['pie', 'Круговая'], ['donut', 'Кольцевая'], ['waffle', 'Вафельная']] as const).map(([id, label]) => ({ id, label, category: 'composition' as const, settings: treemapSettings, defaultConfig: { kind: id, aggregation: 'sum' as const, showValues: true, showLegend: id === 'waffle', showDirectLabels: false } })),
   { id: treemapChartDefinitions[0][0], label: treemapChartDefinitions[0][1], category: 'hierarchy', defaultConfig: { kind: 'treemap', aggregation: 'sum', showValues: true, showLegend: false, showDirectLabels: false, showXAxisTitle: false, showYAxisTitle: false }, settings: treemapSettings },
-  ...mapPresets.map(({ kind: id, label }) => ({ id, label, category: 'geography' as const, defaultConfig: { kind: id, aggregation: 'sum' as const, heatmapScaleMode: 'sequential' as const, heatmapLowColor: '#edf2f7', heatmapHighColor: '#1677a6', showValues: false, showLegend: false, showDirectLabels: false }, settings: { ...heatmapSettings, sections: ['series', 'annotations', 'text', 'headings', 'legend-values', 'credits'] as ChartPlugin['settings']['sections'] } })),
+  ...mapChartPresets.map(({ kind: id, label }) => ({ id, label, category: 'geography' as const, defaultConfig: { kind: id, aggregation: 'sum' as const, heatmapScaleMode: 'sequential' as const, heatmapLowColor: '#edf2f7', heatmapHighColor: '#1923e3', showValues: false, showLegend: false, showDirectLabels: false, mapShowNames: isTileMapChart(id), mapLabelFormat: 'code' as const, mapTileGap: 4 }, settings: { ...heatmapSettings, sections: ['series', 'annotations', 'text', 'headings', 'legend-values', 'credits'] as ChartPlugin['settings']['sections'] } })),
   { id: 'sankey', label: 'Санкей', category: 'relationship', defaultConfig: { kind: 'sankey', aggregation: 'sum', showValues: true, showLegend: false, showDirectLabels: false }, settings: { ...treemapSettings, sections: ['series', 'annotations', 'text', 'headings', 'credits'] } },
 ]
 
@@ -168,10 +176,12 @@ const validationFor = (id: ChartKind, base: ChartPlugin['validate']): ChartPlugi
   : id === 'butterfly' ? (table, config) => { const generic = base(table, config), native = validateNativeButterflyMapping(table, config); return { ok: generic.ok && native.ok, errors: [...generic.errors, ...native.errors] } }
   : isNativeXYKind(id) ? validateNativeXYMapping
   : isNativeDistributionKind(id) ? validateNativeDistributionMapping
+  : id === 'stream-graph' ? (table, config) => { const generic = base(table, config), stream = validateStreamMapping(table, config); return { ok: generic.ok && stream.ok, errors: [...generic.errors, ...stream.errors] } }
   : id === 'slope' ? slopeValidation
   : id === 'bump' ? (table, config) => { const baseResult = base(table, config); const rankResult = validateBumpMapping(table, config); const errors = [...baseResult.errors, ...rankResult.errors]; return { ok: errors.length === 0, errors } }
   : id === 'indexed-line' ? indexedValidation
   : id === 'seasonal-line' ? seasonalValidation
+  : id === 'marimekko' ? (table, config) => { const generic = base(table, config), native = validateMarimekkoMapping(table, config); return { ok: generic.ok && native.ok, errors: [...generic.errors, ...native.errors] } }
   : base
 
 export const chartRegistry: ChartPlugin[] = descriptors.map((descriptor) => {

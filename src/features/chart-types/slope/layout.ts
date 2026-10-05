@@ -2,7 +2,7 @@ import { formatYAxisNumber } from '../../../core/numberFormat'
 import { measureTextWidth } from '../../../core/textMetrics'
 import type { ChartTextStyle } from '../../../core/types'
 import type { NativeSlopeChartScene, ResolvedSceneGeometry, ResolvedSlopeGeometry } from '../../../entities/chart/model/ChartScene'
-import { axisReservation, type AxisSpec } from '../../chart-layout/axisLayout'
+import { axisReservation, categoryLabelRotation, type AxisSpec } from '../../chart-layout/axisLayout'
 import { resolveFrame } from '../../chart-layout/frameLayout'
 import type { Rect } from '../../chart-layout/geometry'
 import type { LayoutReservation, ResolvedReservation } from '../../chart-layout/reservations'
@@ -24,10 +24,11 @@ export const slopeGuideValues = (scene: NativeSlopeChartScene) => {
 function measuredCategoryAxis(scene: NativeSlopeChartScene, available: Rect): AxisSpec {
   const source = scene.plot.categoryAxis
   const maxWidth = Math.max(1, available.width / 2)
-  const layouts = scene.plot.positions.map((position) => layoutText({ document: plainTextDocument(position.label, source.labels.style), maxWidth, rotation: source.labels.rotation, wrap: scene.compatibilityConfig.xAxisLabelOverflow === 'wrap' }))
+  const rotation = categoryLabelRotation(scene.plot.positions.map((position) => position.label), source.labels.style, scene.plot.positions.map(() => maxWidth - 8), scene.compatibilityConfig.xAxisLabelRotate)
+  const layouts = scene.plot.positions.map((position) => layoutText({ document: plainTextDocument(position.label, source.labels.style), maxWidth, rotation, wrap: scene.compatibilityConfig.xAxisLabelOverflow === 'wrap' && !rotation, breakWords: false }))
   const size = Math.ceil(Math.max(0, ...layouts.map((layout) => layout.rotatedSize.height)))
   const title = source.title && { ...source.title, size: Math.ceil(layoutText({ document: plainTextDocument(source.title.text, source.title.style), maxWidth: available.width }).size.height) }
-  return { ...source, labels: { ...source.labels, size }, title }
+  return { ...source, labels: { ...source.labels, size, rotation }, title }
 }
 
 function measuredValueAxis(scene: NativeSlopeChartScene): AxisSpec {
@@ -59,7 +60,7 @@ export type ResolvedSlopeScene = NativeSlopeChartScene & {
 
 export function resolveNativeSlopeScene(scene: NativeSlopeChartScene): ResolvedSlopeScene {
   const initial = resolveFrame({ canvas: scene.document.canvas, spacing: scene.document.composition })
-  const categoryAxis = measuredCategoryAxis(scene, initial.plot)
+  let categoryAxis = measuredCategoryAxis(scene, initial.plot)
   const valueAxis = measuredValueAxis(scene)
   const reservations = frameReservations(scene, initial.content)
   const categoryReservation = axisReservation(categoryAxis, 50)
@@ -77,7 +78,12 @@ export function resolveNativeSlopeScene(scene: NativeSlopeChartScene): ResolvedS
   if (leftWidth) reservations.push({ id: 'slope:endpoint-left', side: 'left', size: leftWidth, gap: scene.plot.endpointLabels.distance, mode: 'outside', priority: 61 })
   if (rightWidth) reservations.push({ id: 'slope:endpoint-right', side: 'right', size: rightWidth, gap: scene.plot.endpointLabels.distance, mode: 'outside', priority: 61 })
 
-  const frame = resolveFrame({ canvas: scene.document.canvas, spacing: scene.document.composition, reservations })
+  let frame = resolveFrame({ canvas: scene.document.canvas, spacing: scene.document.composition, reservations })
+  categoryAxis = measuredCategoryAxis(scene, frame.plot)
+  const revised = axisReservation(categoryAxis, 50)
+  const categoryIndex = reservations.findIndex((item) => item.id === 'axis:category')
+  if (categoryIndex >= 0 && revised) reservations[categoryIndex] = revised
+  frame = resolveFrame({ canvas: scene.document.canvas, spacing: scene.document.composition, reservations })
   const plot = frame.plot
   const firstX = plot.x + plot.width / 4, lastX = plot.x + plot.width * 3 / 4
   const scaleGap = scaleWidth ? scene.plot.valueAxis.labels.gap : 0

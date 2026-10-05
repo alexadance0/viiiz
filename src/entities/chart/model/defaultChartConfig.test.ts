@@ -8,7 +8,7 @@ describe('createDefaultChartConfig', () => {
     first.palette?.push('#000000')
     first.paletteGradientColors![0] = '#000000'
     expect(second.palette).not.toContain('#000000')
-    expect(second.paletteGradientColors).toEqual(['#3b4cc0', '#f7f7f7', '#b40426'])
+    expect(second.paletteGradientColors).toEqual(['#3b4cc0', '#b40426'])
     expect(second.kind).toBe('bar')
     expect(second).toMatchObject({ showXAxisTitle: false, showYAxisTitle: false })
     expect(second).toMatchObject({

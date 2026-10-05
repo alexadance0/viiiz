@@ -1,0 +1,87 @@
+import { expect, test } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
+
+test('the new category groups Dot Plot, dumbbell and Arrow Plot with working orientation controls', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/editor')
+  await page.getByRole('button', { name: 'До → после', exact: true }).click()
+  await page.getByRole('button', { name: /Выбрать график/ }).click()
+  const category = page.getByRole('region', { name: 'Точки и изменения', exact: true })
+  await expect(category.getByRole('button')).toHaveCount(3)
+  await expect(category.getByRole('button', { name: 'Гантельная', exact: true })).toBeVisible()
+  await category.getByRole('button', { name: 'Arrow Plot', exact: true }).click()
+  await expect(page.getByRole('combobox', { name: 'Начальное значение', exact: true })).not.toHaveValue('')
+  await expect(page.getByRole('combobox', { name: 'Конечное значение', exact: true })).not.toHaveValue('')
+  await page.getByRole('button', { name: 'Настроить оформление →' }).click()
+  const canvas = page.locator('.chart-canvas-shell[data-plot-kind="comparison-stem"]')
+  await expect(canvas).toHaveAttribute('data-render-status', 'settled')
+  await expect(canvas.locator('svg path[stroke="#1923e3"]').last()).toBeVisible()
+  await page.getByText('Стрелочная диаграмма', { exact: true }).click()
+  await page.getByRole('combobox', { name: 'Ориентация', exact: true }).selectOption('vertical')
+  await expect(canvas).toHaveAttribute('data-render-status', 'settled')
+  await page.getByRole('checkbox', { name: 'Показывать изменение между точками', exact: true }).press('Space')
+  await page.getByRole('checkbox', { name: 'Цвет по направлению изменения', exact: true }).press('Space')
+  await expect(canvas.locator('svg path[stroke="#168a72"]').last()).toBeVisible()
+  await page.getByRole('navigation', { name: 'Этапы создания графика' }).getByRole('button', { name: /Тип графика/ }).click()
+  await page.getByRole('button', { name: 'Dot Plot', exact: true }).click()
+  await page.getByRole('button', { name: 'Настроить оформление →' }).click()
+  await page.getByText('Точечная диаграмма', { exact: true }).click()
+  await expect(page.getByRole('combobox', { name: 'Ориентация', exact: true })).toHaveValue('horizontal')
+  await page.getByRole('combobox', { name: 'Ориентация', exact: true }).selectOption('vertical')
+  await expect(canvas).toHaveAttribute('data-render-status', 'settled')
+})
+
+for (const kind of ['dot-plot', 'arrow-plot']) for (const orientation of ['horizontal', 'vertical']) {
+  test(`${kind} ${orientation} preserves marks, direction, labels and export geometry`, async ({ page }) => {
+    const errors: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.route('**/src/main.tsx', (route) => route.fulfill({ contentType: 'text/javascript', body: '' }))
+    await page.goto('/editor')
+    await page.evaluate(async () => {
+      await import('/src/index.css')
+      await import('/src/App.css')
+      await import('/src/test-fixtures/chartAudit.browser.tsx')
+    })
+    for (const horizontal of [false, true]) for (const vertical of [false, true]) {
+      await page.evaluate(async ({ kind, orientation, horizontal, vertical }) => {
+        const { renderConfig } = await import('/src/test-fixtures/chartAudit.browser.tsx')
+        renderConfig(kind, { xField: 'Категория', yField: 'Начало', yFields: ['Начало', 'Конец'], dumbbellStartField: 'Начало', dumbbellEndField: 'Конец', dumbbellOrientation: orientation, dumbbellShowDifference: true, dumbbellColorByChange: true, showValues: true, showLegend: false, showDirectLabels: false, showHorizontalGrid: horizontal, showVerticalGrid: vertical, gridColor: '#c94f91', palette: ['#0072b2', '#e69f00'] }, { name: 'Точки и изменения', columns: ['Категория', 'Начало', 'Конец'], rows: [{ Категория: 'Рост', Начало: 10, Конец: 14 }, { Категория: 'Падение', Начало: 20, Конец: 18 }, { Категория: 'Равенство', Начало: -4, Конец: -4 }, { Категория: 'Пропуск', Начало: 8, Конец: null }] })
+      }, { kind, orientation, horizontal, vertical })
+      const canvas = page.locator('#chart-audit-host .chart-canvas-shell')
+      await expect(canvas).toHaveAttribute('data-render-status', 'settled')
+      await expect(canvas.locator('svg text').filter({ hasText: /^Рост$/ })).toBeVisible()
+      await expect(canvas.locator('svg text').filter({ hasText: /^Пропуск$/ })).toHaveCount(kind === 'dot-plot' ? 1 : 0)
+      const grids = await canvas.locator('svg path[stroke="#c94f91"]').evaluateAll((nodes) => nodes.flatMap((node) => [...(node.getAttribute('d') ?? '').matchAll(/M\s*([-\d.e]+)[ ,]+([-\d.e]+)\s*L\s*([-\d.e]+)[ ,]+([-\d.e]+)/gi)].map((match) => ({ width: Math.abs(Number(match[3]) - Number(match[1])), height: Math.abs(Number(match[4]) - Number(match[2])) }))))
+      expect(grids.some((line) => line.width > 10 && line.height < 1)).toBe(horizontal)
+      expect(grids.some((line) => line.height > 10 && line.width < 1)).toBe(vertical)
+    }
+    const canvas = page.locator('#chart-audit-host .chart-canvas-shell')
+    const marks = await canvas.locator('svg path').evaluateAll((nodes) => nodes.filter((node) => ['#0072b2', '#e69f00', '#168a72', '#db5a5a', '#777580'].includes(node.getAttribute('fill') ?? '') && Number(getComputedStyle(node).opacity) > 0).map((node) => (node as SVGGraphicsElement).getBBox()).filter((box) => box.width > 5 && box.width <= 14 && box.height > 5 && box.height <= 14).length)
+    expect(marks).toBe(kind === 'dot-plot' ? 7 : 1)
+    if (kind === 'arrow-plot') {
+      const heads = await canvas.locator('svg path').evaluateAll((nodes) => nodes.filter((node) => ['#168a72', '#db5a5a'].includes(node.getAttribute('stroke') ?? '') && (node.getAttribute('d')?.match(/L/g)?.length ?? 0) === 2).map((node) => node.getAttribute('d')))
+      expect(heads).toHaveLength(2)
+      const point = canvas.locator('svg path[stroke="#168a72"]').last()
+      const box = (await point.boundingBox())!
+      await page.mouse.move(orientation === 'horizontal' ? box.x + box.width - 1 : box.x + box.width / 2, orientation === 'vertical' ? box.y + 1 : box.y + box.height / 2)
+      await expect(canvas).toHaveAttribute('data-render-status', 'settled')
+      await page.mouse.move(1, 1)
+      expect(await canvas.locator('svg path').evaluateAll((nodes) => nodes.filter((node) => ['#168a72', '#db5a5a'].includes(node.getAttribute('stroke') ?? '') && (node.getAttribute('d')?.match(/L/g)?.length ?? 0) === 2).map((node) => node.getAttribute('d')))).toEqual(heads)
+    }
+    const bounds = await page.evaluate(async () => (await import('/src/test-fixtures/chartAudit.browser.tsx')).textBounds())
+    expect(bounds.filter((item) => item.outside)).toEqual([])
+    await page.screenshot({ path: `/tmp/viiiz-${kind}-${orientation}.png` })
+    const paths = await canvas.locator('svg path').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('d')).sort())
+    let download = page.waitForEvent('download')
+    await page.evaluate(async () => (await import('/src/test-fixtures/chartAudit.browser.tsx')).exportSvg())
+    const svg = await readFile((await (await download).path())!, 'utf8')
+    const exportedPaths = await page.evaluate((svg) => [...new DOMParser().parseFromString(svg, 'image/svg+xml').querySelectorAll('path')].map((node) => node.getAttribute('d')).sort(), svg)
+    expect(exportedPaths).toEqual(paths)
+    download = page.waitForEvent('download')
+    await page.evaluate(async () => (await import('/src/test-fixtures/chartAudit.browser.tsx')).exportPng())
+    const png = await readFile((await (await download).path())!)
+    expect(png.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a')
+    expect(errors).toEqual([])
+  })
+}

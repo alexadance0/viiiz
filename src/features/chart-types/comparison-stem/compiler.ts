@@ -1,3 +1,4 @@
+import { isPairedComparisonChart, isPointComparisonChart } from '../../../core/chartKinds'
 import { describeChange, changeColor, formatChange } from '../../../core/changeSemantics'
 import type { ChartConfig, ChartKind, DataTable } from '../../../core/types'
 import { chartDocumentFromLegacy } from '../../../entities/chart/model/legacyChartConfigAdapter'
@@ -6,7 +7,7 @@ import type { CartesianPointScene, ComparisonStemConnectorScene, ComparisonStemS
 import { compileNativeBarScene } from '../bar/compiler'
 import { orderedBounds } from '../../../core/chartScale'
 
-export const NATIVE_COMPARISON_STEM_KINDS = ['lollipop', 'horizontal-lollipop', 'dumbbell'] as const
+export const NATIVE_COMPARISON_STEM_KINDS = ['lollipop', 'horizontal-lollipop', 'dumbbell', 'dot-plot', 'arrow-plot'] as const
 export type NativeComparisonStemKind = typeof NATIVE_COMPARISON_STEM_KINDS[number]
 export const isNativeComparisonStemKind = (kind: ChartKind): kind is NativeComparisonStemKind => (NATIVE_COMPARISON_STEM_KINDS as readonly ChartKind[]).includes(kind)
 
@@ -24,8 +25,8 @@ const layerId = (ids: ElementId[]) => `layer:comparison:${ids.join('|')}` as Lay
 
 export function compileNativeComparisonStemScene(table: DataTable, sourceConfig: ChartConfig): NativeComparisonStemChartScene {
   if (!isNativeComparisonStemKind(sourceConfig.kind)) throw new Error(`Native comparison/stem compiler cannot compile ${sourceConfig.kind}.`)
-  const dumbbell = sourceConfig.kind === 'dumbbell'
-  const orientation = dumbbell ? sourceConfig.dumbbellOrientation ?? 'horizontal' : sourceConfig.kind === 'horizontal-lollipop' ? 'horizontal' : 'vertical'
+  const dumbbell = isPairedComparisonChart(sourceConfig.kind)
+  const orientation = isPointComparisonChart(sourceConfig.kind) ? sourceConfig.dumbbellOrientation ?? 'horizontal' : sourceConfig.kind === 'horizontal-lollipop' ? 'horizontal' : 'vertical'
   const fields = dumbbell ? [sourceConfig.dumbbellStartField, sourceConfig.dumbbellEndField].filter((field): field is string => Boolean(field)) : sourceConfig.yFields
   const validDumbbell = !dumbbell || fields.length === 2 && fields[0] !== fields[1]
   const surrogate = {
@@ -79,7 +80,7 @@ export function compileNativeComparisonStemScene(table: DataTable, sourceConfig:
   const valueDomain = sourceConfig.yAxisScaleType === 'log'
     ? { min: logDomainMin, max: configuredMax != null && configuredMax > logDomainMin ? configuredMax : Math.max(logDomainMin * 10, logMaxBase), step: sourceConfig.yAxisStep ?? base.plot.valueDomain.step }
     : base.plot.valueDomain
-  const connectors: ComparisonStemConnectorScene[] = dumbbell && series.length === 2
+  const connectors: ComparisonStemConnectorScene[] = sourceConfig.kind === 'dot-plot' ? [] : dumbbell && series.length === 2
     ? categories.map((category, categoryIndex) => {
       const first = series[0].points[categoryIndex], second = series[1].points[categoryIndex]
       const descriptor = describeChange(first.value!, second.value!)
@@ -90,8 +91,12 @@ export function compileNativeComparisonStemScene(table: DataTable, sourceConfig:
       return { id: layerId(endpointIds), categoryId: category.id, categoryIndex, endpointIds, fromValue: first.value!, toValue: second.value!, stroke: { color, width: sourceConfig.dumbbellConnectorWidth ?? 3, type: sourceConfig.dumbbellConnectorType ?? 'solid', opacity: sourceConfig.dumbbellConnectorOpacity ?? 1 }, change: { descriptor, visible: Boolean(sourceConfig.dumbbellShowDifference), label: formatChange(descriptor, sourceConfig.dumbbellDifferenceFormat ?? 'absolute', sourceConfig, sourceConfig.dumbbellPercentDecimals ?? 0), position: sourceConfig.dumbbellDifferencePosition ?? 'middle', color: sourceConfig.dumbbellColorByChange ? color : sourceConfig.valueText.color } }
     })
     : series.flatMap((item) => item.points.map((point) => ({ id: layerId([point.id]), categoryId: categories[point.categoryIndex].id, categoryIndex: point.categoryIndex, endpointIds: [point.id], fromValue: sourceConfig.yAxisScaleType === 'log' ? valueDomain.min : 0, toValue: point.value!, stroke: { color: item.color, width: Math.max(1, sourceConfig.seriesStyles[item.name]?.lineWidth ?? 2), type: 'solid', opacity: .72 } })))
+  if (sourceConfig.kind === 'arrow-plot') series.forEach((item) => item.points.forEach((point) => {
+    const color = sourceConfig.elementStyles[point.legacyKey]?.color ?? connectors[point.categoryIndex]?.stroke.color ?? point.marker.fill
+    point.marker = { ...point.marker, fill: color, stroke: color }
+  }))
   const pointIds = new Set(series.flatMap((item) => item.points.map((point) => point.id)))
   const categoryIds = new Set(categories.map((category) => `category-label:${category.id}`))
   const elements: ChartElement[] = base.elements.filter((element) => element.role === 'mark' ? pointIds.has(element.id) : element.role === 'category-label' ? categoryIds.has(element.id) : 'seriesId' in element && series.some((item) => item.id === element.seriesId))
-  return { ...base, document: chartDocumentFromLegacy(table, sourceConfig), compatibilityConfig: sourceConfig, elements, plot: { kind: 'comparison-stem', variant: dumbbell ? 'dumbbell' : 'lollipop', categoryPlacement: 'band', orientation, categories, categoryAxis: base.plot.categoryAxis, valueAxis: base.plot.valueAxis, valueDomain, series, connectors } }
+  return { ...base, document: chartDocumentFromLegacy(table, sourceConfig), compatibilityConfig: sourceConfig, elements, plot: { kind: 'comparison-stem', variant: sourceConfig.kind === 'arrow-plot' ? 'arrow' : sourceConfig.kind === 'dot-plot' ? 'dot' : dumbbell ? 'dumbbell' : 'lollipop', categoryPlacement: 'band', orientation, categories, categoryAxis: base.plot.categoryAxis, valueAxis: base.plot.valueAxis, valueDomain, series, connectors } }
 }

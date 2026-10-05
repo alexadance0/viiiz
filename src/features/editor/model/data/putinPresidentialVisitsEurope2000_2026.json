@@ -1,0 +1,247 @@
+[
+  {
+    "country": "Albania",
+    "iso2": "AL",
+    "visits": 0
+  },
+  {
+    "country": "Andorra",
+    "iso2": "AD",
+    "visits": 0
+  },
+  {
+    "country": "Austria",
+    "iso2": "AT",
+    "visits": 6
+  },
+  {
+    "country": "Belarus",
+    "iso2": "BY",
+    "visits": 28
+  },
+  {
+    "country": "Belgium",
+    "iso2": "BE",
+    "visits": 4
+  },
+  {
+    "country": "Bosnia and Herzegovina",
+    "iso2": "BA",
+    "visits": 0
+  },
+  {
+    "country": "Bulgaria",
+    "iso2": "BG",
+    "visits": 2
+  },
+  {
+    "country": "Croatia",
+    "iso2": "HR",
+    "visits": 2
+  },
+  {
+    "country": "Cyprus",
+    "iso2": "CY",
+    "visits": 0
+  },
+  {
+    "country": "Czechia",
+    "iso2": "CZ",
+    "visits": 1
+  },
+  {
+    "country": "Denmark",
+    "iso2": "DK",
+    "visits": 0
+  },
+  {
+    "country": "Estonia",
+    "iso2": "EE",
+    "visits": 0
+  },
+  {
+    "country": "Finland",
+    "iso2": "FI",
+    "visits": 9
+  },
+  {
+    "country": "France",
+    "iso2": "FR",
+    "visits": 17
+  },
+  {
+    "country": "Germany",
+    "iso2": "DE",
+    "visits": 19
+  },
+  {
+    "country": "Greece",
+    "iso2": "GR",
+    "visits": 5
+  },
+  {
+    "country": "Hungary",
+    "iso2": "HU",
+    "visits": 5
+  },
+  {
+    "country": "Iceland",
+    "iso2": "IS",
+    "visits": 0
+  },
+  {
+    "country": "Ireland",
+    "iso2": "IE",
+    "visits": 0
+  },
+  {
+    "country": "Italy",
+    "iso2": "IT",
+    "visits": 11
+  },
+  {
+    "country": "Kosovo",
+    "iso2": "XK",
+    "visits": 0
+  },
+  {
+    "country": "Latvia",
+    "iso2": "LV",
+    "visits": 0
+  },
+  {
+    "country": "Liechtenstein",
+    "iso2": "LI",
+    "visits": 0
+  },
+  {
+    "country": "Lithuania",
+    "iso2": "LT",
+    "visits": 0
+  },
+  {
+    "country": "Luxembourg",
+    "iso2": "LU",
+    "visits": 1
+  },
+  {
+    "country": "Malta",
+    "iso2": "MT",
+    "visits": 0
+  },
+  {
+    "country": "Moldova",
+    "iso2": "MD",
+    "visits": 2
+  },
+  {
+    "country": "Monaco",
+    "iso2": "MC",
+    "visits": 0
+  },
+  {
+    "country": "Montenegro",
+    "iso2": "ME",
+    "visits": 0
+  },
+  {
+    "country": "Netherlands",
+    "iso2": "NL",
+    "visits": 3
+  },
+  {
+    "country": "North Macedonia",
+    "iso2": "MK",
+    "visits": 0
+  },
+  {
+    "country": "Norway",
+    "iso2": "NO",
+    "visits": 1
+  },
+  {
+    "country": "Poland",
+    "iso2": "PL",
+    "visits": 2
+  },
+  {
+    "country": "Portugal",
+    "iso2": "PT",
+    "visits": 2
+  },
+  {
+    "country": "Romania",
+    "iso2": "RO",
+    "visits": 1
+  },
+  {
+    "country": "San Marino",
+    "iso2": "SM",
+    "visits": 0
+  },
+  {
+    "country": "Serbia",
+    "iso2": "RS",
+    "visits": 3
+  },
+  {
+    "country": "Slovakia",
+    "iso2": "SK",
+    "visits": 1
+  },
+  {
+    "country": "Slovenia",
+    "iso2": "SI",
+    "visits": 2
+  },
+  {
+    "country": "Spain",
+    "iso2": "ES",
+    "visits": 2
+  },
+  {
+    "country": "Sweden",
+    "iso2": "SE",
+    "visits": 1
+  },
+  {
+    "country": "Switzerland",
+    "iso2": "CH",
+    "visits": 1
+  },
+  {
+    "country": "Ukraine",
+    "iso2": "UA",
+    "visits": 21
+  },
+  {
+    "country": "United Kingdom",
+    "iso2": "GB",
+    "visits": 7
+  },
+  {
+    "country": "Vatican City",
+    "iso2": "VA",
+    "visits": 6
+  },
+  {
+    "country": "Turkey",
+    "iso2": "TR",
+    "visits": 14
+  },
+  {
+    "country": "Armenia",
+    "iso2": "AM",
+    "visits": 8
+  },
+  {
+    "country": "Azerbaijan",
+    "iso2": "AZ",
+    "visits": 7
+  },
+  {
+    "country": "Georgia",
+    "iso2": "GE",
+    "visits": 0
+  }
+]

@@ -1,7 +1,7 @@
 import type { ChartTextStyle } from '../../../core/types'
 import type { CartesianPointScene } from '../../../entities/chart/model/ChartScene'
 import type { ResolvedComparisonStemScene } from '../../chart-types/comparison-stem/layout'
-import { nativeGraphicTextStyle, nativeTextStyle, renderNativeCartesianAxis } from './renderBarScene'
+import { calendarCategoryGraphics, nativeGraphicTextStyle, nativeTextStyle, renderNativeCartesianAxis } from './renderBarScene'
 
 const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!)
 const dash = (type: 'solid' | 'dashed' | 'dotted') => type === 'dashed' ? [8, 5] : type === 'dotted' ? [2, 4] : undefined
@@ -31,11 +31,20 @@ export function renderComparisonStemScene(scene: ResolvedComparisonStemScene): R
     renderItem: (params: { dataIndex: number }) => {
       const point = source.points[params.dataIndex], resolved = point && scene.comparisonGeometry.points[point.id]
       if (!point || !resolved || point.value == null) return null
-      const shape = markerShape(point, resolved.x, resolved.y)
+      const arrow = scene.plot.variant === 'arrow'
+      const connector = arrow ? scene.plot.connectors[point.categoryIndex] : undefined
+      const connectorGeometry = connector && scene.comparisonGeometry.connectors[connector.id]
+      const dx = connectorGeometry ? connectorGeometry.x2 - connectorGeometry.x1 : 0, dy = connectorGeometry ? connectorGeometry.y2 - connectorGeometry.y1 : 0
+      const length = Math.hypot(dx, dy), head = Math.min(point.marker.size, length)
+      const ux = length ? dx / length : 0, uy = length ? dy / length : 0
+      const shape = arrow && source.role === 'end' && length > 0
+        ? { type: 'polyline', shape: { points: [[resolved.x - ux * head - uy * head / 2, resolved.y - uy * head + ux * head / 2], [resolved.x, resolved.y], [resolved.x - ux * head + uy * head / 2, resolved.y - uy * head - ux * head / 2]] } }
+        : markerShape(point, resolved.x, resolved.y)
       const info = pointInfo(point, source.name, point.marker.fill)
       const interactiveStyle = (data[params.dataIndex]?.itemStyle ?? {}) as Record<string, string | number | undefined>
+      const arrowColor = interactiveStyle.fill ?? interactiveStyle.color ?? point.marker.fill
       return { type: 'group', info, children: [
-        { ...shape, info, style: { fill: interactiveStyle.fill ?? interactiveStyle.color ?? point.marker.fill, stroke: interactiveStyle.stroke ?? interactiveStyle.borderColor ?? point.marker.stroke, lineWidth: interactiveStyle.lineWidth ?? interactiveStyle.borderWidth ?? point.marker.strokeWidth, opacity: interactiveStyle.opacity, shadowColor: interactiveStyle.shadowColor, shadowBlur: interactiveStyle.shadowBlur } },
+        ...(!arrow || source.role === 'end' ? [{ ...shape, info, style: { fill: arrow && length > 0 ? 'none' : interactiveStyle.fill ?? interactiveStyle.color ?? point.marker.fill, stroke: arrow ? arrowColor : interactiveStyle.stroke ?? interactiveStyle.borderColor ?? point.marker.stroke, lineWidth: arrow ? connector?.stroke.width ?? 3 : interactiveStyle.lineWidth ?? interactiveStyle.borderWidth ?? point.marker.strokeWidth, opacity: arrow ? Number(interactiveStyle.opacity ?? 1) * (connector?.stroke.opacity ?? 1) : interactiveStyle.opacity, shadowColor: interactiveStyle.shadowColor, shadowBlur: interactiveStyle.shadowBlur, lineCap: 'round', lineJoin: 'round' } }] : []),
         ...(resolved.label?.visible ? [{ type: 'text', info, style: { x: resolved.label.x, y: resolved.label.y, text: point.label.text, fill: point.label.style.color, font: font(point.label.style), align: resolved.label.align, verticalAlign: resolved.label.verticalAlign, lineHeight: Math.round(point.label.style.size * point.label.style.lineHeight / 100) } }] : []),
       ] }
     },
@@ -75,17 +84,17 @@ export function renderComparisonStemScene(scene: ResolvedComparisonStemScene): R
     tooltip: { trigger: 'item', formatter: (input: { dataIndex?: number; seriesName?: string }) => {
       const source = scene.plot.series.find((item) => item.name === input.seriesName), point = source?.points[input.dataIndex ?? 0]
       if (!point) return ''
-      if (scene.plot.variant === 'dumbbell') {
+      if (scene.plot.variant === 'dumbbell' || scene.plot.variant === 'arrow') {
         const connector = scene.plot.connectors[point.categoryIndex], start = scene.plot.series[0]?.points[point.categoryIndex], end = scene.plot.series[1]?.points[point.categoryIndex]
         return `<b>${escapeHtml(point.displayCategory)}</b><br/>${escapeHtml(scene.plot.series[0]?.name)}: <b>${escapeHtml(start?.displayValue)}</b><br/>${escapeHtml(scene.plot.series[1]?.name)}: <b>${escapeHtml(end?.displayValue)}</b><br/>Изменение: <b>${escapeHtml(connector?.change?.label)}</b>`
       }
       return `<b>${escapeHtml(point.displayCategory)}</b><br/>${escapeHtml(source?.name)}: <b>${escapeHtml(point.displayValue)}</b>`
     } },
     legend: { show: Boolean(legendGuide?.visible && legendItems.length), data: legendItems.map((item) => ({ name: item.rendererName, icon: config.legendMarker === 'circle' ? 'circle' : config.legendMarker === 'diamond' ? 'diamond' : config.legendMarker === 'triangle' ? 'triangle' : 'rect', itemStyle: { color: item.color, borderWidth: 0 } })), formatter: (name: string) => legendLabels.get(name) ?? name, orient: legendGuide?.kind === 'categorical-legend' && (legendGuide.position === 'left' || legendGuide.position === 'right') ? 'vertical' : 'horizontal', left: legendRail?.x ?? scene.geometry.content.x, top: legendRail?.y, itemWidth: 10, itemHeight: 10, itemGap: 18, textStyle: nativeTextStyle(config.legendText) },
-    grid: { left: plot.x, top: plot.y, right: canvas.width - plot.x - plot.width, bottom: canvas.height - plot.y - plot.height, containLabel: false },
+    grid: { left: plot.x, top: plot.y, right: canvas.width - plot.x - plot.width, bottom: canvas.height - plot.y - plot.height, containLabel: false, outerBoundsMode: 'none' },
     xAxis: horizontal ? renderNativeCartesianAxis(scene, 'value') : renderNativeCartesianAxis(scene, 'category'),
     yAxis: horizontal ? renderNativeCartesianAxis(scene, 'category') : renderNativeCartesianAxis(scene, 'value'),
     series: [...series, ...directSeries],
-    graphic: [...categoryGrid, ...connectors, ...verticalTitleGraphic, ...footer],
+    graphic: [...(scene.plot.categoryAxis.calendarTicks ? calendarCategoryGraphics(scene) : categoryGrid), ...connectors, ...verticalTitleGraphic, ...footer],
   }
 }

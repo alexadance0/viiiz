@@ -4,7 +4,7 @@ import type { ColumnType, DataIssue, DataTable, DataValue, TimeFrequency, TimePr
 const serialize = (value: DataValue) => value instanceof Date ? `date:${value.toISOString()}` : `${typeof value}:${String(value)}`
 
 const transposeHeader = (value: DataValue, index: number) => {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10)
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return formatTimeValue(value, undefined, 'iso')
   return String(value ?? '').trim() || `Строка ${index + 1}`
 }
 

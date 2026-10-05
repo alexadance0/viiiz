@@ -9,8 +9,8 @@ export const valueLabelPosition = (config: ChartConfig, kind: ChartConfig['kind'
 }
 
 export const valueLabelAlignment = (position: string) => ({
-  align: position === 'left' ? 'right' as const : position === 'right' ? 'left' as const : 'center' as const,
-  verticalAlign: position === 'top' ? 'bottom' as const : position === 'bottom' ? 'top' as const : 'middle' as const,
+  align: position === 'left' || position === 'insideRight' ? 'right' as const : position === 'right' || position === 'insideLeft' ? 'left' as const : 'center' as const,
+  verticalAlign: position === 'top' || position === 'insideBottom' ? 'bottom' as const : position === 'bottom' || position === 'insideTop' ? 'top' as const : 'middle' as const,
 })
 
 export const isInsideValueLabel = (config: Pick<ChartConfig, 'valueLabelPosition'>) =>

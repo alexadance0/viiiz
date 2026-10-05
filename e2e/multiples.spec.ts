@@ -74,7 +74,7 @@ test('category spacing gives taller rows to longer groups and keeps preview and 
   expect(exported[1].height).toBeGreaterThan(exported[0].height)
   expect(exported[1].y).toBeGreaterThanOrEqual(exported[0].y + exported[0].height)
   await page.locator('.export-menu > summary').click()
-  await page.getByRole('button', { name: '← Тип графика', exact: true }).click()
+  await page.getByRole('navigation', { name: 'Этапы создания графика' }).getByRole('button', { name: /Тип графика/ }).click()
   await toggle.click()
   await expect.poll(async () => {
     const restored = await page.locator('.multiples-cell').evaluateAll((cells) => cells.map((cell) => cell.getBoundingClientRect().height))
@@ -318,7 +318,7 @@ test('design scope switch is sticky, omits grid setup and remembers the last cha
   await expect(settings.locator('.multiples-presets')).toHaveCount(0)
   await page.screenshot({ path: '/tmp/viiiz-design-scope.png', fullPage: true })
   await scope.getByRole('button', { name: 'Вся композиция', exact: true }).click()
-  await page.getByRole('button', { name: '← Тип графика', exact: true }).click()
+  await page.getByRole('navigation', { name: 'Этапы создания графика' }).getByRole('button', { name: /Тип графика/ }).click()
   await expect(page.locator('.multiples-presets')).toBeVisible()
   await expect(page.getByRole('spinbutton', { name: 'Колонки', exact: true })).toBeVisible()
 })

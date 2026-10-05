@@ -1,4 +1,5 @@
-import { continuousDateLabel } from '../../../core/chartDateAxis'
+import { isScatterChart } from '../../../core/chartKinds'
+import { continuousDateLabel, planDateAxisTicks } from '../../../core/chartDateAxis'
 import { axisValue, dateValue, niceNumericScale, orderedBounds } from '../../../core/chartScale'
 import { seriesLegendItemId } from '../../../core/legend'
 import { formatChartNumber, formatXAxisNumber } from '../../../core/numberFormat'
@@ -15,7 +16,7 @@ import { inferBubbleSizeField, inferScatterLabelField } from './inference'
 import { linearRegression, sampleRegression } from './regression'
 import { encodeBubbleDiameter, niceSizeGuideValue, normalizeSizeRange } from './sizeEncoding'
 
-export const isNativeXYKind = (kind: ChartConfig['kind']): kind is 'scatter' | 'bubble' => kind === 'scatter' || kind === 'bubble'
+export const isNativeXYKind = isScatterChart
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
 const layerId = (value: string) => value as LayerId
 const axis = (input: AxisSpec) => input
@@ -46,7 +47,24 @@ export function validateNativeXYMapping(table: DataTable, config: ChartConfig) {
   if (!yFields.some(numeric)) errors.push({ field: 'yField', message: 'Выберите числовую колонку для значения.' })
   if (!table.rows.some((row) => typeof row[config.xField] === 'number' && Number.isFinite(row[config.xField]) || row[config.xField] instanceof Date && !Number.isNaN((row[config.xField] as Date).getTime()))) errors.push({ field: 'xField', message: 'Для этого графика ось X должна быть числовой или датой.' })
   if (config.kind === 'bubble' && !numeric(config.scatterSizeField)) errors.push({ field: 'scatterSizeField', message: 'Выберите числовую колонку для размера пузырька.' })
+  if (config.kind === 'connected-scatter' && config.scatterOrderField && !table.columns.includes(config.scatterOrderField)) errors.push({ field: 'scatterOrderField', message: 'Выберите существующую колонку для порядка соединения точек.' })
   return { ok: errors.length === 0, errors }
+}
+
+function orderedConnectionRows(table: DataTable, config: ChartConfig, group: string) {
+  const field = config.scatterOrderField
+  const rows = table.rows.map((row, rowIndex) => ({ row, rowIndex })).filter(({ row }) => !config.scatterColorField || String(row[config.scatterColorField] ?? 'Без категории') === group)
+  if (!field) return config.scatterOrderDirection === 'desc' ? rows.reverse() : rows
+  const collator = new Intl.Collator('ru', { numeric: true })
+  const direction = config.scatterOrderDirection === 'desc' ? -1 : 1
+  return rows.filter(({ row }) => {
+    const value = row[field]
+    return value instanceof Date ? Number.isFinite(value.getTime()) : typeof value === 'number' ? Number.isFinite(value) : typeof value === 'string' && Boolean(value.trim())
+  }).sort((left, right) => {
+    const a = left.row[field], b = right.row[field]
+    const av = a instanceof Date ? a.getTime() : a, bv = b instanceof Date ? b.getTime() : b
+    return (typeof av === 'number' && typeof bv === 'number' ? av - bv : collator.compare(String(av), String(bv))) * direction || left.rowIndex - right.rowIndex
+  })
 }
 
 export function compileNativeXYScene(table: DataTable, config: ChartConfig): NativeXYChartScene {
@@ -59,14 +77,16 @@ export function compileNativeXYScene(table: DataTable, config: ChartConfig): Nat
   const automaticX = niceNumericScale(xValues)
   const automaticDateDomain = { minimum: xValues.length ? Math.min(...xValues) : 0, maximum: xValues.length ? Math.max(...xValues) : 1 }
   const [manualXMin, manualXMax] = orderedBounds(dateAxis ? dateValue(config.xAxisMin) : axisValue(config.xAxisMin), dateAxis ? dateValue(config.xAxisMax) : axisValue(config.xAxisMax))
+  const calendarAxis = dateAxis ? planDateAxisTicks(rows.map(({ row }) => row[config.xField]), table, config) : undefined
   const xScale = {
+    calendarTicks: calendarAxis?.ticks,
     type: dateAxis ? 'time' as const : 'linear' as const,
-    minimum: manualXMin ?? (dateAxis ? undefined : automaticX.min),
-    maximum: manualXMax ?? (dateAxis ? undefined : automaticX.max),
+    minimum: manualXMin ?? (dateAxis ? calendarAxis?.min : automaticX.min),
+    maximum: manualXMax ?? (dateAxis ? calendarAxis?.max : automaticX.max),
     step: dateAxis ? undefined : config.xAxisStep ?? automaticX.step,
     timeProfile: dateAxis ? table.timeProfiles?.[config.xField] : undefined,
     dateLabelFormat: dateAxis ? config.dateLabelFormat : undefined,
-    automaticDomain: { minimum: dateAxis ? automaticDateDomain.minimum : automaticX.min, maximum: dateAxis ? automaticDateDomain.maximum : automaticX.max, step: dateAxis ? undefined : automaticX.step },
+    automaticDomain: { minimum: dateAxis ? calendarAxis?.min ?? automaticDateDomain.minimum : automaticX.min, maximum: dateAxis ? calendarAxis?.max ?? automaticDateDomain.maximum : automaticX.max, step: dateAxis ? undefined : automaticX.step },
   }
   const sizeField = variant === 'bubble' ? config.scatterSizeField : undefined
   const sizeValues = sizeField ? rows.flatMap(({ row }) => typeof row[sizeField] === 'number' && Number.isFinite(row[sizeField]) ? [row[sizeField] as number] : []) : []
@@ -86,29 +106,34 @@ export function compileNativeXYScene(table: DataTable, config: ChartConfig): Nat
     const groupStyle = config.scatterColorField ? config.seriesStyles[group] : undefined
     const color = style?.color ?? groupStyle?.color ?? getSeriesColor(config, config.scatterColorField ? group : name, config.scatterColorField ? groupIndex : fieldIndex)
     const id = seriesId(`xy:${yField}`, config.scatterColorField ? group : '')
+    const pointsByRow = new Map<number, XYPointScene>()
     const points = rows.flatMap(({ row, rowIndex }): XYPointScene[] => {
       const sourceY = row[yField]
       if (typeof sourceY !== 'number' || !Number.isFinite(sourceY)) return []
       if (config.scatterColorField && String(row[config.scatterColorField] ?? 'Без категории') !== group) return []
       const sourceX = row[config.xField]
-      const legacyKey = legacyPointElementKey(name, sourceX)
+      const legacyKey = legacyPointElementKey(name, variant === 'connected-scatter' ? `row:${rowIndex}` : sourceX)
       const override = config.elementStyles[legacyKey]
       const datumId = config.aggregation === 'none' ? rawDatumId(rowIndex, yField) : aggregateDatumId(`${rowIndex}:${coordinate(sourceX)}`, yField)
       const sizeValue = sizeField && typeof row[sizeField] === 'number' && Number.isFinite(row[sizeField]) ? row[sizeField] as number : undefined
       const seriesSize = style?.markerSize ?? config.scatterPointSize ?? 10
       const size = override?.markerSize ?? (sizeEncoding ? encodeBubbleDiameter(sizeValue, { ...sizeRange, maximumMagnitude, missingDiameter }) : seriesSize)
       const stroke = override?.markerBorder ?? override?.color ?? style?.markerBorder ?? style?.color ?? color
-      return [{
+      const point: XYPointScene = {
         type: 'xy-point', id: markElementId(id, datumId), datumId, seriesId: id, legacyKey,
         x: coordinate(sourceX), y: sourceY, sourceX, sourceY,
         displayX: sourceX instanceof Date ? formatTimeValue(sourceX, table.timeProfiles?.[config.xField], config.dateLabelFormat) : formatXAxisNumber(sourceX, config),
         displayY: formatChartNumber(sourceY, config),
         marker: { shape: override?.markerShape ?? style?.markerShape ?? 'circle', size, fill: config.scatterHollow ? 'transparent' : override?.markerFill ?? override?.color ?? style?.markerFill ?? color, stroke, strokeWidth: override?.markerBorderWidth ?? style?.markerBorderWidth ?? config.scatterBorderWidth ?? 1, opacity: clamp01(override?.fillOpacity ?? style?.fillOpacity ?? config.scatterOpacity ?? .78) },
         label: { visible: override?.showLabel ?? globalLabelVisible, text: override?.label || (labelField ? String(row[labelField] ?? '') : formatChartNumber(sourceY, config)), position: override?.labelPosition ?? config.scatterLabelPosition ?? 'right', style: override?.valueText ?? config.valueText, collision: 'shift-y-hide-overlap' },
+        displayOrder: config.scatterOrderField && row[config.scatterOrderField] != null ? row[config.scatterOrderField] instanceof Date ? formatTimeValue(row[config.scatterOrderField] as Date, table.timeProfiles?.[config.scatterOrderField], 'day-month-year') : String(row[config.scatterOrderField]) : undefined,
         sizeValue, displaySizeValue: sizeValue == null ? undefined : formatChartNumber(sizeValue, config), colorGroup: config.scatterColorField ? group : undefined,
-      }]
+      }
+      if (variant === 'connected-scatter') pointsByRow.set(rowIndex, point)
+      return [point]
     })
-    return { id, name, yField, colorGroup: config.scatterColorField ? group : undefined, color, visible: true, points }
+    const connection = variant === 'connected-scatter' ? { points: orderedConnectionRows(table, config, group).map(({ rowIndex }) => pointsByRow.get(rowIndex) ?? null), stroke: { color, width: style?.lineWidth ?? config.scatterConnectionWidth ?? 2, type: style?.lineType ?? config.scatterConnectionType ?? 'solid' as const, opacity: clamp01(config.scatterConnectionOpacity ?? .8) } } : undefined
+    return { id, name, yField, colorGroup: config.scatterColorField ? group : undefined, color, visible: true, points, ...(connection ? { connection } : {}) }
   })).sort((left, right) => (seriesOrder.get(left.name) ?? Number.MAX_SAFE_INTEGER) - (seriesOrder.get(right.name) ?? Number.MAX_SAFE_INTEGER))
   const yValues = series.flatMap((item) => item.points.map((point) => point.y))
   const automaticY = niceNumericScale(yValues)

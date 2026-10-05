@@ -1,0 +1,217 @@
+import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs'
+
+const directory = 'output/chart-audit-2026-10-03'
+const read = (name) => JSON.parse(readFileSync(`${directory}/${name}`, 'utf8'))
+const inventory = read('settings-inventory.json').fields
+const compiler = read('compiler-matrix.json')
+const browser = readdirSync(`${directory}/browser`).map((kind) => read(`browser/${kind}/results.json`))
+const settings = readdirSync(`${directory}/settings-browser`).filter((name) => name.endsWith('.json')).map((name) => read(`settings-browser/${name}`))
+const boundaries = existsSync(`${directory}/boundaries/results.json`) ? read('boundaries/results.json') : []
+const transitions = existsSync(`${directory}/picker-transitions.json`) ? read('picker-transitions.json') : { states: [], errors: [] }
+const fontExports = existsSync(`${directory}/font-export/results.json`) ? read('font-export/results.json') : []
+const remainingFields = existsSync(`${directory}/remaining-fields.json`) ? read('remaining-fields.json') : []
+const baselineText = readFileSync('/tmp/viiiz-audit-browser-baseline.json', 'utf8')
+const baseline = JSON.parse(baselineText.slice(baselineText.indexOf('{')))
+writeFileSync(`${directory}/baseline.json`, JSON.stringify(baseline, null, 2))
+const records = browser.flatMap((item) => item.results)
+const exports = records.filter((item) => item.svgDifference && item.pngDifference)
+const rich = exports.filter((item) => item.case === 'combined-rich-text')
+const ordinary = exports.filter((item) => item.case !== 'combined-rich-text')
+const counts = (list, key) => Object.fromEntries([...new Set(list.map((item) => item[key]))].map((value) => [value, list.filter((item) => item[key] === value).length]))
+const compilerFields = new Set(compiler.coverage.flatMap((item) => item.fields))
+// Full theme patches carry unchanged config keys; these are not additional coverage.
+const browserFields = new Set([...settings.flatMap((item) => item.fields).filter((field) => compilerFields.has(field)), ...boundaries.filter((item) => !item.error).flatMap((item) => item.fields ?? []), ...remainingFields.flatMap((item) => item.fields)])
+const stats = {
+  types: compiler.coverage.length, settings: inventory.length, compiler: { attempted: compiler.total, rendered: compiler.checked, findings: counts(compiler.findings, 'type') },
+  configurationBrowser: { types: settings.length, rendered: settings.reduce((sum, item) => sum + item.checked, 0), rejected: settings.reduce((sum, item) => sum + item.rejected.length, 0), flagged: settings.reduce((sum, item) => sum + item.findings.length, 0) },
+  combinationsBrowser: { attempted: records.length, errors: records.filter((item) => item.error).length },
+  boundaryBrowser: { cases: boundaries.length, errors: boundaries.filter((item) => item.error).length },
+  exportPairs: exports.length, richTextPairs: rich.length, maxPlainSvgDifference: Math.max(...ordinary.map((item) => item.svgDifference.ratio ?? 0)), maxPlainPngDifference: Math.max(...ordinary.map((item) => item.pngDifference.ratio ?? 0)),
+  compilerFields: compilerFields.size, browserFields: browserFields.size, baseline: baseline.stats, transitionErrors: transitions.errors, fontExports,
+}
+writeFileSync(`${directory}/summary.json`, JSON.stringify(stats, null, 2))
+writeFileSync(`${directory}/settings-checklist.json`, JSON.stringify(inventory.map((field) => ({ name: field.name, values: field.values, number: field.number, string: field.string, compilerVaried: compilerFields.has(field.name), browserVaried: browserFields.has(field.name), references: field.references, controls: field.controls })), null, 2))
+const rows = compiler.coverage.map((item) => {
+  const config = settings.find((entry) => entry.kind === item.kind), visual = browser.find((entry) => entry.kind === item.kind)
+  return `| ${item.label} | \`${item.kind}\` | ${item.cases} | ${config?.checked ?? '—'} | ${visual?.results.filter((entry) => entry.svgDifference && entry.pngDifference).length ?? 0} |`
+})
+const percent = (value) => `${(value * 100).toFixed(3)}%`
+const report = `# Аудит графиков — 3–4 октября 2026
+
+Аудит текущей рабочей копии: **${stats.types} типа, ${stats.settings} поле ChartConfig**. Изменения реализации графиков не вносились. Добавлены отдельные инструменты аудита, отчёт и воспроизводящие материалы. Предыдущие незакоммиченные изменения сохранены.
+
+## Что проверено
+
+- Компиляция, расчёт сцены и геометрии: ${compiler.total} сценариев, ${compiler.checked} дошли до рендера. Отклонённые комбинации сохраняются отдельно; их нельзя считать успешной отрисовкой.
+- Реальный ChartCanvas в Chromium: ${stats.configurationBrowser.rendered} отдельных конфигураций, ${records.length} комбинаций положения осей и легенды, ${boundaries.length} дополнительных проверок пределов текста, отступов, ролей данных и шрифтов.
+- Оси сверху/снизу и слева/справа × легенда сверху/снизу/слева: 16 сочетаний на тип. У типов без соответствующей оси/легенды это проверка безопасного игнорирования параметра, а не обещание поддержки такого интерфейса.
+- Дополнительные сочетания: узкий холст, длинные заголовки и переносы, форматированный HTML, тёмная тема через applyCanvasTheme, прямые подписи, крупный текст и отступы; отдельно — индивидуальные стили рядов, порядок, примечания легенды, аннотации и стрелки.
+- Дискретные значения конфигурации; доступные числовые пределы контролов, промежуточные значения; размеры текстовых элементов, 6/72 px, веса 300–800, интерлиньяж 80–250%, левое/центральное/правое выравнивание, курсив и произвольные цвета. Все 18 семейств из fontCatalog применены ко всем типам в дополнительной браузерной матрице; пользовательский WOFF2 проверен отдельно.
+- Реальные экспортные функции ChartCanvas: ${exports.length} наборов предпросмотр → SVG → PNG. Размеры снимков совпадают; сравнение по пикселям, порог различия канала 24/255. Растеризация выполняется в том же браузере с загруженными шрифтами.
+- Существующие тесты редактирования, выбора данных, выделения значений, карт, плиточных карт, Marimekko, композиции нескольких графиков, сохранения и экспорта; переключение типов в настоящем редакторе.
+
+## Подтверждённые проблемы
+
+### A01 · P1 · Выравнивание текстовых блоков обрезает текст
+
+**Воспроизведение:** открыть любой график; для заголовка, подзаголовка, примечания или источника выбрать «По центру» либо «Справа». В тестовом холсте 800×600 заголовок «Аудит графика» с размером 24 при центрировании начинается на x=−57.07, при правом выравнивании — на x=−146.14. Часть текста теряется. Это обычный допустимый размер, а не экстремальная настройка.
+
+**Причина:** [ChartCanvas.tsx:695](../src/components/ChartCanvas.tsx#L695), textAnchor всегда возвращает marginLeft; align меняет направление от этой точки. Комментарий о выравнивании внутри style.width не соответствует измеренному поведению текущего ZRender. Аналогичный якорь используется в текстах подвала.
+
+**Рекомендация:** единая функция размещения блока с правильным якорем и тестами left/center/right для всех четырёх текстовых ролей и переноса строк. Перепроверить HTML отдельно.
+
+**Доказательство:** [центрированный заголовок линии](../${directory}/settings-browser/line-0.png), полные случаи в settings-browser/*.json. Это общая проблема рамки, не отдельных типов.
+
+### A02 · P1 · Форматированный текст расходится между предпросмотром и экспортом
+
+**Воспроизведение:** titleHtml с двумя абзацами, жирным/курсивным начертанием и вложенным размером шрифта, subtitleHtml и noteHtml с форматированием. Сценарий combined-rich-text. В предпросмотре абзацы заголовка смещаются вниз, вторая строка перекрывает подзаголовок; в SVG/PNG они располагаются иначе. На базовых снимках расхождение около 6.9% пикселей. SVG и PNG согласованы друг с другом, но не с экраном.
+
+**Места:** [ChartCanvasDisplays.tsx:42](../src/components/ChartCanvasDisplays.tsx#L42), [CanvasTextOverlay.tsx:52](../src/components/CanvasTextOverlay.tsx#L52), [chartExport.ts:40](../src/features/chart-export/chartExport.ts#L40). HTML-блоки используют браузерную разметку абзацев, экспорт создаёт строки самостоятельно. Стили абзацев не нормализованы одинаково; экспорт дополнительно берёт единый lineHeight от базового размера даже при смешанных размерах.
+
+**Рекомендация:** единая модель строк и высоты для HTML-предпросмотра и SVG, нормализация абзацев и независимая проверка смешанного размера, курсива, подчёркивания и переноса. Обновление эталонных скриншотов не исправит эту проблему.
+
+**Доказательства:** [предпросмотр](../${directory}/browser/horizontal-bar/combined-rich-text-preview.png), [экспорт](../${directory}/browser/horizontal-bar/combined-rich-text-svg.png). Подробные значения для каждого типа — browser/*/results.json.
+
+### A03 · P1 · Проценты горизонтальных нормированных столбцов выходят за холст
+
+**Воспроизведение:** horizontal-normalized-stacked-bar, несколько рядов, значения включены, подписи снаружи справа, холст 800×600. Значение 35,48% начинается на x=755 и занимает 61.70 px: правый край 816.70 при ширине холста 800. Четыре подписи в стандартном наборе обрезаны. Проявляется и в экспорте, так что совпадение экспорта с экраном здесь не означает правильность.
+
+**Места:** [renderBarScene.ts](../src/features/chart-renderer/echarts/renderBarScene.ts), [bar/layout.ts](../src/features/chart-types/bar/layout.ts): подписи на конце стека и резерв за пределом шкалы 100%.
+
+**Рекомендация:** учитывать ширину наружной подписи в правом резерве либо размещать её внутри при недостатке места. Проверить отрицательные значения, длинные аффиксы и обе ориентации.
+
+**Доказательство:** [стандартный предпросмотр](../${directory}/browser/horizontal-normalized-stacked-bar/default-preview.png).
+
+### A04 · P2 · У «Бабочки» обрезается заголовок вертикальной оси
+
+**Воспроизведение:** butterfly, включить название категориальной оси «Категории». На стандартном холсте его x=−12.5, ширина 25: половина текста уходит за левый край. Зафиксировано во всех 21 сценарии общей матрицы.
+
+**Места:** [renderButterflyScene.ts](../src/features/chart-renderer/echarts/renderButterflyScene.ts), [renderBarScene.ts:252](../src/features/chart-renderer/echarts/renderBarScene.ts#L252), [butterfly/layout.ts](../src/features/chart-types/butterfly/layout.ts): центральная ось не даёт обычной боковой точки размещения для заголовка.
+
+**Рекомендация:** рассчитывать заголовок относительно фактической геометрии butterfly; проверять варианты размещения категорий и обе стороны.
+
+**Доказательство:** [предпросмотр](../${directory}/browser/butterfly/default-preview.png).
+
+### A05 · P2 · «Точки + среднее» зависит от предварительной загрузки другого типа
+
+**Воспроизведение:** в чистом контексте смонтировать ChartCanvas с kind=moving-average-scatter до загрузки scatter/bubble. Сообщение «Series scatter is used but not imported», затем ошибка Scheduler/dataTask при resize; отрисовка не завершается. После preloadAllEcharts работает. Обычный редактор предварительно загружает все серии, поэтому эта зависимость часто скрыта.
+
+**Причина:** [loadEchartsForKind.ts:7](../src/components/echarts/loadEchartsForKind.ts#L7): scatterKinds содержит scatter и bubble, но не moving-average-scatter; для последнего загружается только LineChart.
+
+**Рекомендация:** загрузчик каждого типа должен подключать все используемые им серии. Добавить проверку первого открытия без предварительного посещения других типов.
+
+**Доказательство:** [запись холодного запуска](../${directory}/cold-start/moving-average-scatter.json). Прогон после предварительной загрузки сохраняется отдельно в основной матрице.
+
+### A06 · P1 · Перенос категорий горизонтальных графиков ломает подписи и заходит в подвал
+
+**Воспроизведение:** horizontal-bar, холст 480×640, оси сверху/справа, легенда справа, xAxisLabelOverflow=wrap; сценарий combined-narrow-wrap. «Категория 1» распадается на отдельные буквы в узкой колонке; соседние многострочные подписи накладываются друг на друга и доходят до примечания и источника. Числовые деления сверху также тесно расположены. Аналогичные пересечения обнаружены у horizontal-stacked-bar, horizontal-normalized-stacked-bar, horizontal-lollipop и dumbbell. Это поддерживаемый размер холста, а не отрицательная геометрия.
+
+**Место:** [renderBarScene.ts:152](../src/features/chart-renderer/echarts/renderBarScene.ts#L152), аналогичные расчёты категориальных осей других семейств. Для горизонтального графика расстояние между строками не является допустимой шириной текста. Высоту многострочной подписи нужно учитывать в размещении категорий.
+
+**Рекомендация:** вычислять ширину по фактической полосе подписей; ограничивать число строк доступной высотой строки, поддержать осмысленное сокращение или увеличение высоты графика. Не допускать наложения на соседние категории и подвал.
+
+**Доказательства:** [предпросмотр](../${directory}/browser/horizontal-bar/combined-narrow-wrap-preview.png), [таблица пересечений](../${directory}/export-text-collisions.json). Для pie/donut на том же узком холсте также найдены пересечения наружных подписей; они требуют отдельного расчёта свободной зоны.
+
+### A07 · P1 · Переход к сглаживанию создаёт недопустимые SVG transform с NaN
+
+**Воспроизведение:** в настоящем редакторе выбрать демонстрацию «Временной ряд», открыть выбор графика и последовательно пройти все 54 типа в порядке меню. При выборе «Линия + среднее» и «Точки + среднее» браузер сообщает о path/text transform translate(93 NaN). В каждом типе три сообщения, при этом состояние холста — settled, а не error. Это отдельная ошибка, не зависимость загрузчика из A05.
+
+**Места для разбора:** [renderSmoothingScene.ts](../src/features/chart-renderer/echarts/renderSmoothingScene.ts), [smoothing/compiler.ts](../src/features/chart-types/smoothing/compiler.ts), [renderLineAreaScene.ts](../src/features/chart-renderer/echarts/renderLineAreaScene.ts), анимационные переходы ChartCanvas. Источник конкретного NaN требует исправления с воспроизведением; наличие null в рассчитанном среднем и анимация — направления проверки, а не доказанная причина.
+
+**Рекомендация:** не создавать графику с нечисловыми координатами; проверять пропуски и переходы между слоями. Закрепить тестом реальную последовательность выбора с включённой анимацией и отдельно reduced motion.
+
+**Доказательство:** [picker-transitions.json](../${directory}/picker-transitions.json); независимо воспроизведено после исходного полного E2E.
+
+### A08 · P1 · Source Sans 3 теряется при экспорте и подменяется шрифтом с засечками
+
+**Воспроизведение:** задать Source Sans 3 всем текстовым элементам графика и экспортировать. В предпросмотре текст без засечек, в SVG/PNG — с засечками. На контрольном столбчатом графике различается около 4.30% пикселей. У остальных 17 семейств в этой проверке SVG совпал с предпросмотром, а PNG отличался максимум одним пикселем.
+
+**Причина, подтверждённая артефактом:** экспортный SVG Source Sans 3 не содержит font-family и встроенного файла шрифта. Значение каталога [textFonts.ts:30](../src/core/textFonts.ts#L30) — Source Sans 3, sans-serif без кавычек вокруг имени с числом; при построении CSS такое имя теряется. [chartExport.ts:23](../src/features/chart-export/chartExport.ts#L23) затем не обнаруживает семейство для встраивания. Сам файл шрифта загружен в браузере, что не гарантирует корректного CSS на конкретном элементе.
+
+**Рекомендация:** корректно заключать имя семейства в кавычки и экранировать его в CSS/font shorthand, Canvas и SVG. Проверить названия импортируемых шрифтов с цифрами и специальными символами. После исправления проверять и фактическое семейство DOM, и автономный SVG/PNG.
+
+**Доказательства:** [предпросмотр](../${directory}/font-export/Source-Sans-3-preview.png), [экспорт](../${directory}/font-export/Source-Sans-3-svg.png), [сравнение всех 18 семейств](../${directory}/font-export/results.json).
+
+### A09 · P1 · Обычный курсив также отличается в предпросмотре и экспорте
+
+**Воспроизведение:** без HTML включить курсив у текстовых элементов графика. Отдельно проверены Wix Madefor Text, Wix Madefor Display, Onest и Inter. Предпросмотр использует прямые глифы, а SVG/PNG — наклонные; разница составляет 2.83–3.61% пикселей. Это не проблема абзацев из A02. Дополнительные варианты веса 800 у Wix Madefor Text и Onest сохранились корректно.
+
+**Причина:** [index.css:1](../src/index.css#L1) задаёт font-synthesis:none для предпросмотра; [textFonts.ts:84](../src/core/textFonts.ts#L84) загружает локальные normal-face, для удалённых семейств запрашиваются веса без italic-face. Экспортная SVG-сцена не наследует font-synthesis:none, а для Google Fonts может отдельно получить italic-face. Конвейеры выбирают разные глифы.
+
+**Рекомендация:** одинаково поддерживать курсив в Canvas/HTML/SVG: загрузить правильные italic-face либо одинаково разрешить синтез на графике и в экспорте. Простое отключение курсива в SVG сохранит равенство, но не выполнит настройку пользователя.
+
+**Доказательства:** [предпросмотр](../${directory}/font-export/Onest-italic-preview.png), [экспорт](../${directory}/font-export/Onest-italic-svg.png), [численные сравнения](../${directory}/font-export/results.json).
+
+### A10 · P1 · Режим сокращения длинных названий категорий не сокращает текст
+
+**Воспроизведение:** bar, длинные названия категорий, поворот 0°, переключить xAxisLabelOverflow из auto в truncate. Все шесть строк и их измеренные прямоугольники полностью совпадают между режимами; многоточий нет. При ширине подписи около 553–559 px шаг между категориями около 58 px: подписи наложены, крайние выходят за холст.
+
+**Причина:** [renderBarScene.ts:152](../src/features/chart-renderer/echarts/renderBarScene.ts#L152) и [renderLineAreaScene.ts:73](../src/features/chart-renderer/echarts/renderLineAreaScene.ts#L73) передают overflow:truncate без width; ширина задаётся только для wrap. У режима нет границы для сокращения.
+
+**Рекомендация:** задавать доступную ширину и для truncate, учитывать ориентацию оси и поворот. Проверять результат текста, а не только успешный статус рендера.
+
+**Доказательства:** [результаты auto/truncate и проверка CSS имён шрифтов](../${directory}/text-semantics.json), [предпросмотр truncate](../${directory}/boundaries/truncation-truncate.png). CSS.supports отдельно подтвердил невалидность незаключённого в кавычки имени Source Sans 3 из A08.
+
+## Крайние сочетания и кандидаты на дополнительное исправление
+
+- **P2 — отсутствие места для графика.** Крупный текст, высокая легенда, большой интерлиньяж и отступы способны свести plot.width/height к нулю. У pie/donut с legendText.size=64 начало plot находится на y=665 при высоте холста 600. Это не следует исправлять произвольным уменьшением пользовательского шрифта: нужны диагностика нехватки места и понятный способ её устранить. [reservations.ts](../src/features/chart-layout/reservations.ts) обнуляет размер, но не ограничивает начало области и не сообщает о переполнении. Число кандидатов и конфигурации — compiler-matrix.json и boundaries/results.json.
+- **P2 — крайние подписи значений/осей.** Некоторые большие подписи и длинные аффиксы выходят за холст. Например, indexed-line при кратком годовом формате даты оставляет значение 408,33 до x≈805 на холсте 800. Это отдельный резерв для краевых подписей. Автоматические flags — кандидаты: часть геометрии может быть намеренно ограничена clip-path, поэтому все flags не объявляются отдельными дефектами.
+- **P2 — несовместимый диапазон в slope.** Если xAxisMin/xAxisMax исключают выбранные slopeXValues, предварительная validate проходит, но ChartCanvas затем показывает ошибку. Это явная диагностируемая несовместимость настроек; её следует обнаруживать раньше. Не классифицировано как необработанное падение браузера.
+- **Переключение типов:** ${transitions.errors.length} сообщений ошибок в отдельном прогоне; конкретные типы и последовательность — [picker-transitions.json](../${directory}/picker-transitions.json), подтверждённая проблема A07. Успешная compile-геометрия не доказывает отсутствие проблем внутри ECharts во время перехода.
+
+## Предпросмотр и экспорт
+
+В основной матрице **${exports.length} наборов**, по одному SVG и PNG в каждом; дополнительно ${fontExports.length} наборов семейств/начертаний шрифта. Для обычного текста основной матрицы максимальное расхождение SVG: ${percent(stats.maxPlainSvgDifference)}, PNG: ${percent(stats.maxPlainPngDifference)}. Небольшие отличия у точек/пузырьков на узком холсте требуют оценки растеризации; они не смешаны с систематической проблемой HTML и шрифтов. Полные размеры и доли расхождения записаны рядом с файлами.
+
+Форматированный текст проверен в ${rich.length} наборах. Дополнительно проверен экспорт всех 18 семейств и шести сочетаний курсива/веса на общем текстовом конвейере: ошибки выделены в A08/A09. Контрольный произвольный цвет #74204f и имя Audit Custom Font используются только в тестах пользовательских настроек. Замечания design hook к ним признаны контекстными ложными срабатываниями; палитра и типографика продукта не менялись, исключения hook не добавлялись.
+
+## Результаты существующих проверок
+
+- Сборка и TypeScript: исходный прогон успешен; финальная проверка инструментария сохраняется в артефактах.
+- Unit: 72 файла, 865 тестов прошли в исходном полном прогоне.
+- Полный существующий E2E: **${baseline.stats.expected} успешно, ${baseline.stats.unexpected} с ошибками из 148**, без retries и обновления golden-файлов. Четыре ошибки относятся к главной странице/галерее, одна — к устаревшему ожиданию 9 категорий вместо 11. Три — отличия visual snapshots для scatter/interval/horizontal bars; их нужно оценивать отдельно. Одна — SVG transform с NaN при последовательном выборе типов.
+- Lint завершился без ошибок, с существующими предупреждениями, в том числе в скриптах навыка и экспортируемых React-helper функциях.
+- Новые аудиторские тесты фиксируют результаты в JSON. Зелёный запуск такого теста означает, что сбор данных завершился, а не что все конфигурации визуально корректны.
+
+## Оценка проверенных аспектов графиков
+
+Это оценка в рамках текущего аудита сцен, а не сертификация всего интерфейса.
+
+| Аспект | Оценка 0–4 | Основание |
+| --- | ---: | --- |
+| Доступность | 2 | Текст SVG сохраняется; часть текста обрезается, полная клавиатурная работа с элементами холста и представление данных для скринридера отдельно не подтверждены. |
+| Производительность | 3 | Сцены и типы загружаются по семействам; тысячи небольших конфигураций отрисованы. Сбой независимой загрузки A05; стресс-тест больших таблиц в этот аудит не входил. |
+| Тема | 3 | Общая функция тёмной темы проверена на всех типах, включая подписи; произвольные сочетания цветов остаются пользовательской настройкой, а не гарантией контраста. |
+| Адаптация размеров | 1 | На допустимом узком холсте подписи сталкиваются и заходят в подвал; крупный текст/отступы могут полностью убрать область данных. |
+| Визуальные антипаттерны | 3 | Осмысленная типографика и явные настройки; основной недостаток — разные модели размещения текста и отсутствие единого контроля коллизий. |
+
+## Покрытие по каждому типу
+
+В колонке «экспорт» число наборов preview/SVG/PNG. Поле «браузер» включает конфигурации отдельных настроек; общие сочетания и пределы идут дополнительно.
+
+| Тип | Идентификатор | Сценариев компиляции | Настроек в браузере | Экспорт |
+| --- | --- | ---: | ---: | ---: |
+${rows.join('\n')}
+
+## Границы достоверности
+
+Это полный проход по текущему реестру типов и инвентарю настроек, а не перебор бесконечного числа текстов, чисел и всех декартовых сочетаний. Проверки построены на контрольных таблицах и выбранных значимых комбинациях. Применимость общих полей фильтруется по семейству; служебные параметры и роли данных отмечены отдельно. ${compilerFields.size} поле было явно изменено в основной матрице компиляции, ${browserFields.size} — в браузерных матрицах; не изменённое поле не считается доказанным только потому, что оно есть в конфигурации. [settings-checklist.json](../${directory}/settings-checklist.json) содержит отметку по каждому из ${inventory.length} полей и ссылки на контролы/использование.
+
+Основная матрица подаёт конфигурацию напрямую в ChartCanvas; существующие E2E дополнительно проходят настоящие контролы. Это различие важно: некоторые UI-действия вместе с изменением значения автоматически меняют типографику, порядок или роли. Для композиции нескольких графиков использованы отдельные существующие тесты, а не обычный одиночный ChartCanvas. fontFaces в boundaries/results.json фиксирует загрузку файла шрифта; статус loaded сам по себе не доказывает использование этого семейства на конкретном элементе. Google Fonts проверены в текущем сетевом контексте; недоступность провайдера и всех его подмножеств отдельно не моделировалась. Системные шрифты на других ОС, Safari/Firefox, PDF и печать не получили отдельного подтверждения.
+
+Не обновлялись эталонные снимки; не выполнялись commit, push или deploy.
+
+## Порядок исправления
+
+1. Общая рамка и шрифты: A01, A02, A08 и A09. Они затрагивают все типы с соответствующими настройками и соответствие экспорта.
+2. Потеря, перенос и сокращение подписей: A03, A04, A06 и A10, затем краевые подписи и нехватка места.
+3. Независимая загрузка типов A05 и ошибки переходов A07.
+4. Закрепить новые проверки конкретными assertions после исправлений; актуализировать устаревшие E2E отдельно от обновления визуальных эталонов.
+
+## Повторный запуск
+
+Инвентарь: node scripts/chart-audit-inventory.mjs. Компиляция: CHART_AUDIT=1 npm run test -- src/test-fixtures/chartAudit.test.ts. Браузерные матрицы: CHART_AUDIT=1 npx playwright test e2e/chart-audit.spec.ts e2e/chart-settings-audit.spec.ts e2e/chart-boundary-audit.spec.ts e2e/chart-audit-review.spec.ts e2e/chart-transition-audit.spec.ts e2e/chart-font-export-audit.spec.ts e2e/chart-field-audit.spec.ts --workers=1. Для проверки поведения после загрузки серий задаётся CHART_AUDIT_WARM=1, холодный запуск сохраняется отдельно. Отчёт: node scripts/chart-audit-report.mjs. Обычные прогоны не запускают тяжёлый аудит без CHART_AUDIT=1.
+`
+const linkedReport = report.replace(/\]\(\.\.\/([^)]*)\)/g, (_match, target) => `](${process.cwd()}/${target.replace(/#L(\d+)$/, ':$1')})`)
+writeFileSync('docs/chart-audit-2026-10-03.md', linkedReport)
+console.log(JSON.stringify(stats))

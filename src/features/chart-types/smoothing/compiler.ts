@@ -79,5 +79,5 @@ export function compileNativeSmoothingScene(table: DataTable, config: ChartConfi
     ...layers.filter((layer) => layer.role === 'raw').flatMap((layer) => layer.points.map((point): ChartElement => ({ id: point.id, role: 'mark', coordinateSpace: 'data', selectable: true, seriesId: layer.sourceSeriesId, datumId: point.datumId, legacyKey: point.legacyKey }))),
     ...layers.map((layer): ChartElement => ({ id: `legend-item:${layer.id}`, role: 'legend-item', coordinateSpace: 'canvas', selectable: true, seriesId: layer.id, text: layer.name })),
   ]
-  return { ...base, elements, guides, plot: { kind: 'smoothing', variant: config.kind, window, categoryPlacement: 'point', categories: base.plot.categories, categoryLabelPlan: base.plot.categoryLabelPlan, categoryAxis: base.plot.categoryAxis, valueAxis: base.plot.valueAxis, valueDomain: base.plot.valueDomain, sourceGroups, layers } }
+  return { ...base, elements, guides, plot: { kind: 'smoothing', variant: config.kind, window, categoryPlacement: 'point', categories: base.plot.categories, dateAxis: base.plot.dateAxis, categoryLabelPlan: base.plot.categoryLabelPlan, categoryAxis: base.plot.categoryAxis, valueAxis: base.plot.valueAxis, valueDomain: base.plot.valueDomain, sourceGroups, layers } }
 }

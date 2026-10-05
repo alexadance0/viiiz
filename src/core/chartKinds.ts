@@ -17,22 +17,25 @@ export const distributionVisualDefaults = (kind: ChartKind): Partial<ChartConfig
   distributionSummaryLength: 100,
   ...(kind === 'raincloud' ? { distributionRaincloudPointMode: 'overlay' as const } : {}),
 })
+export const isScatterChart = (kind: ChartKind): kind is 'scatter' | 'bubble' | 'connected-scatter' => kind === 'scatter' || kind === 'bubble' || kind === 'connected-scatter'
 export const isLollipopChart = (kind: ChartKind) => kind === 'lollipop' || kind === 'horizontal-lollipop'
 export const isHorizontalBarChart = (kind: ChartKind) => kind === 'horizontal-bar' || kind === 'butterfly' || kind === 'horizontal-stacked-bar' || kind === 'horizontal-normalized-stacked-bar' || kind === 'horizontal-lollipop'
-export const isHorizontalChart = (kind: ChartKind) => kind === 'dumbbell' || isHorizontalBarChart(kind)
-export const usesHorizontalAxes = (config: Pick<ChartConfig, 'kind' | 'barOrientation' | 'dumbbellOrientation' | 'distributionOrientation'>) => config.kind === 'dumbbell'
+export const isPairedComparisonChart = (kind: ChartKind) => kind === 'dumbbell' || kind === 'arrow-plot'
+export const isPointComparisonChart = (kind: ChartKind) => kind === 'dot-plot' || isPairedComparisonChart(kind)
+export const isHorizontalChart = (kind: ChartKind) => isPointComparisonChart(kind) || isHorizontalBarChart(kind)
+export const usesHorizontalAxes = (config: Pick<ChartConfig, 'kind' | 'barOrientation' | 'dumbbellOrientation' | 'distributionOrientation'>) => isPointComparisonChart(config.kind)
   ? (config.dumbbellOrientation ?? 'horizontal') === 'horizontal'
   : isDistributionChart(config.kind)
     ? (config.distributionOrientation ?? 'horizontal') === 'horizontal'
   : isHorizontalChart(config.kind) || isBarChart(config.kind) && config.barOrientation === 'horizontal'
-export const isBarChart = (kind: ChartKind) => kind === 'bar' || kind === 'stacked-bar' || kind === 'normalized-stacked-bar' || kind === 'waterfall' || kind === 'lollipop' || isHorizontalBarChart(kind)
-export const isAreaChart = (kind: ChartKind) => kind === 'area' || kind === 'stacked-area' || kind === 'normalized-stacked-area'
+export const isBarChart = (kind: ChartKind) => kind === 'marimekko' || kind === 'bar' || kind === 'stacked-bar' || kind === 'normalized-stacked-bar' || kind === 'waterfall' || kind === 'lollipop' || isHorizontalBarChart(kind)
+export const isAreaChart = (kind: ChartKind) => kind === 'area' || kind === 'stacked-area' || kind === 'normalized-stacked-area' || kind === 'stream-graph'
 export const isLineLikeChart = (kind: ChartKind) => kind === 'bump' || kind === 'line' || kind === 'spline' || kind === 'step-line' || kind === 'moving-average-line' || kind === 'moving-average-scatter' || kind === 'slope' || kind === 'range-line' || kind === 'step-range-line' || kind === 'confidence-line' || isAreaChart(kind)
-export const isStackedBarChart = (kind: ChartKind) => kind === 'stacked-bar' || kind === 'normalized-stacked-bar' || kind === 'butterfly' || kind === 'horizontal-stacked-bar' || kind === 'horizontal-normalized-stacked-bar'
-export const isStackedAreaChart = (kind: ChartKind) => kind === 'stacked-area' || kind === 'normalized-stacked-area'
+export const isStackedBarChart = (kind: ChartKind) => kind === 'marimekko' || kind === 'stacked-bar' || kind === 'normalized-stacked-bar' || kind === 'butterfly' || kind === 'horizontal-stacked-bar' || kind === 'horizontal-normalized-stacked-bar'
+export const isStackedAreaChart = (kind: ChartKind) => kind === 'stacked-area' || kind === 'normalized-stacked-area' || kind === 'stream-graph'
 export const isStackedChart = (kind: ChartKind) => isStackedBarChart(kind) || isStackedAreaChart(kind)
-export const isNormalizedStackedChart = (kind: ChartKind) => kind === 'normalized-stacked-bar' || kind === 'horizontal-normalized-stacked-bar' || kind === 'normalized-stacked-area'
-export const chartUsesAggregation = (kind: ChartKind) => !isMapChart(kind) && kind !== 'scatter' && kind !== 'bubble' && !isDistributionChart(kind)
+export const isNormalizedStackedChart = (kind: ChartKind) => kind === 'marimekko' || kind === 'normalized-stacked-bar' || kind === 'horizontal-normalized-stacked-bar' || kind === 'normalized-stacked-area'
+export const chartUsesAggregation = (kind: ChartKind) => !isMapChart(kind) && !isScatterChart(kind) && !isDistributionChart(kind)
 
 export const isPieChart = (kind: ChartKind): kind is 'pie' | 'donut' => kind === 'pie' || kind === 'donut'
 

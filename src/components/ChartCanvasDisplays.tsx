@@ -1,5 +1,7 @@
+import { useLayoutEffect, useRef } from 'react'
+import { appendStyledText, type ExportTextBlock } from '../features/chart-export/chartExport'
 import { AnnotationHalo, syncAnnotationHaloScroll } from './AnnotationHalo'
-import type { ChartAnnotation, ChartTextStyle } from '../core/types'
+import type { ChartAnnotation } from '../core/types'
 import { annotationTextHtml, sanitizeAnnotationHtml } from '../core/annotationHtml'
 
 const annotationStyle = (annotation: ChartAnnotation, _canvasBackground = '#ffffff'): React.CSSProperties => {
@@ -27,18 +29,14 @@ export function AnnotationDisplay({ annotation, canvasBackground, onSelect }: { 
   return <div data-annotation-id={annotation.id} className="canvas-annotation annotation-display" style={annotationStyle(annotation, canvasBackground)} onClick={(event) => { event.stopPropagation(); onSelect() }}><AnnotationHalo annotation={annotation}/><div className="annotation-content annotation-foreground" onScroll={syncAnnotationHaloScroll} style={{ ...textStyle, color: annotation.fragments[0]?.color ?? '#292929' }} dangerouslySetInnerHTML={{ __html: html }}/></div>
 }
 
-const sanitizeRichTextHtml = (html: string) => {
-  const root = document.createElement('template')
-  root.innerHTML = sanitizeAnnotationHtml(html)
-  root.content.querySelectorAll<HTMLElement>('*').forEach((element) => {
-    element.style.removeProperty('text-shadow')
-    element.style.removeProperty('-webkit-text-stroke-color')
-    element.style.removeProperty('-webkit-text-stroke-width')
-    element.style.removeProperty('text-align')
-  })
-  return root.innerHTML
-}
-
-export function CanvasTextDisplay({ html, style, left, top, width, onSelect }: { html: string; style: ChartTextStyle; left: number; top: number; width: number; onSelect(): void }) {
-  return <div className="canvas-rich-text-display" style={{ left, top, width, fontFamily: style.fontFamily, fontSize: style.size, fontWeight: style.weight, fontStyle: style.italic ? 'italic' : 'normal', lineHeight: `${Math.round(style.size * style.lineHeight / 100)}px`, color: style.color, textAlign: style.align }} onClick={(event) => { event.stopPropagation(); onSelect() }} dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(html) }}/>
+export function CanvasTextDisplay({ block, onSelect }: { block: ExportTextBlock; onSelect(): void }) {
+  const ref = useRef<SVGSVGElement>(null)
+  useLayoutEffect(() => {
+    const svg = ref.current
+    if (!svg) return
+    svg.replaceChildren()
+    const height = appendStyledText(svg, [{ ...block, left: 0, top: 0 }])
+    svg.setAttribute('height', String(height))
+  }, [block])
+  return <svg ref={ref} className="canvas-rich-text-display" width={block.width} style={{ left: block.left, top: block.top, overflow: 'visible', fontFamily: block.style.fontFamily, fontSize: block.style.size, fontWeight: block.style.weight, fontStyle: block.style.italic ? 'italic' : 'normal', lineHeight: `${Math.round(block.style.size * block.style.lineHeight / 100)}px`, textAlign: block.style.align }} onClick={(event) => { event.stopPropagation(); onSelect() }}/>
 }

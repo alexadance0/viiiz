@@ -13,6 +13,30 @@ const config = (kind: ChartConfig['kind']): ChartConfig => ({ ...createDefaultCh
 const table = (rows: DataTable['rows']): DataTable => ({ name: 'map', columns: ['Территория', 'Значение'], rows })
 
 describe('native choropleth maps', () => {
+  it('keeps Chukotka with mainland Russia on the right of the world map', () => {
+    const scene = compileNativeMapScene(mapDemoTables.world, config('map-world'))
+    const region = scene.plot.regions.find((region) => region.regionId === 'RU')!
+    const points = region.polygons.flat(2)
+    expect(points.every(([x, y]) => x > scene.plot.width / 2 && x <= scene.plot.width && y >= 0 && y <= scene.plot.height)).toBe(true)
+    // The easternmost coast belongs to the same exterior ring as the mainland,
+    // rather than a relocated fragment with an artificial straight border.
+    const easternmost = Math.max(...points.map(([x]) => x))
+    expect(Math.max(...region.polygons[0][0].map(([x]) => x))).toBe(easternmost)
+  })
+  it('renders all maps without artificial markers and a taller rectangular world without Antarctica', () => {
+    const scene = compileNativeMapScene(mapDemoTables.world, config('map-world'))
+    expect(scene.plot).toMatchObject({ width: 1000, height: 500 })
+    expect(scene.plot.regions.some((region) => region.regionId === 'AQ')).toBe(false)
+    for (const { id, kind } of mapPresets) {
+      const compiled = compileNativeMapScene(mapDemoTables[id], config(kind))
+      const option = renderScene(resolveNativeMapScene(compiled)) as { series: Array<{ renderItem(params: { dataIndex: number }, api: { style(): object }): { children: Array<{ type: string }> } }> }
+      for (let dataIndex = 0; dataIndex < compiled.plot.regions.length; dataIndex++) {
+        const item = option.series[0].renderItem({ dataIndex }, { style: () => ({}) })
+        expect(item.children.some((child) => child.type === 'circle')).toBe(false)
+      }
+    }
+  })
+
   it.each(mapPresets)('$label enables an individual value independently of the global labels', ({ id, kind }) => {
     const initial = compileNativeMapScene(mapDemoTables[id], config(kind))
     const region = initial.plot.regions.filter((item) => item.value !== null).sort((a, b) => b.area - a.area)[0]
@@ -46,6 +70,18 @@ describe('native choropleth maps', () => {
     expect(mapRegions('russia')).toHaveLength(89)
     expect(mapRegions('usa')).toHaveLength(51)
     expect(mapRegions('europe')).toHaveLength(50)
+    expect(mapRegions('world')).toHaveLength(241)
+    expect(new Set(mapRegions('world').map((item) => item.id)).size).toBe(241)
+    expect(findMapRegion('world', 'США')?.id).toBe('US')
+    expect(findMapRegion('world', 'USA')?.id).toBe('US')
+    expect(findMapRegion('world', 'Бразилия')?.id).toBe('BR')
+    expect(findMapRegion('world', 'BRA')?.id).toBe('BR')
+    expect(findMapRegion('world', 'AUS')?.id).toBe('AU')
+    expect(findMapRegion('world', 'AU')?.name).toBe('Австралия')
+    expect(findMapRegion('world', 'IOA')?.id).toBe('IOA')
+    expect(findMapRegion('world', 'Норвегия')?.id).toBe('NO')
+    expect(findMapRegion('world', 'Антарктида')).toBeUndefined()
+    expect(findMapRegion('world', 'AQ')).toBeUndefined()
     expect(mapRegions('russia').filter((region) => region.disputed).map((region) => region.id).sort()).toEqual(['UA-09', 'UA-14', 'UA-23', 'UA-40', 'UA-43', 'UA-65'])
     expect(findMapRegion('russia', 'Республика Татарстан')?.id).toBe('RU-TA')
     expect(findMapRegion('russia', 'ДНР')?.id).toBe('UA-14')

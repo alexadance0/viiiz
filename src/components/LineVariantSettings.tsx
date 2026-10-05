@@ -1,3 +1,4 @@
+import { isPairedComparisonChart } from '../core/chartKinds'
 import type { ChartConfig, DataTable } from '../core/types'
 import { NumberInput } from './NumberInput'
 import { normalizeMovingAverageWindow } from '../features/chart-types/smoothing/movingAverage'
@@ -9,6 +10,12 @@ interface Props { config: ChartConfig; numericColumns?: string[]; table: DataTab
 
 export function LineVariantSettings({ config, numericColumns = config.yFields, table, onChange }: Props) {
   const patch = (values: Partial<ChartConfig>) => onChange({ ...config, ...values })
+  if (config.kind === 'stream-graph') return <details className="settings-group line-variant-settings" open><summary>Компоновка потоков</summary><div>
+    <label>Базовая линия<select value={config.streamBaseline ?? 'wiggle'} onChange={(event) => patch({ streamBaseline: event.target.value as ChartConfig['streamBaseline'] })}><option value="wiggle">Минимум колебаний</option><option value="centered">Симметрично относительно центра</option></select></label>
+    <label>Порядок потоков<select value={config.streamOrder ?? 'inside-out'} onChange={(event) => patch({ streamOrder: event.target.value as ChartConfig['streamOrder'], ...(event.target.value === 'inside-out' ? { seriesOrder: [] } : {}) })}><option value="inside-out">От центра к краям</option><option value="data">Как в данных</option></select></label>
+    <SettingsCheckbox isSelected={config.streamSmooth ?? true} onChange={(streamSmooth) => patch({ streamSmooth })}>Плавные границы потоков</SettingsCheckbox>
+    <small>Толщина ленты показывает значение. Положение по вертикали задаёт компоновка. Используйте неотрицательные значения.</small>
+  </div></details>
   if (config.kind === 'moving-average-line' || config.kind === 'moving-average-scatter') return <details className="settings-group line-variant-settings"><summary>Скользящее среднее</summary><div>
     <label>Период сглаживания<NumberInput min="2" max="365" value={config.movingAverageWindow ?? 12} onValueChange={(movingAverageWindow) => patch({ movingAverageWindow: normalizeMovingAverageWindow(movingAverageWindow) })}/></label>
     <label>Прозрачность исходных данных, %<NumberInput min="5" max="80" value={Math.round((config.movingAverageRawOpacity ?? .22) * 100)} onValueChange={(value) => patch({ movingAverageRawOpacity: value / 100 })}/></label>
@@ -17,7 +24,8 @@ export function LineVariantSettings({ config, numericColumns = config.yFields, t
   if (config.kind === 'bump') return <details className="settings-group line-variant-settings" open><summary>Динамика рейтинга</summary><div>
     <label>Данные рейтинга<select value={config.bumpMode ?? 'value'} onChange={(event) => patch({ bumpMode: event.target.value as ChartConfig['bumpMode'] })}><option value="value">Рассчитать места по значениям</option><option value="rank">Готовые места из таблицы</option></select></label>
     {(config.bumpMode ?? 'value') === 'value' && <label>Первое место<select value={config.bumpRankDirection ?? 'desc'} onChange={(event) => patch({ bumpRankDirection: event.target.value as ChartConfig['bumpRankDirection'] })}><option value="desc">Наибольшее значение</option><option value="asc">Наименьшее значение</option></select></label>}
-    <SettingsCheckbox isSelected={config.bumpShowStartLabels ?? true} onChange={(bumpShowStartLabels) => patch({ bumpShowStartLabels })}>Названия в начале линий</SettingsCheckbox>
+    <SettingsCheckbox isSelected={config.bumpSmooth ?? false} onChange={(bumpSmooth) => patch({ bumpSmooth })}>Плавные линии</SettingsCheckbox>
+    <SettingsCheckbox isSelected={config.bumpShowStartLabels ?? false} onChange={(bumpShowStartLabels) => patch({ bumpShowStartLabels })}>Названия в начале линий</SettingsCheckbox>
     <small className="settings-note">Названия на концах включаются в разделе «Легенда». Равные значения делят место, пропуски остаются пустыми.</small>
   </div></details>
   if (config.kind === 'indexed-line') {
@@ -55,11 +63,16 @@ export function LineVariantSettings({ config, numericColumns = config.yFields, t
     {(config.slopeColorByChange ?? false) && <><label>Рост<ColorControl value={config.slopeIncreaseColor ?? '#168a72'} onChange={(slopeIncreaseColor) => patch({ slopeIncreaseColor })}/></label><label>Снижение<ColorControl value={config.slopeDecreaseColor ?? '#db5a5a'} onChange={(slopeDecreaseColor) => patch({ slopeDecreaseColor })}/></label><label>Без изменения<ColorControl value={config.slopeNeutralColor ?? '#777580'} onChange={(slopeNeutralColor) => patch({ slopeNeutralColor })}/></label></>}
     <button type="button" className="reset-element" onClick={() => patch({ slopeShowChange: false, slopeChangeFormat: 'absolute', slopeChangePosition: 'middle', slopeChangePercentDecimals: 0, slopeColorByChange: false, slopeIncreaseColor: '#168a72', slopeDecreaseColor: '#db5a5a', slopeNeutralColor: '#777580' })}>Сбросить изменение</button>
   </div></details>
-  if (config.kind === 'dumbbell') return <details className="settings-group line-variant-settings"><summary>Гантельная диаграмма</summary><div>
+  if (config.kind === 'dot-plot') return <details className="settings-group line-variant-settings" open><summary>Точечная диаграмма</summary><div>
+    <label>Ориентация<select value={config.dumbbellOrientation ?? 'horizontal'} onChange={(event) => patch({ dumbbellOrientation: event.target.value as ChartConfig['dumbbellOrientation'], showHorizontalGrid: event.target.value === 'vertical', showVerticalGrid: event.target.value === 'horizontal' })}><option value="horizontal">Горизонтальная</option><option value="vertical">Вертикальная</option></select></label>
+    <label>Сортировка<select value={config.barCategorySort ?? 'none'} onChange={(event) => patch({ barCategorySort: event.target.value as ChartConfig['barCategorySort'] })}><option value="none">Как в данных</option><option value="value-desc">По убыванию значения</option><option value="value-asc">По возрастанию значения</option></select></label>
+    <small className="settings-note">Каждый выбранный показатель представлен точкой. Пропущенные значения не отображаются.</small>
+  </div></details>
+  if (isPairedComparisonChart(config.kind)) return <details className="settings-group line-variant-settings"><summary>{config.kind === 'arrow-plot' ? 'Стрелочная диаграмма' : 'Гантельная диаграмма'}</summary><div>
     <label>Начальное значение<select value={config.dumbbellStartField ?? ''} onChange={(event) => { const dumbbellStartField = event.target.value || undefined; patch({ dumbbellStartField, yFields: [dumbbellStartField, config.dumbbellEndField].filter((field): field is string => Boolean(field)), yField: dumbbellStartField ?? config.yField }) }}><option value="">Выберите показатель…</option>{numericColumns.map((column) => <option key={column}>{column}</option>)}</select></label>
     <label>Конечное значение<select value={config.dumbbellEndField ?? ''} onChange={(event) => { const dumbbellEndField = event.target.value || undefined; patch({ dumbbellEndField, yFields: [config.dumbbellStartField, dumbbellEndField].filter((field): field is string => Boolean(field)) }) }}><option value="">Выберите показатель…</option>{numericColumns.map((column) => <option key={column}>{column}</option>)}</select></label>
     {config.dumbbellStartField === config.dumbbellEndField && config.dumbbellStartField && <small className="settings-note interval-error">Выберите два разных показателя.</small>}
-    <label>Ориентация<select value={config.dumbbellOrientation ?? 'horizontal'} onChange={(event) => patch({ dumbbellOrientation: event.target.value as NonNullable<ChartConfig['dumbbellOrientation']> })}><option value="horizontal">Горизонтальная</option><option value="vertical">Вертикальная</option></select></label>
+    <label>Ориентация<select value={config.dumbbellOrientation ?? 'horizontal'} onChange={(event) => patch({ dumbbellOrientation: event.target.value as NonNullable<ChartConfig['dumbbellOrientation']>, showHorizontalGrid: event.target.value === 'vertical', showVerticalGrid: event.target.value === 'horizontal' })}><option value="horizontal">Горизонтальная</option><option value="vertical">Вертикальная</option></select></label>
     <strong>Подписи точек</strong>
     <SettingsCheckbox isSelected={config.showValues && (config.dumbbellShowStartValue ?? true)} onChange={(dumbbellShowStartValue) => patch({ showValues: true, dumbbellShowStartValue })}>Начальное значение</SettingsCheckbox>
     <SettingsCheckbox isSelected={config.showValues && (config.dumbbellShowEndValue ?? true)} onChange={(dumbbellShowEndValue) => patch({ showValues: true, dumbbellShowEndValue })}>Конечное значение</SettingsCheckbox>

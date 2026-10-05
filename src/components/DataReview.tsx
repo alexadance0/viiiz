@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Pagination } from '@heroui/react'
 import { ArrowRightLeft, ChevronLeft, ChevronRight, TriangleAlert } from 'lucide-react'
 import type { ColumnType, DataIssue, DataTable } from '../core/types'
+import { formatTimeValue } from '../core/timeFrequency'
 import { findDuplicateRowIndices } from '../core/dataQuality'
 import { SettingsCheckbox } from './SettingsCheckbox'
 
@@ -86,8 +87,8 @@ export function DataReview({ table, types, issues, onRename, onType, onConfigure
               const empty = row[column] == null || row[column] === ''
               const isEditing = editing?.row === rowIndex && editing.column === column
               const imputed = table.imputedCells?.[column]?.[rowIndex]
-              const source = table.rawRows?.[rowIndex]?.[column] ?? row[column]
-              return <td title={imputed ? `Восстановлено методом: ${imputed.method}` : undefined} className={`${types[column] === 'number' ? 'numeric-cell' : ''} ${empty ? 'missing-cell' : ''} ${activeColumn === column ? 'selected-cell' : ''} ${isEditing ? 'editing-cell' : ''} ${imputed ? 'imputed-cell' : ''}`} onClick={() => setSelectedColumn(column)} onDoubleClick={() => setEditing({ row: rowIndex, column, value: String(source ?? '') })} key={column}>{isEditing ? <input autoFocus value={editing.value} onChange={(event) => setEditing({ ...editing, value: event.target.value })} onBlur={(event) => { if (event.currentTarget.dataset.cancelled !== 'true') onEditCell(rowIndex, column, editing.value); setEditing(null) }} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') { event.currentTarget.dataset.cancelled = 'true'; event.currentTarget.blur() } }}/> : <>{imputed && <i className="imputed-mark">∿</i>}{empty ? <span>пропуск</span> : row[column] instanceof Date ? row[column].toLocaleDateString('ru-RU') : String(row[column])}</>}</td>
+              const source = row[column] instanceof Date ? formatTimeValue(row[column], undefined, 'day-month-year') : table.rawRows?.[rowIndex]?.[column] ?? row[column]
+              return <td title={imputed ? `Восстановлено методом: ${imputed.method}` : undefined} className={`${types[column] === 'number' ? 'numeric-cell' : ''} ${empty ? 'missing-cell' : ''} ${activeColumn === column ? 'selected-cell' : ''} ${isEditing ? 'editing-cell' : ''} ${imputed ? 'imputed-cell' : ''}`} onClick={() => setSelectedColumn(column)} onDoubleClick={() => setEditing({ row: rowIndex, column, value: String(source ?? '') })} key={column}>{isEditing ? <input autoFocus aria-label={`Изменить ${column}, строка ${rowIndex + 1}`} placeholder={types[column] === 'date' ? 'ДД.ММ.ГГГГ' : undefined} value={editing.value} onChange={(event) => setEditing({ ...editing, value: event.target.value })} onBlur={(event) => { if (event.currentTarget.dataset.cancelled !== 'true') onEditCell(rowIndex, column, editing.value); setEditing(null) }} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); if (event.key === 'Escape') { event.currentTarget.dataset.cancelled = 'true'; event.currentTarget.blur() } }}/> : <>{imputed && <i className="imputed-mark">∿</i>}{empty ? <span>пропуск</span> : row[column] instanceof Date ? row[column].toLocaleDateString('ru-RU') : String(row[column])}</>}</td>
             })}</tr>})}</tbody>
           </table>
           <Pagination className="table-pagination" size="sm">

@@ -1,10 +1,10 @@
+import { contrastText } from '../../../core/color'
 import type { ChartTextStyle } from '../../../core/types'
 import type { ResolvedWaterfallScene } from '../../chart-types/waterfall/layout'
 import { renderNativeBarScene } from './renderBarScene'
 
 const textStyle = (style: ChartTextStyle) => ({ fill: style.color, fontFamily: style.fontFamily, fontSize: style.size, fontWeight: style.weight, fontStyle: style.italic ? 'italic' : 'normal', lineHeight: Math.round(style.size * style.lineHeight / 100), align: style.align })
 const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
-const contrast = (color: string) => { const match = color.match(/^#([\da-f]{6})$/i); if (!match) return '#fff'; const rgb = [0, 2, 4].map((offset) => parseInt(match[1].slice(offset, offset + 2), 16)); return (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000 > 150 ? '#202027' : '#fff' }
 
 export function renderWaterfallScene(scene: ResolvedWaterfallScene): Record<string, unknown> {
   const sourceSeries = { id: scene.plot.marks[0]?.seriesId ?? 'waterfall', name: scene.compatibilityConfig.yFields[0] ?? scene.compatibilityConfig.yField, color: '', visible: true, marks: scene.plot.marks }
@@ -15,12 +15,13 @@ export function renderWaterfallScene(scene: ResolvedWaterfallScene): Record<stri
     const mark = scene.plot.marks[params.dataIndex], geometry = mark && scene.waterfallGeometry.marks[mark.id]
     if (!mark || !geometry) return null
     const meta = info(mark)
-    return { type: 'group', silent: false, info: meta, children: [{ type: 'rect', silent: false, info: meta, shape: { ...geometry.rect, r: mark.style.borderRadius }, style: { fill: mark.style.color, opacity: barData[params.dataIndex].itemStyle.opacity, stroke: mark.style.borderColor, lineWidth: mark.style.borderWidth } }, ...(geometry.label ? [{ type: 'text', silent: false, info: { ...meta, selectionTarget: 'value-label' }, style: { x: geometry.label.x, y: geometry.label.y, text: mark.label.text, ...textStyle(mark.label.style), fill: geometry.label.inside && mark.label.autoContrast ? contrast(mark.style.color) : mark.label.style.color, align: geometry.label.align, verticalAlign: geometry.label.verticalAlign } }] : [])] }
+    return { type: 'group', silent: false, info: meta, children: [{ type: 'rect', silent: false, info: meta, shape: { ...geometry.rect, r: mark.style.borderRadius }, style: { fill: mark.style.color, opacity: barData[params.dataIndex].itemStyle.opacity, stroke: mark.style.borderColor, lineWidth: mark.style.borderWidth } }, ...(geometry.label ? [{ type: 'text', silent: false, info: { ...meta, selectionTarget: 'value-label' }, style: { x: geometry.label.x, y: geometry.label.y, text: mark.label.text, ...textStyle(mark.label.style), fill: geometry.label.inside && mark.label.autoContrast ? contrastText(mark.style.color, 4.5, mark.style.opacity, scene.compatibilityConfig.canvasBackground) : mark.label.style.color, align: geometry.label.align, verticalAlign: geometry.label.verticalAlign } }] : [])] }
   } }
   const connectors = scene.plot.connectors.map((connector) => ({ id: connector.id, type: 'line', silent: true, z: 35, shape: scene.waterfallGeometry.connectors[connector.id], style: { stroke: connector.color, lineWidth: 1, lineDash: [4, 3] } }))
   const xAxis = base.xAxis as { axisLabel?: Record<string, unknown>; axisTick?: Record<string, unknown> }
   const originalInterval = xAxis.axisLabel?.interval
   const visibleCategory = (index: number) => {
+    if (scene.plot.categoryAxis.calendarTicks && scene.plot.categories[index]?.value instanceof Date) return false
     if (index === scene.plot.categories.length - 1) return true
     return typeof originalInterval === 'function' ? Boolean((originalInterval as (index: number) => boolean)(index)) : index % (Number(originalInterval ?? 0) + 1) === 0
   }

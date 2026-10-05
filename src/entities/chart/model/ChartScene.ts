@@ -1,4 +1,4 @@
-import type { ChartConfig, ChartTextStyle, DataValue, TimeProfile } from '../../../core/types'
+import type { ChartConfig, ChartTextStyle, DataValue, TimeProfile, TimeFrequency } from '../../../core/types'
 import type { ChangeDescriptor } from '../../../core/changeSemantics'
 import type { AxisSpec } from '../../../features/chart-layout/axisLayout'
 import type { Rect } from '../../../features/chart-layout/geometry'
@@ -40,7 +40,7 @@ export interface CartesianBarPlotScene {
   categoryPlacement: 'band'
   orientation: 'vertical' | 'horizontal'
   stacking: 'none' | 'stacked' | 'normalized'
-  categories: Array<{ id: DatumId; value: DataValue; label: string; coordinate: string }>
+  categories: Array<{ id: DatumId; value: DataValue; label: string; coordinate: string; span?: { start: number; end: number; total: number } }>
   categoryAxis: AxisSpec
   valueAxis: AxisSpec
   valueDomain: { min: number; max: number; step: number }
@@ -71,7 +71,7 @@ export interface ComparisonStemSeriesScene {
 
 export interface ComparisonStemPlotScene {
   kind: 'comparison-stem'
-  variant: 'lollipop' | 'dumbbell'
+  variant: 'lollipop' | 'dumbbell' | 'dot' | 'arrow'
   categoryPlacement: 'band'
   orientation: 'vertical' | 'horizontal'
   categories: Array<{ id: DatumId; value: DataValue; label: string; coordinate: string }>
@@ -168,9 +168,11 @@ export interface LineSeriesScene extends CartesianPointSeriesScene {
 
 export interface AreaSeriesScene extends CartesianPointSeriesScene {
   fill: { color: string; opacity: number }
+  streamBands?: Array<{ lower: number; upper: number }>
 }
 
 interface CartesianPointPlotScene {
+  dateAxis?: { min: number; max: number; frequency?: TimeFrequency; ticks: Array<{ value: number; label: string }> }
   valueAxisInverse?: boolean
   categoryPlacement: 'point'
   categories: Array<{ id: DatumId; value: DataValue; label: string; coordinate: string }>
@@ -332,6 +334,7 @@ export interface CartesianSlopePlotScene {
 }
 
 export interface XYScaleSpec {
+  calendarTicks?: Array<{ value: number; label: string }>
   type: 'linear' | 'log' | 'time'
   minimum?: number
   maximum?: number
@@ -357,6 +360,7 @@ export interface XYPointScene {
   label: { visible: boolean; text: string; position: 'top' | 'right' | 'bottom' | 'left'; style: ChartTextStyle; collision: 'shift-y-hide-overlap' }
   sizeValue?: number
   displaySizeValue?: string
+  displayOrder?: string
   colorGroup?: string
 }
 
@@ -368,6 +372,7 @@ export interface XYSeriesScene {
   color: string
   visible: boolean
   points: XYPointScene[]
+  connection?: { points: Array<XYPointScene | null>; stroke: { color: string; width: number; type: 'solid' | 'dashed' | 'dotted'; opacity: number } }
 }
 
 export interface SizeEncodingSpec {
@@ -415,7 +420,7 @@ export interface XYQuadrantLayerScene {
 
 export interface CartesianXYPlotScene {
   kind: 'xy'
-  variant: 'scatter' | 'bubble'
+  variant: 'scatter' | 'bubble' | 'connected-scatter'
   xAxis: AxisSpec
   yAxis: AxisSpec
   xScale: XYScaleSpec
@@ -721,7 +726,7 @@ export interface MapRegionScene {
   label: { visible: boolean; explicit: boolean; text: string; style: ChartTextStyle }
 }
 export interface MapPlotScene {
-  kind: 'map'; preset: 'russia' | 'usa' | 'europe'
+  kind: 'map'; preset: 'russia' | 'usa' | 'europe' | 'world'
   regions: MapRegionScene[]; width: number; height: number; unmatched: string[]
   colorDomain: HeatmapPlotScene['colorDomain']
 }

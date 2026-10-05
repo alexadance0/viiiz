@@ -51,6 +51,24 @@ describe('native canvas adapters', () => {
     expect(customFontCss([{ name: 'DM Sans', dataUrl: 'data:font/woff2;base64,abc', weight: 700, style: 'italic' }])).toBe('@font-face{font-family:"DM Sans";src:url("data:font/woff2;base64,abc");font-weight:700;font-style:italic;}')
   })
 
+  it('keeps owned value and guide layers above bars during hover', () => {
+    const option = { series: [
+      { name: 'a', type: 'bar', z: 2 },
+      { name: '__native-bar:a:0', type: 'custom', customBarOf: 'a', z: 4 },
+      { name: '__bar-value-labels:a', type: 'custom', customBarOf: 'a', silent: true, z: 20 },
+      { name: '__bar-direct-label:a', type: 'custom', customBarOf: 'a', z: 30 },
+      { name: '__axis', type: 'custom', z: 100 },
+    ] }
+    applySeriesVisualState(option, config, null, null, 'a')
+    expect(option.series.map((series) => series.z)).toEqual([1002, 1004, 1020, 1030, 100])
+  })
+
+  it('explicitly restores the default series layer after hover', () => {
+    const option = { series: [{ name: 'a', type: 'bar' }] }
+    applySeriesVisualState(option, config)
+    expect(option.series[0]).toMatchObject({ z: 2 })
+  })
+
   it('does not turn a regular line chart into an area chart while highlighting', () => {
     const option = getChartPlugin('line').buildOption(table, config) as Record<string, unknown> & { series: Array<{ name?: string; areaStyle?: object }> }
     applySeriesVisualState(option, config, 'a')

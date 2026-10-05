@@ -1,0 +1,2682 @@
+[
+  {
+    "system": "(ensemble): AWD-LSTM-DOC (fin) × 5 (WT2)",
+    "date": "2018-08-30",
+    "compute": 666.00006
+  },
+  {
+    "system": "4 layer QRNN (h=2500)",
+    "date": "2018-03-22",
+    "compute": 591.5882
+  },
+  {
+    "system": "A.X K2",
+    "date": "2026-07-29",
+    "compute": 1800000000.0
+  },
+  {
+    "system": "ACF-WIDER",
+    "date": "2014-07-15",
+    "compute": 0.07638001
+  },
+  {
+    "system": "ADALINE",
+    "date": "1960-06-30",
+    "compute": 6.6e-12
+  },
+  {
+    "system": "ADAM (CIFAR-10)",
+    "date": "2014-12-22",
+    "compute": 0.62497985
+  },
+  {
+    "system": "ADM",
+    "date": "2021-05-11",
+    "compute": 6200000.0
+  },
+  {
+    "system": "AFM-on-device",
+    "date": "2024-07-29",
+    "compute": 451260000.0
+  },
+  {
+    "system": "AFM-server",
+    "date": "2024-07-29",
+    "compute": 4300000000.0
+  },
+  {
+    "system": "ALBERT-xxlarge",
+    "date": "2020-02-09",
+    "compute": 2390000.0
+  },
+  {
+    "system": "ALIGN",
+    "date": "2021-06-11",
+    "compute": 25986700.0
+  },
+  {
+    "system": "ALLaM adapted 70B",
+    "date": "2024-05-21",
+    "compute": 1062000060.0
+  },
+  {
+    "system": "ANN Eye Tracker",
+    "date": "1993-11-29",
+    "compute": 1.7534401e-05
+  },
+  {
+    "system": "AR-LDM",
+    "date": "2022-11-20",
+    "compute": 510000.0
+  },
+  {
+    "system": "ASE+ACE",
+    "date": "1983-09-01",
+    "compute": 3.24e-07
+  },
+  {
+    "system": "AWD-LSTM + MoS + Partial Shuffled",
+    "date": "2019-06-10",
+    "compute": 315.00003
+  },
+  {
+    "system": "AWD-LSTM - 3-layer LSTM (tied) + continuous cache pointer (WT2)",
+    "date": "2017-08-07",
+    "compute": 297.00003
+  },
+  {
+    "system": "AWD-LSTM+WT+Cache+IOG (WT2)",
+    "date": "2017-09-26",
+    "compute": 3.18
+  },
+  {
+    "system": "AWD-LSTM-DRILL + dynamic evaluation† (WT2)",
+    "date": "2019-05-14",
+    "compute": 408.0
+  },
+  {
+    "system": "AWD-LSTM-MoS + dynamic evaluation (WT2, 2017)",
+    "date": "2017-11-10",
+    "compute": 3360.0
+  },
+  {
+    "system": "Adaptive Input Transformer + RD",
+    "date": "2021-06-28",
+    "compute": 85800.01
+  },
+  {
+    "system": "AgentFounder-30B",
+    "date": "2025-09-16",
+    "compute": 653670000.0
+  },
+  {
+    "system": "AlexNet",
+    "date": "2012-09-30",
+    "compute": 470.0
+  },
+  {
+    "system": "AlexaTM 20B",
+    "date": "2022-08-02",
+    "compute": 204374020.0
+  },
+  {
+    "system": "AlphaCode",
+    "date": "2022-02-02",
+    "compute": 238010000.0
+  },
+  {
+    "system": "AlphaFold",
+    "date": "2020-01-15",
+    "compute": 100000.0
+  },
+  {
+    "system": "AlphaFold 2",
+    "date": "2020-11-30",
+    "compute": 2990000.0
+  },
+  {
+    "system": "AlphaFold 3",
+    "date": "2024-05-08",
+    "compute": 41405644.0
+  },
+  {
+    "system": "AlphaFold-Multimer",
+    "date": "2021-10-04",
+    "compute": 4350000.0
+  },
+  {
+    "system": "AlphaGo Fan",
+    "date": "2015-10-01",
+    "compute": 380000.03
+  },
+  {
+    "system": "AlphaGo Lee",
+    "date": "2016-01-27",
+    "compute": 1900000.0
+  },
+  {
+    "system": "AlphaGo Master",
+    "date": "2017-10-19",
+    "compute": 341000.0
+  },
+  {
+    "system": "AlphaGo Zero",
+    "date": "2017-10-18",
+    "compute": 649439.9
+  },
+  {
+    "system": "AlphaStar",
+    "date": "2019-10-30",
+    "compute": 107734000.0
+  },
+  {
+    "system": "AlphaTensor",
+    "date": "2022-10-05",
+    "compute": 714147.8
+  },
+  {
+    "system": "AlphaX-1",
+    "date": "2019-10-02",
+    "compute": 889.344
+  },
+  {
+    "system": "AlphaZero",
+    "date": "2017-12-05",
+    "compute": 106000.0
+  },
+  {
+    "system": "Amazon Nova Pro",
+    "date": "2024-12-03",
+    "compute": 6000009700.0
+  },
+  {
+    "system": "Amazon Titan",
+    "date": "2023-09-28",
+    "compute": 4800000000.0
+  },
+  {
+    "system": "Ankh_large",
+    "date": "2023-01-16",
+    "compute": 6500000.0
+  },
+  {
+    "system": "Aramco Metabrain AI",
+    "date": "2024-03-04",
+    "compute": 10500000000.0
+  },
+  {
+    "system": "AudioGen",
+    "date": "2023-03-05",
+    "compute": 9500000.0
+  },
+  {
+    "system": "AudioLM",
+    "date": "2023-07-26",
+    "compute": 3900.0
+  },
+  {
+    "system": "BASIC-L",
+    "date": "2021-11-19",
+    "compute": 41200000.0
+  },
+  {
+    "system": "BEIT-3",
+    "date": "2022-08-22",
+    "compute": 70000.0
+  },
+  {
+    "system": "BERT-Large",
+    "date": "2018-10-11",
+    "compute": 285000.0
+  },
+  {
+    "system": "BERT-Large-CAS (PTB+WT2+WT103)",
+    "date": "2019-04-20",
+    "compute": 154050.0
+  },
+  {
+    "system": "BERT-RBP",
+    "date": "2022-04-07",
+    "compute": 140000.0
+  },
+  {
+    "system": "BIDAF",
+    "date": "2016-11-05",
+    "compute": 3468.6145
+  },
+  {
+    "system": "BLIP-2 (Q-Former)",
+    "date": "2023-01-30",
+    "compute": 1200000.0
+  },
+  {
+    "system": "BLOOM-176B",
+    "date": "2022-07-11",
+    "compute": 365664000.0
+  },
+  {
+    "system": "Bankruptcy-NN",
+    "date": "1990-06-17",
+    "compute": 3.0593378e-06
+  },
+  {
+    "system": "Base LM + kNN LM + Continuous Cache",
+    "date": "2019-11-01",
+    "compute": 30529.201
+  },
+  {
+    "system": "Big Transformer for Back-Translation",
+    "date": "2018-08-28",
+    "compute": 478080.0
+  },
+  {
+    "system": "Big-Little Net",
+    "date": "2018-07-10",
+    "compute": 246.048
+  },
+  {
+    "system": "Big-Little Net (speech)",
+    "date": "2018-07-10",
+    "compute": 429.00482
+  },
+  {
+    "system": "BlenderBot 3",
+    "date": "2022-08-10",
+    "compute": 430000030.0
+  },
+  {
+    "system": "BloombergGPT",
+    "date": "2023-03-30",
+    "compute": 236000020.0
+  },
+  {
+    "system": "ByT5-XXL",
+    "date": "2021-05-28",
+    "compute": 81000000.0
+  },
+  {
+    "system": "CHAI-1",
+    "date": "2024-10-15",
+    "compute": 7760572.5
+  },
+  {
+    "system": "CLIP (ViT L/14@336px)",
+    "date": "2021-01-05",
+    "compute": 10500000.0
+  },
+  {
+    "system": "CNN Committee (MNIST)",
+    "date": "2011-09-18",
+    "compute": 52.0
+  },
+  {
+    "system": "CNN Committee (NIST)",
+    "date": "2011-09-18",
+    "compute": 26.0
+  },
+  {
+    "system": "CNN committee (traffic sign)",
+    "date": "2011-10-03",
+    "compute": 0.99198145
+  },
+  {
+    "system": "CODEFUSION (Python)",
+    "date": "2023-10-26",
+    "compute": 7920.0
+  },
+  {
+    "system": "CPM-Large",
+    "date": "2020-12-01",
+    "compute": 260520.0
+  },
+  {
+    "system": "CT-MoS (WT2)",
+    "date": "2020-12-25",
+    "compute": 540.0
+  },
+  {
+    "system": "CaLM",
+    "date": "2022-12-19",
+    "compute": 29000.0
+  },
+  {
+    "system": "CamemBERT",
+    "date": "2019-11-10",
+    "compute": 830000.0
+  },
+  {
+    "system": "Cancer drug mechanism prediction",
+    "date": "1992-10-16",
+    "compute": 5.346e-08
+  },
+  {
+    "system": "Ceramic-MLP",
+    "date": "1994-01-07",
+    "compute": 4.5312e-06
+  },
+  {
+    "system": "ChatGLM3-6B",
+    "date": "2023-10-27",
+    "compute": 50400000.0
+  },
+  {
+    "system": "Chinchilla",
+    "date": "2022-03-29",
+    "compute": 576000000.0
+  },
+  {
+    "system": "Claude 2",
+    "date": "2023-07-11",
+    "compute": 3866000100.0
+  },
+  {
+    "system": "Claude 3.5 Sonnet",
+    "date": "2024-06-20",
+    "compute": 26999998000.0
+  },
+  {
+    "system": "Claude 3.7 Sonnet",
+    "date": "2025-02-24",
+    "compute": 33500000000.0
+  },
+  {
+    "system": "CoAtNet",
+    "date": "2021-06-09",
+    "compute": 42700004.0
+  },
+  {
+    "system": "CoCa",
+    "date": "2022-06-14",
+    "compute": 73000000.0
+  },
+  {
+    "system": "CodeT5-base",
+    "date": "2021-11-01",
+    "compute": 1560000.1
+  },
+  {
+    "system": "CodeT5-large",
+    "date": "2022-07-05",
+    "compute": 2720000.0
+  },
+  {
+    "system": "Codex",
+    "date": "2021-07-07",
+    "compute": 73440000.0
+  },
+  {
+    "system": "CogAgent",
+    "date": "2023-12-14",
+    "compute": 67070004.0
+  },
+  {
+    "system": "CogVLM-17B",
+    "date": "2023-11-06",
+    "compute": 63310000.0
+  },
+  {
+    "system": "CogView",
+    "date": "2021-05-26",
+    "compute": 26800000.0
+  },
+  {
+    "system": "Cognitron",
+    "date": "1975-09-01",
+    "compute": 5.184e-09
+  },
+  {
+    "system": "Composer 2",
+    "date": "2026-03-19",
+    "compute": 23200000000.0
+  },
+  {
+    "system": "Composer 2.5",
+    "date": "2026-05-18",
+    "compute": 38700003000.0
+  },
+  {
+    "system": "Conformer + Wav2vec 2.0 + Noisy Student",
+    "date": "2020-10-20",
+    "compute": 7600000.0
+  },
+  {
+    "system": "ContextNet + Noisy Student",
+    "date": "2020-01-19",
+    "compute": 8160000.0
+  },
+  {
+    "system": "Contriever",
+    "date": "2021-12-16",
+    "compute": 157000.0
+  },
+  {
+    "system": "ConvS2S (ensemble of 8 models)",
+    "date": "2017-07-25",
+    "compute": 56400.0
+  },
+  {
+    "system": "Cross-lingual alignment",
+    "date": "2019-04-04",
+    "compute": 2560.0
+  },
+  {
+    "system": "DALL-E",
+    "date": "2021-01-05",
+    "compute": 47000000.0
+  },
+  {
+    "system": "DALL·E 2",
+    "date": "2022-04-06",
+    "compute": 336957860.0
+  },
+  {
+    "system": "DBRX",
+    "date": "2024-03-27",
+    "compute": 2600000000.0
+  },
+  {
+    "system": "DCNN",
+    "date": "2015-08-07",
+    "compute": 480.9869
+  },
+  {
+    "system": "DD-PPO",
+    "date": "2019-12-19",
+    "compute": 780000.06
+  },
+  {
+    "system": "DDPM-IP (CelebA)",
+    "date": "2023-01-27",
+    "compute": 350000.0
+  },
+  {
+    "system": "DETR",
+    "date": "2020-05-26",
+    "compute": 400000.0
+  },
+  {
+    "system": "DINOv2",
+    "date": "2023-04-14",
+    "compute": 7418511.0
+  },
+  {
+    "system": "DITTO",
+    "date": "2022-06-06",
+    "compute": 3317.7603
+  },
+  {
+    "system": "DLRM-2020",
+    "date": "2019-05-31",
+    "compute": 4000.0
+  },
+  {
+    "system": "DLWP",
+    "date": "2021-02-09",
+    "compute": 5684.515
+  },
+  {
+    "system": "DNABERT",
+    "date": "2021-08-15",
+    "compute": 107000.01
+  },
+  {
+    "system": "DNN EM segmentation",
+    "date": "2012-12-03",
+    "compute": 478.0
+  },
+  {
+    "system": "DQN",
+    "date": "2013-12-19",
+    "compute": 2.846884
+  },
+  {
+    "system": "DeBERTa",
+    "date": "2021-06-10",
+    "compute": 25880000.0
+  },
+  {
+    "system": "DeLighT",
+    "date": "2020-08-03",
+    "compute": 3801.6
+  },
+  {
+    "system": "Decision tree (classification)",
+    "date": "2001-12-08",
+    "compute": 0.063
+  },
+  {
+    "system": "Deep Autoencoders",
+    "date": "2011-04-29",
+    "compute": 36.72864
+  },
+  {
+    "system": "DeepLoc",
+    "date": "2017-07-07",
+    "compute": 578.1024
+  },
+  {
+    "system": "DeepSeek-Coder-V2 236B",
+    "date": "2024-06-17",
+    "compute": 1285200000.0
+  },
+  {
+    "system": "DeepSeek-R1",
+    "date": "2025-01-20",
+    "compute": 3500000000.0
+  },
+  {
+    "system": "DeepSeek-R1 (May 2025)",
+    "date": "2025-05-28",
+    "compute": 4020010000.0
+  },
+  {
+    "system": "DeepSeek-V2.5",
+    "date": "2024-09-06",
+    "compute": 1789200000.0
+  },
+  {
+    "system": "DeepSeek-V3",
+    "date": "2024-12-24",
+    "compute": 3300000000.0
+  },
+  {
+    "system": "DeepSeek-V3 (Mar 2025)",
+    "date": "2025-03-24",
+    "compute": 3300000000.0
+  },
+  {
+    "system": "DeepSeek-V4-Flash",
+    "date": "2026-04-24",
+    "compute": 2496000300.0
+  },
+  {
+    "system": "DeepSeek-V4-Pro",
+    "date": "2026-04-24",
+    "compute": 9702001000.0
+  },
+  {
+    "system": "DeepStack",
+    "date": "2017-01-06",
+    "compute": 14463.36
+  },
+  {
+    "system": "DeiT-B",
+    "date": "2021-01-15",
+    "compute": 78840.0
+  },
+  {
+    "system": "Denoising Diffusion Probabilistic Models (LSUN Bedroom)",
+    "date": "2021-06-11",
+    "compute": 78401.25
+  },
+  {
+    "system": "DensePhrases",
+    "date": "2020-12-23",
+    "compute": 2099.52
+  },
+  {
+    "system": "Detic",
+    "date": "2022-01-07",
+    "compute": 23439.975
+  },
+  {
+    "system": "DiT-XL/2",
+    "date": "2023-03-02",
+    "compute": 600000.0
+  },
+  {
+    "system": "DiffDock",
+    "date": "2022-10-04",
+    "compute": 72000.0
+  },
+  {
+    "system": "Discriminator Guidance",
+    "date": "2022-11-28",
+    "compute": 215700.0
+  },
+  {
+    "system": "DistBelief NNLM",
+    "date": "2013-01-16",
+    "compute": 2612.736
+  },
+  {
+    "system": "DistBelief Speech",
+    "date": "2012-12-03",
+    "compute": 311.40002
+  },
+  {
+    "system": "DistilBERT",
+    "date": "2019-10-02",
+    "compute": 12441.6
+  },
+  {
+    "system": "Distributed representation NN",
+    "date": "1986-08-15",
+    "compute": 3.888e-07
+  },
+  {
+    "system": "Doubao-pro",
+    "date": "2024-10-28",
+    "compute": 25050001000.0
+  },
+  {
+    "system": "DreamerV3",
+    "date": "2023-01-10",
+    "compute": 220320.0
+  },
+  {
+    "system": "Dropout (CIFAR)",
+    "date": "2012-06-03",
+    "compute": 4.2687
+  },
+  {
+    "system": "Dropout (ImageNet)",
+    "date": "2012-06-03",
+    "compute": 273.1968
+  },
+  {
+    "system": "Dropout (MNIST)",
+    "date": "2012-06-03",
+    "compute": 6.039371
+  },
+  {
+    "system": "Dropout-LSTM+Noise(Bernoulli) (WT2)",
+    "date": "2018-05-03",
+    "compute": 127.0
+  },
+  {
+    "system": "EI-REHN-1000D",
+    "date": "2017-08-14",
+    "compute": 10.599999
+  },
+  {
+    "system": "ELECTRA",
+    "date": "2020-03-23",
+    "compute": 3100000.0
+  },
+  {
+    "system": "ELMo",
+    "date": "2018-02-01",
+    "compute": 3.3001
+  },
+  {
+    "system": "EMDR",
+    "date": "2021-06-09",
+    "compute": 1910000.0
+  },
+  {
+    "system": "ERNIE 3.0",
+    "date": "2021-07-05",
+    "compute": 22500000.0
+  },
+  {
+    "system": "ERNIE 3.0 Titan",
+    "date": "2021-12-23",
+    "compute": 1042100030.0
+  },
+  {
+    "system": "ERNIE-Doc (247M)",
+    "date": "2020-12-31",
+    "compute": 30302.799
+  },
+  {
+    "system": "ERNIE-GEN (large)",
+    "date": "2020-08-06",
+    "compute": 200000.0
+  },
+  {
+    "system": "ESM1b",
+    "date": "2020-12-15",
+    "compute": 5100000.0
+  },
+  {
+    "system": "ESM2-15B",
+    "date": "2022-07-21",
+    "compute": 73500000.0
+  },
+  {
+    "system": "ESM3 (98B)",
+    "date": "2024-06-25",
+    "compute": 1070000000.0
+  },
+  {
+    "system": "EVA-01",
+    "date": "2022-11-14",
+    "compute": 15010000.0
+  },
+  {
+    "system": "EXAONE 3.5 32B",
+    "date": "2024-12-09",
+    "compute": 1250000000.0
+  },
+  {
+    "system": "EXAONE 4.0 (32B)",
+    "date": "2025-07-15",
+    "compute": 2690000000.0
+  },
+  {
+    "system": "EXAONE 4.5",
+    "date": "2026-04-09",
+    "compute": 3850000100.0
+  },
+  {
+    "system": "EXAONE Deep 32B",
+    "date": "2025-03-16",
+    "compute": 1260000000.0
+  },
+  {
+    "system": "Eagle 2",
+    "date": "2025-01-20",
+    "compute": 47156000.0
+  },
+  {
+    "system": "EfficientNetV2-XL",
+    "date": "2021-06-23",
+    "compute": 95600.01
+  },
+  {
+    "system": "EnhanceNet",
+    "date": "2016-12-23",
+    "compute": 130.79233
+  },
+  {
+    "system": "Eurus-2-7B-PRIME",
+    "date": "2025-01-02",
+    "compute": 401915.9
+  },
+  {
+    "system": "FFN SwiGLU",
+    "date": "2020-02-14",
+    "compute": 33687.316
+  },
+  {
+    "system": "FGN",
+    "date": "2025-06-12",
+    "compute": 9618951.0
+  },
+  {
+    "system": "FLAN 137B",
+    "date": "2021-09-03",
+    "compute": 2047000000.0
+  },
+  {
+    "system": "FTW (For The Win)",
+    "date": "2018-07-03",
+    "compute": 34900.0
+  },
+  {
+    "system": "Falcon-180B",
+    "date": "2023-09-06",
+    "compute": 3760000300.0
+  },
+  {
+    "system": "Falcon-40B",
+    "date": "2023-03-15",
+    "compute": 240000000.0
+  },
+  {
+    "system": "Feedback Transformer",
+    "date": "2020-02-21",
+    "compute": 7690.5474
+  },
+  {
+    "system": "Feedforward NN",
+    "date": "2010-05-13",
+    "compute": 0.35000002
+  },
+  {
+    "system": "FinGPT-13B",
+    "date": "2023-10-07",
+    "compute": 160000000.0
+  },
+  {
+    "system": "Fine-tuned-AWD-LSTM-DOC (fin)",
+    "date": "2018-11-12",
+    "compute": 51.88
+  },
+  {
+    "system": "Flamingo",
+    "date": "2022-04-29",
+    "compute": 218972000.0
+  },
+  {
+    "system": "Flan-PaLM 540B",
+    "date": "2022-10-20",
+    "compute": 2540000000.0
+  },
+  {
+    "system": "Florence",
+    "date": "2021-11-22",
+    "compute": 48310000.0
+  },
+  {
+    "system": "Fold2Seq",
+    "date": "2021-06-24",
+    "compute": 140.0
+  },
+  {
+    "system": "FourCastNet",
+    "date": "2022-02-22",
+    "compute": 345047.06
+  },
+  {
+    "system": "Fractional Max-Pooling",
+    "date": "2014-12-18",
+    "compute": 100.0
+  },
+  {
+    "system": "Fraternal dropout + AWD-LSTM 3-layer (WT2)",
+    "date": "2017-10-31",
+    "compute": 306.0
+  },
+  {
+    "system": "FunSearch",
+    "date": "2023-12-14",
+    "compute": 387000000.0
+  },
+  {
+    "system": "Fusion in Encoder",
+    "date": "2022-11-18",
+    "compute": 130000.0
+  },
+  {
+    "system": "GANs",
+    "date": "2014-06-10",
+    "compute": 518.4
+  },
+  {
+    "system": "GGNN",
+    "date": "2023-08-05",
+    "compute": 7560000.5
+  },
+  {
+    "system": "GL-LWGC-AWD-MoS-LSTM + dynamic evaluation (WT2)",
+    "date": "2017-08-29",
+    "compute": 456.00003
+  },
+  {
+    "system": "GLM-130B",
+    "date": "2022-08-04",
+    "compute": 354900540.0
+  },
+  {
+    "system": "GLM-4.5",
+    "date": "2025-07-28",
+    "compute": 4420000300.0
+  },
+  {
+    "system": "GLM-4.6",
+    "date": "2025-09-30",
+    "compute": 4420000300.0
+  },
+  {
+    "system": "GLM-4.7",
+    "date": "2025-12-22",
+    "compute": 4420000300.0
+  },
+  {
+    "system": "GLM-5",
+    "date": "2026-02-12",
+    "compute": 6840000500.0
+  },
+  {
+    "system": "GLaM",
+    "date": "2021-12-13",
+    "compute": 363631140.0
+  },
+  {
+    "system": "GNMT",
+    "date": "2016-09-26",
+    "compute": 6620000.0
+  },
+  {
+    "system": "GNN",
+    "date": "2008-12-09",
+    "compute": 1.6145999e-06
+  },
+  {
+    "system": "GOAT",
+    "date": "2021-07-27",
+    "compute": 24120000.0
+  },
+  {
+    "system": "GPT-1",
+    "date": "2018-06-01",
+    "compute": 17578.125
+  },
+  {
+    "system": "GPT-2 (1.5B)",
+    "date": "2019-02-14",
+    "compute": 1920000.1
+  },
+  {
+    "system": "GPT-2 Medium (FlashAttention)",
+    "date": "2022-05-27",
+    "compute": 892809.25
+  },
+  {
+    "system": "GPT-3 175B (davinci)",
+    "date": "2020-05-28",
+    "compute": 314000000.0
+  },
+  {
+    "system": "GPT-3.5 (davinci-002)",
+    "date": "2022-03-15",
+    "compute": 2578000000.0
+  },
+  {
+    "system": "GPT-4 (Jun 2023)",
+    "date": "2023-06-13",
+    "compute": 21000000000.0
+  },
+  {
+    "system": "GPT-4 (Mar 2023)",
+    "date": "2023-03-15",
+    "compute": 21000000000.0
+  },
+  {
+    "system": "GPT-4.5",
+    "date": "2025-02-27",
+    "compute": 380000000000.0
+  },
+  {
+    "system": "GPT-5",
+    "date": "2025-08-07",
+    "compute": 66000003000.0
+  },
+  {
+    "system": "GPT-NeoX-20B",
+    "date": "2022-02-09",
+    "compute": 93162700.0
+  },
+  {
+    "system": "GPU DBNs",
+    "date": "2009-06-15",
+    "compute": 1.0
+  },
+  {
+    "system": "GQA-8-XXL",
+    "date": "2023-12-23",
+    "compute": 34912896.0
+  },
+  {
+    "system": "GShard (dense)",
+    "date": "2020-06-30",
+    "compute": 47650000.0
+  },
+  {
+    "system": "Galactica",
+    "date": "2022-11-16",
+    "compute": 324000000.0
+  },
+  {
+    "system": "Gato",
+    "date": "2022-05-12",
+    "compute": 4020000.0
+  },
+  {
+    "system": "Gemini 1.0 Ultra",
+    "date": "2023-12-06",
+    "compute": 50000003000.0
+  },
+  {
+    "system": "GenCast",
+    "date": "2024-05-01",
+    "compute": 816998.44
+  },
+  {
+    "system": "GenSLM",
+    "date": "2022-10-11",
+    "compute": 1420000.0
+  },
+  {
+    "system": "Generative BST",
+    "date": "2021-03-05",
+    "compute": 14490000.0
+  },
+  {
+    "system": "German ELECTRA Large",
+    "date": "2020-10-21",
+    "compute": 1428295.6
+  },
+  {
+    "system": "GoogLeNet / InceptionV1",
+    "date": "2014-09-17",
+    "compute": 1510.0
+  },
+  {
+    "system": "Gopher (280B)",
+    "date": "2021-12-08",
+    "compute": 631000000.0
+  },
+  {
+    "system": "GraphCast",
+    "date": "2023-11-14",
+    "compute": 21000000.0
+  },
+  {
+    "system": "Grok 3",
+    "date": "2025-02-17",
+    "compute": 350000000000.0
+  },
+  {
+    "system": "Grok 4",
+    "date": "2025-07-09",
+    "compute": 500000000000.0
+  },
+  {
+    "system": "Grok-1",
+    "date": "2023-11-04",
+    "compute": 2900000000.0
+  },
+  {
+    "system": "Grok-2",
+    "date": "2024-08-13",
+    "compute": 29600002000.0
+  },
+  {
+    "system": "HR-ResNet101",
+    "date": "2016-12-13",
+    "compute": 7077.0
+  },
+  {
+    "system": "Hanabi 4 player",
+    "date": "2019-02-01",
+    "compute": 4300.0
+  },
+  {
+    "system": "Handwritten digit recognition network",
+    "date": "1989-11-27",
+    "compute": 0.00018144
+  },
+  {
+    "system": "Heuristic Reinforcement Learning",
+    "date": "1965-10-01",
+    "compute": 1.08e-09
+  },
+  {
+    "system": "Hierarchical LM",
+    "date": "2005-01-06",
+    "compute": 0.115848005
+  },
+  {
+    "system": "Hierarchical Scene Labeling (Stanford Background)",
+    "date": "2013-08-01",
+    "compute": 237.74689
+  },
+  {
+    "system": "High Performance CNN (NORB)",
+    "date": "2011-07-16",
+    "compute": 25.7985
+  },
+  {
+    "system": "HuBERT",
+    "date": "2021-07-27",
+    "compute": 5540000.0
+  },
+  {
+    "system": "Hunyuan-Large",
+    "date": "2024-11-06",
+    "compute": 3492370000.0
+  },
+  {
+    "system": "Hunyuan-TurboS",
+    "date": "2025-03-11",
+    "compute": 5400000000.0
+  },
+  {
+    "system": "Hybrid H3-2.7B",
+    "date": "2022-12-28",
+    "compute": 6480000.0
+  },
+  {
+    "system": "HyenaDNA",
+    "date": "2023-06-27",
+    "compute": 1811000.0
+  },
+  {
+    "system": "HyperCLOVA 204B",
+    "date": "2021-09-10",
+    "compute": 200000000.0
+  },
+  {
+    "system": "IMPALA",
+    "date": "2018-02-05",
+    "compute": 168000.0
+  },
+  {
+    "system": "ISS",
+    "date": "2017-09-15",
+    "compute": 3.4
+  },
+  {
+    "system": "Image generation",
+    "date": "2013-12-20",
+    "compute": 0.47520003
+  },
+  {
+    "system": "Imagen",
+    "date": "2022-05-23",
+    "compute": 14600000.0
+  },
+  {
+    "system": "Inception v3",
+    "date": "2015-12-02",
+    "compute": 100000.0
+  },
+  {
+    "system": "Incoder-6.7B",
+    "date": "2023-04-09",
+    "compute": 3000010.2
+  },
+  {
+    "system": "Inflection-2",
+    "date": "2023-11-22",
+    "compute": 10010000000.0
+  },
+  {
+    "system": "Inflection-2.5",
+    "date": "2024-03-07",
+    "compute": 8000001500.0
+  },
+  {
+    "system": "Inkling",
+    "date": "2026-07-15",
+    "compute": 1845000000.0
+  },
+  {
+    "system": "InstructBLIP",
+    "date": "2023-05-11",
+    "compute": 194000.0
+  },
+  {
+    "system": "InstructGPT 175B",
+    "date": "2022-01-27",
+    "compute": 319181000.0
+  },
+  {
+    "system": "InternImage",
+    "date": "2022-11-10",
+    "compute": 2408000.2
+  },
+  {
+    "system": "InternLM",
+    "date": "2023-07-06",
+    "compute": 998400000.0
+  },
+  {
+    "system": "Invariant CNN",
+    "date": "2004-06-27",
+    "compute": 0.00097423
+  },
+  {
+    "system": "Invariant image recognition",
+    "date": "1989-06-18",
+    "compute": 2.7e-05
+  },
+  {
+    "system": "JFT",
+    "date": "2017-07-10",
+    "compute": 843000.06
+  },
+  {
+    "system": "JPMAX",
+    "date": "1994-12-02",
+    "compute": 8.082828e-08
+  },
+  {
+    "system": "Jais",
+    "date": "2023-08-29",
+    "compute": 48946764.0
+  },
+  {
+    "system": "Jurassic-1-Jumbo",
+    "date": "2021-08-11",
+    "compute": 370000000.0
+  },
+  {
+    "system": "K-EXAONE",
+    "date": "2025-12-31",
+    "compute": 1520000000.0
+  },
+  {
+    "system": "K-EXAONE 2.0",
+    "date": "2026-07-31",
+    "compute": 3550000000.0
+  },
+  {
+    "system": "KEPLER",
+    "date": "2020-11-23",
+    "compute": 1660000.0
+  },
+  {
+    "system": "KN-LM",
+    "date": "2007-06-22",
+    "compute": 773.03815
+  },
+  {
+    "system": "KataGo",
+    "date": "2019-02-27",
+    "compute": 23200.002
+  },
+  {
+    "system": "Kimi K2",
+    "date": "2025-07-11",
+    "compute": 2976000000.0
+  },
+  {
+    "system": "Kimi K2 Thinking",
+    "date": "2025-11-06",
+    "compute": 4200000000.0
+  },
+  {
+    "system": "Kimi K2.5",
+    "date": "2026-02-02",
+    "compute": 5800000000.0
+  },
+  {
+    "system": "Kimi K3",
+    "date": "2026-07-16",
+    "compute": 20001000000.0
+  },
+  {
+    "system": "LCNP LabelMe",
+    "date": "2009-11-22",
+    "compute": 3.2951503
+  },
+  {
+    "system": "LCNP MNIST",
+    "date": "2009-11-22",
+    "compute": 4.1818523
+  },
+  {
+    "system": "LCNP NORB",
+    "date": "2009-11-22",
+    "compute": 2.45209
+  },
+  {
+    "system": "LISSOM",
+    "date": "1995-11-27",
+    "compute": 0.0001955448
+  },
+  {
+    "system": "LLaMA-65B",
+    "date": "2023-02-24",
+    "compute": 550000000.0
+  },
+  {
+    "system": "LLaVA",
+    "date": "2023-04-17",
+    "compute": 78049000.0
+  },
+  {
+    "system": "LLaVA 1.5",
+    "date": "2023-11-05",
+    "compute": 78070000.0
+  },
+  {
+    "system": "LLaVA-OV-72B",
+    "date": "2024-08-06",
+    "compute": 3036552000.0
+  },
+  {
+    "system": "LMICA",
+    "date": "2004-12-01",
+    "compute": 2.7820802
+  },
+  {
+    "system": "LSTM",
+    "date": "1997-11-15",
+    "compute": 0.031512
+  },
+  {
+    "system": "LSTM LM",
+    "date": "2012-09-09",
+    "compute": 16.6
+  },
+  {
+    "system": "LSTM+NeuralCache",
+    "date": "2018-09-24",
+    "compute": 0.9828
+  },
+  {
+    "system": "LTE speaker verification system",
+    "date": "1966-11-01",
+    "compute": 1.0591706e-07
+  },
+  {
+    "system": "LUKE",
+    "date": "2020-10-02",
+    "compute": 18144000.0
+  },
+  {
+    "system": "LaMDA",
+    "date": "2022-02-10",
+    "compute": 355000000.0
+  },
+  {
+    "system": "LeNet-5",
+    "date": "1998-11-01",
+    "compute": 0.0028109376
+  },
+  {
+    "system": "Libratus",
+    "date": "2017-08-19",
+    "compute": 551000.0
+  },
+  {
+    "system": "Linear Decision Functions",
+    "date": "1962-06-01",
+    "compute": 1.5592501e-09
+  },
+  {
+    "system": "Ling-1T",
+    "date": "2025-10-10",
+    "compute": 6000001500.0
+  },
+  {
+    "system": "Llama 2-70B",
+    "date": "2023-07-18",
+    "compute": 810000000.0
+  },
+  {
+    "system": "Llama 2-7B",
+    "date": "2023-07-18",
+    "compute": 84000000.0
+  },
+  {
+    "system": "Llama 3-70B",
+    "date": "2024-04-18",
+    "compute": 7861000000.0
+  },
+  {
+    "system": "Llama 3.1-405B",
+    "date": "2024-07-23",
+    "compute": 38000000000.0
+  },
+  {
+    "system": "Llama 3.2 11B",
+    "date": "2024-09-24",
+    "compute": 579000000.0
+  },
+  {
+    "system": "Llama 3.3 70B",
+    "date": "2024-12-06",
+    "compute": 6864977000.0
+  },
+  {
+    "system": "Llama 4 Behemoth (preview)",
+    "date": "2025-04-05",
+    "compute": 51840000000.0
+  },
+  {
+    "system": "Llama 4 Maverick",
+    "date": "2025-04-05",
+    "compute": 2244000000.0
+  },
+  {
+    "system": "Llama 4 Scout",
+    "date": "2025-04-05",
+    "compute": 4080000300.0
+  },
+  {
+    "system": "Llama Guard",
+    "date": "2023-12-07",
+    "compute": 160000000.0
+  },
+  {
+    "system": "Llama-3.1-Nemotron-70B-Instruct",
+    "date": "2024-10-12",
+    "compute": 7929000000.0
+  },
+  {
+    "system": "LongCat-2.0",
+    "date": "2026-06-29",
+    "compute": 10080000000.0
+  },
+  {
+    "system": "LongCat-Flash",
+    "date": "2025-09-01",
+    "compute": 3725999900.0
+  },
+  {
+    "system": "M6-T",
+    "date": "2021-03-05",
+    "compute": 5500000.5
+  },
+  {
+    "system": "MLN-ASR",
+    "date": "1988-08-01",
+    "compute": 2.96425e-07
+  },
+  {
+    "system": "MLP with back-propagation",
+    "date": "1986-10-01",
+    "compute": 6.7392e-07
+  },
+  {
+    "system": "MM1-30B",
+    "date": "2024-03-14",
+    "compute": 486000000.0
+  },
+  {
+    "system": "MMLSTM (PTB)",
+    "date": "2019-12-05",
+    "compute": 58.298782
+  },
+  {
+    "system": "MMLSTM (WT-2)",
+    "date": "2019-12-05",
+    "compute": 193.8
+  },
+  {
+    "system": "MSA Transformer",
+    "date": "2021-02-13",
+    "compute": 5490000.0
+  },
+  {
+    "system": "MSRA (C, PReLU)",
+    "date": "2015-02-06",
+    "compute": 23974.031
+  },
+  {
+    "system": "MUSIC perceptron",
+    "date": "1996-06-03",
+    "compute": 0.0008817336
+  },
+  {
+    "system": "Make-A-Scene",
+    "date": "2022-03-24",
+    "compute": 6417285.0
+  },
+  {
+    "system": "Masked Autoencoders ViT-H",
+    "date": "2021-11-11",
+    "compute": 460000.0
+  },
+  {
+    "system": "MedBERT",
+    "date": "2021-05-20",
+    "compute": 9470.0
+  },
+  {
+    "system": "Meena",
+    "date": "2020-01-28",
+    "compute": 112000000.0
+  },
+  {
+    "system": "MegaScale (Production)",
+    "date": "2024-02-23",
+    "compute": 3900000000.0
+  },
+  {
+    "system": "Megatron-BERT",
+    "date": "2019-09-17",
+    "compute": 22000002.0
+  },
+  {
+    "system": "Megatron-LM (1.2B)",
+    "date": "2019-09-17",
+    "compute": 1130400.0
+  },
+  {
+    "system": "Megatron-LM (8.3B)",
+    "date": "2019-09-17",
+    "compute": 9100000.0
+  },
+  {
+    "system": "Megatron-Turing NLG 530B",
+    "date": "2021-10-11",
+    "compute": 858600060.0
+  },
+  {
+    "system": "Mesh-TensorFlow Transformer 2.9B (translation)",
+    "date": "2018-11-05",
+    "compute": 68428.805
+  },
+  {
+    "system": "Mesh-TensorFlow Transformer 4.9B (language)",
+    "date": "2018-11-05",
+    "compute": 161740.8
+  },
+  {
+    "system": "MetNet",
+    "date": "2020-03-24",
+    "compute": 9510.912
+  },
+  {
+    "system": "Meta Pseudo Labels",
+    "date": "2021-03-01",
+    "compute": 47900004.0
+  },
+  {
+    "system": "MiMo-V2.5-Pro",
+    "date": "2026-04-23",
+    "compute": 6804000300.0
+  },
+  {
+    "system": "Minerva (540B)",
+    "date": "2022-06-29",
+    "compute": 2741500200.0
+  },
+  {
+    "system": "Mixtral 8x7B",
+    "date": "2023-12-11",
+    "compute": 774000000.0
+  },
+  {
+    "system": "Mixture of linear models",
+    "date": "1994-12-02",
+    "compute": 0.0004536
+  },
+  {
+    "system": "MoE-Multi",
+    "date": "2017-01-23",
+    "compute": 93939.055
+  },
+  {
+    "system": "Mogrifier RLSTM (WT2)",
+    "date": "2022-11-03",
+    "compute": 140.0
+  },
+  {
+    "system": "MolmoAct 2",
+    "date": "2026-04-05",
+    "compute": 11000001.0
+  },
+  {
+    "system": "Motif-3",
+    "date": "2026-08-07",
+    "compute": 1100000000.0
+  },
+  {
+    "system": "Movie Gen Video",
+    "date": "2024-10-04",
+    "compute": 1650000000.0
+  },
+  {
+    "system": "MuZero",
+    "date": "2019-11-19",
+    "compute": 48000.0
+  },
+  {
+    "system": "Multi-cell LSTM",
+    "date": "2018-11-15",
+    "compute": 2.00664
+  },
+  {
+    "system": "MultiBand Diffusion",
+    "date": "2023-11-08",
+    "compute": 26000.0
+  },
+  {
+    "system": "MuseNet",
+    "date": "2019-04-25",
+    "compute": 220830.11
+  },
+  {
+    "system": "NAS with base 8 and shared embeddings",
+    "date": "2016-11-05",
+    "compute": 10.5
+  },
+  {
+    "system": "NASv3 (CIFAR-10)",
+    "date": "2016-11-05",
+    "compute": 2200000.0
+  },
+  {
+    "system": "NETtalk reimplementation",
+    "date": "1990-06-01",
+    "compute": 3.5811936e-05
+  },
+  {
+    "system": "NLLB",
+    "date": "2022-07-06",
+    "compute": 17511138.0
+  },
+  {
+    "system": "NPLM (AP News)",
+    "date": "2003-03-15",
+    "compute": 1.6668692
+  },
+  {
+    "system": "NPLM (Brown)",
+    "date": "2003-03-15",
+    "compute": 0.13207626
+  },
+  {
+    "system": "NVLM-D 72B",
+    "date": "2024-10-22",
+    "compute": 3020000000.0
+  },
+  {
+    "system": "NVLM-H 72B",
+    "date": "2024-10-22",
+    "compute": 3020000000.0
+  },
+  {
+    "system": "NVLM-X 72B",
+    "date": "2024-10-22",
+    "compute": 3039818200.0
+  },
+  {
+    "system": "Named Entity Recognition model",
+    "date": "2016-03-04",
+    "compute": 96.940796
+  },
+  {
+    "system": "Nemotron 3 Ultra",
+    "date": "2026-06-04",
+    "compute": 6600000000.0
+  },
+  {
+    "system": "Nemotron 3-Nano-30B-A3B",
+    "date": "2025-12-15",
+    "compute": 480000000.0
+  },
+  {
+    "system": "Nemotron-3-8B",
+    "date": "2023-11-15",
+    "compute": 180000000.0
+  },
+  {
+    "system": "Nemotron-4 340B",
+    "date": "2024-06-14",
+    "compute": 18000000000.0
+  },
+  {
+    "system": "Neocognitron",
+    "date": "1980-04-01",
+    "compute": 2.7373824e-07
+  },
+  {
+    "system": "NetTalk (dictionary)",
+    "date": "1987-06-06",
+    "compute": 2.7664064e-05
+  },
+  {
+    "system": "NetTalk (transcription)",
+    "date": "1987-06-06",
+    "compute": 2.8328002e-05
+  },
+  {
+    "system": "Neural LM",
+    "date": "2000-11-28",
+    "compute": 6.339
+  },
+  {
+    "system": "NeuroChess",
+    "date": "1994-12-02",
+    "compute": 0.0008587308
+  },
+  {
+    "system": "Noisy Student (L2)",
+    "date": "2019-11-11",
+    "compute": 26120000.0
+  },
+  {
+    "system": "Nucleotide Transformer",
+    "date": "2023-01-15",
+    "compute": 8080000.0
+  },
+  {
+    "system": "NÜWA",
+    "date": "2021-11-24",
+    "compute": 7245988.0
+  },
+  {
+    "system": "ONE-PEACE",
+    "date": "2023-05-18",
+    "compute": 180000.0
+  },
+  {
+    "system": "OPT-175B",
+    "date": "2022-05-02",
+    "compute": 430000030.0
+  },
+  {
+    "system": "Octo-Base",
+    "date": "2024-05-20",
+    "compute": 585000.0
+  },
+  {
+    "system": "Olmo 3",
+    "date": "2025-11-20",
+    "compute": 1100000000.0
+  },
+  {
+    "system": "OmegaPLM",
+    "date": "2022-07-22",
+    "compute": 10351411.0
+  },
+  {
+    "system": "Once for All",
+    "date": "2020-04-29",
+    "compute": 623700.0
+  },
+  {
+    "system": "OpenAI Five",
+    "date": "2019-12-13",
+    "compute": 67000004.0
+  },
+  {
+    "system": "OpenAI Five Rerun",
+    "date": "2019-12-13",
+    "compute": 13000000.0
+  },
+  {
+    "system": "OpenAI TI7 DOTA 1v1",
+    "date": "2017-08-11",
+    "compute": 604609.5
+  },
+  {
+    "system": "OpenVLA",
+    "date": "2024-06-13",
+    "compute": 110000000.0
+  },
+  {
+    "system": "PLATO-XL",
+    "date": "2021-09-20",
+    "compute": 9900000.0
+  },
+  {
+    "system": "PLUG",
+    "date": "2021-04-19",
+    "compute": 35997696.0
+  },
+  {
+    "system": "PaLI",
+    "date": "2022-09-14",
+    "compute": 169000020.0
+  },
+  {
+    "system": "PaLI-X",
+    "date": "2023-05-29",
+    "compute": 560000000.0
+  },
+  {
+    "system": "PaLM (540B)",
+    "date": "2022-04-04",
+    "compute": 2527200000.0
+  },
+  {
+    "system": "PaLM 2",
+    "date": "2023-05-10",
+    "compute": 7339999700.0
+  },
+  {
+    "system": "PanGu-Σ",
+    "date": "2023-03-20",
+    "compute": 467000000.0
+  },
+  {
+    "system": "Pandemonium (morse)",
+    "date": "1959-02-01",
+    "compute": 6e-07
+  },
+  {
+    "system": "Pangu Ultra",
+    "date": "2025-04-10",
+    "compute": 10692001000.0
+  },
+  {
+    "system": "Pangu-Weather",
+    "date": "2023-07-05",
+    "compute": 39800000.0
+  },
+  {
+    "system": "Parti",
+    "date": "2022-06-22",
+    "compute": 509607970.0
+  },
+  {
+    "system": "PeptideBERT",
+    "date": "2023-08-28",
+    "compute": 49.000004
+  },
+  {
+    "system": "Perceptron (1960)",
+    "date": "1960-03-30",
+    "compute": 7.2e-07
+  },
+  {
+    "system": "Perceptron Mark I",
+    "date": "1957-01-01",
+    "compute": 6.948949e-10
+  },
+  {
+    "system": "PermuteFormer",
+    "date": "2021-09-06",
+    "compute": 2775.0
+  },
+  {
+    "system": "Pluribus",
+    "date": "2019-07-11",
+    "compute": 66.0
+  },
+  {
+    "system": "PoE MNIST",
+    "date": "2000-11-28",
+    "compute": 0.051810004
+  },
+  {
+    "system": "Pointer Sentinel-LSTM (medium)",
+    "date": "2016-09-26",
+    "compute": 7.49
+  },
+  {
+    "system": "PolyCoder",
+    "date": "2022-02-26",
+    "compute": 1100000.0
+  },
+  {
+    "system": "PolyNet",
+    "date": "2016-11-17",
+    "compute": 64000.0
+  },
+  {
+    "system": "Pooling CNN (Caltech 101)",
+    "date": "2010-09-15",
+    "compute": 1.2211242
+  },
+  {
+    "system": "Pooling CNN (NORB)",
+    "date": "2010-09-15",
+    "compute": 1.4562773
+  },
+  {
+    "system": "Predictive Coding NN",
+    "date": "1994-12-02",
+    "compute": 0.018621901
+  },
+  {
+    "system": "Print Recognition Logic",
+    "date": "1963-01-01",
+    "compute": 2.25e-08
+  },
+  {
+    "system": "ProBERTa",
+    "date": "2020-09-01",
+    "compute": 9720.001
+  },
+  {
+    "system": "ProGen2-xlarge",
+    "date": "2022-06-27",
+    "compute": 13500001.0
+  },
+  {
+    "system": "Projected GAN",
+    "date": "2021-11-01",
+    "compute": 10500.0
+  },
+  {
+    "system": "ProtBERT-BFD",
+    "date": "2021-05-04",
+    "compute": 39000004.0
+  },
+  {
+    "system": "ProtT5-XL-U50",
+    "date": "2021-05-04",
+    "compute": 18704498.0
+  },
+  {
+    "system": "ProteinBERT",
+    "date": "2022-02-10",
+    "compute": 65000.0
+  },
+  {
+    "system": "PyramidNet",
+    "date": "2017-09-06",
+    "compute": 2.34
+  },
+  {
+    "system": "QRNN",
+    "date": "2018-02-01",
+    "compute": 688.66473
+  },
+  {
+    "system": "QwQ-32B",
+    "date": "2025-03-06",
+    "compute": 3510000000.0
+  },
+  {
+    "system": "Qwen-72B",
+    "date": "2023-11-30",
+    "compute": 1300000000.0
+  },
+  {
+    "system": "Qwen1.5-72B",
+    "date": "2024-02-04",
+    "compute": 1300000000.0
+  },
+  {
+    "system": "Qwen2-72B",
+    "date": "2024-06-07",
+    "compute": 3020000000.0
+  },
+  {
+    "system": "Qwen2.5 Instruct (72B)",
+    "date": "2024-09-19",
+    "compute": 7851600400.0
+  },
+  {
+    "system": "Qwen2.5-32B",
+    "date": "2024-09-17",
+    "compute": 3510000000.0
+  },
+  {
+    "system": "Qwen2.5-72B",
+    "date": "2024-09-19",
+    "compute": 7800000000.0
+  },
+  {
+    "system": "Qwen3-235B-A22B",
+    "date": "2025-04-29",
+    "compute": 4752000000.0
+  },
+  {
+    "system": "Qwen3-235B-A22B (Jul 2025)",
+    "date": "2025-07-25",
+    "compute": 4752000000.0
+  },
+  {
+    "system": "Qwen3-235B-A22B-Thinking (Jul 2025)",
+    "date": "2025-07-25",
+    "compute": 4752000000.0
+  },
+  {
+    "system": "Qwen3-Coder-480B-A35B",
+    "date": "2025-07-22",
+    "compute": 1575000000.0
+  },
+  {
+    "system": "Qwen3-Max",
+    "date": "2025-09-05",
+    "compute": 15120000000.0
+  },
+  {
+    "system": "Qwen3-Omni-30B-A3B",
+    "date": "2025-09-22",
+    "compute": 36000000.0
+  },
+  {
+    "system": "R-FCN",
+    "date": "2016-06-21",
+    "compute": 719.3578
+  },
+  {
+    "system": "RCTM",
+    "date": "2013-10-01",
+    "compute": 9.3312
+  },
+  {
+    "system": "RDT-1B",
+    "date": "2024-10-10",
+    "compute": 40600000.0
+  },
+  {
+    "system": "RECONTRA-categorized",
+    "date": "1999-06-02",
+    "compute": 0.0080136005
+  },
+  {
+    "system": "RECONTRA-uncategorized",
+    "date": "1999-06-02",
+    "compute": 0.003864
+  },
+  {
+    "system": "RETRO-7B",
+    "date": "2022-02-07",
+    "compute": 16800000.0
+  },
+  {
+    "system": "RNN LM",
+    "date": "2010-09-26",
+    "compute": 53.960003
+  },
+  {
+    "system": "RNNsearch-50*",
+    "date": "2014-09-01",
+    "compute": 1555.2
+  },
+  {
+    "system": "RNTN",
+    "date": "2013-10-01",
+    "compute": 14.22
+  },
+  {
+    "system": "RankNet",
+    "date": "2005-08-07",
+    "compute": 0.0034820817
+  },
+  {
+    "system": "ReLU-Speech",
+    "date": "2013-05-26",
+    "compute": 127.733765
+  },
+  {
+    "system": "Reka Core",
+    "date": "2024-04-15",
+    "compute": 8400010000.0
+  },
+  {
+    "system": "ResNeXt-101 (64×4d)",
+    "date": "2016-11-16",
+    "compute": 12000.0
+  },
+  {
+    "system": "ResNeXt-101 32x48d",
+    "date": "2018-05-02",
+    "compute": 8743950.0
+  },
+  {
+    "system": "ResNet-101 (ImageNet)",
+    "date": "2015-12-10",
+    "compute": 7004.0
+  },
+  {
+    "system": "ResNet-152 (ImageNet)",
+    "date": "2015-12-10",
+    "compute": 10414.081
+  },
+  {
+    "system": "ResNet-200",
+    "date": "2016-09-17",
+    "compute": 29741.645
+  },
+  {
+    "system": "RetinaNet-R101",
+    "date": "2017-08-07",
+    "compute": 2065.392
+  },
+  {
+    "system": "RoBERTa Large",
+    "date": "2019-07-01",
+    "compute": 8506700.0
+  },
+  {
+    "system": "RoFormer",
+    "date": "2023-11-08",
+    "compute": 2162.688
+  },
+  {
+    "system": "RoseTTAFold All-Atom (RFAA)",
+    "date": "2023-10-09",
+    "compute": 214000.02
+  },
+  {
+    "system": "S4",
+    "date": "2021-10-31",
+    "compute": 78328.625
+  },
+  {
+    "system": "SAF R-CNN",
+    "date": "2015-10-28",
+    "compute": 12311.081
+  },
+  {
+    "system": "SB-LM",
+    "date": "2007-06-22",
+    "compute": 1449.4465
+  },
+  {
+    "system": "SEER",
+    "date": "2021-07-29",
+    "compute": 18000000.0
+  },
+  {
+    "system": "SNM-skip",
+    "date": "2014-12-03",
+    "compute": 297600.0
+  },
+  {
+    "system": "SOM-CNN",
+    "date": "1997-01-31",
+    "compute": 3.1431602e-05
+  },
+  {
+    "system": "SPHINX (Llama 2 13B)",
+    "date": "2023-11-13",
+    "compute": 30400000.0
+  },
+  {
+    "system": "SPIDER2",
+    "date": "2016-10-28",
+    "compute": 18.220001
+  },
+  {
+    "system": "SPN-4+KN5",
+    "date": "2014-09-14",
+    "compute": 44.0
+  },
+  {
+    "system": "SPPNet",
+    "date": "2014-06-18",
+    "compute": 3411.072
+  },
+  {
+    "system": "SRU++ Large",
+    "date": "2021-02-24",
+    "compute": 21173.705
+  },
+  {
+    "system": "ST-MoE",
+    "date": "2022-02-17",
+    "compute": 290000000.0
+  },
+  {
+    "system": "SVM-CNN",
+    "date": "2006-06-17",
+    "compute": 0.7452
+  },
+  {
+    "system": "Samuel Neural Checkers",
+    "date": "1959-07-01",
+    "compute": 4.284e-07
+  },
+  {
+    "system": "Sandwich Transformer",
+    "date": "2019-11-10",
+    "compute": 23504.094
+  },
+  {
+    "system": "SciBERT",
+    "date": "2019-03-26",
+    "compute": 89268.48
+  },
+  {
+    "system": "Seed1.5-VL",
+    "date": "2025-05-11",
+    "compute": 1388556000.0
+  },
+  {
+    "system": "Segatron-XL large, M=384 + HCP",
+    "date": "2022-03-21",
+    "compute": 26500.0
+  },
+  {
+    "system": "Segment Anything Model",
+    "date": "2023-04-05",
+    "compute": 7800000.0
+  },
+  {
+    "system": "Seq2Seq LSTM",
+    "date": "2014-09-10",
+    "compute": 56000.0
+  },
+  {
+    "system": "SexNet compression",
+    "date": "1990-10-01",
+    "compute": 7.87752e-05
+  },
+  {
+    "system": "Siamese-TDNN",
+    "date": "1993-08-01",
+    "compute": 0.01286957
+  },
+  {
+    "system": "SigLIP 400M",
+    "date": "2023-03-27",
+    "compute": 4946730.5
+  },
+  {
+    "system": "Skywork-13B",
+    "date": "2023-10-30",
+    "compute": 250000000.0
+  },
+  {
+    "system": "SmooCT",
+    "date": "2014-07-01",
+    "compute": 69.0
+  },
+  {
+    "system": "Solar Open 100B",
+    "date": "2025-12-31",
+    "compute": 1400000000.0
+  },
+  {
+    "system": "Solar Open2 250B",
+    "date": "2026-06-28",
+    "compute": 1050000000.0
+  },
+  {
+    "system": "Sparse all-MLP",
+    "date": "2022-04-14",
+    "compute": 532224.0
+  },
+  {
+    "system": "Speaker-independent vowel classification",
+    "date": "1989-11-27",
+    "compute": 7.485696e-06
+  },
+  {
+    "system": "Stable Diffusion (LDM-KL-8-G)",
+    "date": "2022-04-13",
+    "compute": 50000000.0
+  },
+  {
+    "system": "Stable Diffusion 3",
+    "date": "2024-02-22",
+    "compute": 50000000.0
+  },
+  {
+    "system": "StarCoder",
+    "date": "2023-05-09",
+    "compute": 84600000.0
+  },
+  {
+    "system": "Statement Curriculum Learning",
+    "date": "2022-03-02",
+    "compute": 17901648.0
+  },
+  {
+    "system": "Student of Games",
+    "date": "2021-12-06",
+    "compute": 36679270.0
+  },
+  {
+    "system": "StyleGAN",
+    "date": "2018-12-12",
+    "compute": 39.3
+  },
+  {
+    "system": "StyleGAN3-R",
+    "date": "2021-06-21",
+    "compute": 2427840.0
+  },
+  {
+    "system": "StyleGAN3-T",
+    "date": "2021-06-21",
+    "compute": 1702080.0
+  },
+  {
+    "system": "Swift",
+    "date": "2023-08-30",
+    "compute": 53.37
+  },
+  {
+    "system": "Swin Transformer V2 (SwinV2-G)",
+    "date": "2021-11-18",
+    "compute": 1100000.0
+  },
+  {
+    "system": "Switch",
+    "date": "2021-01-11",
+    "compute": 82200000.0
+  },
+  {
+    "system": "System 11",
+    "date": "1996-06-18",
+    "compute": 2.5859617e-05
+  },
+  {
+    "system": "T5-11B",
+    "date": "2019-10-23",
+    "compute": 33000000.0
+  },
+  {
+    "system": "T5-3B",
+    "date": "2019-10-23",
+    "compute": 9000000.0
+  },
+  {
+    "system": "TA-CNN",
+    "date": "2014-11-29",
+    "compute": 10.854
+  },
+  {
+    "system": "TC-DNN-BLSTM-DNN",
+    "date": "2015-04-06",
+    "compute": 194.10193
+  },
+  {
+    "system": "TD-Gammon",
+    "date": "1992-05-01",
+    "compute": 0.018232157
+  },
+  {
+    "system": "TaLK Convolution",
+    "date": "2020-02-08",
+    "compute": 26990.346
+  },
+  {
+    "system": "Telechat2-115B",
+    "date": "2024-09-20",
+    "compute": 6900000300.0
+  },
+  {
+    "system": "Tensor-Transformer(1core)+PN (WT103)",
+    "date": "2020-03-17",
+    "compute": 1580.0
+  },
+  {
+    "system": "Theseus",
+    "date": "1950-07-02",
+    "compute": 4e-14
+  },
+  {
+    "system": "Tranception",
+    "date": "2022-05-27",
+    "compute": 7240000.5
+  },
+  {
+    "system": "TransE",
+    "date": "2013-12-05",
+    "compute": 1340.928
+  },
+  {
+    "system": "Transformer (2017)",
+    "date": "2017-06-12",
+    "compute": 7424.525
+  },
+  {
+    "system": "Transformer (Adaptive Input Embeddings) WT103",
+    "date": "2018-09-28",
+    "compute": 44700.0
+  },
+  {
+    "system": "Transformer + Simple Recurrent Unit",
+    "date": "2018-09-17",
+    "compute": 11000.0
+  },
+  {
+    "system": "Transformer local-attention (NesT-B)",
+    "date": "2021-05-26",
+    "compute": 24057.602
+  },
+  {
+    "system": "Transformer-XL (257M)",
+    "date": "2019-01-09",
+    "compute": 378327.72
+  },
+  {
+    "system": "Transformer-XL DeFINE (141M)",
+    "date": "2019-11-27",
+    "compute": 1742.76
+  },
+  {
+    "system": "Transformer-XL Large + Phrase Induction",
+    "date": "2019-06-04",
+    "compute": 378486.53
+  },
+  {
+    "system": "TransformerXL + spectrum control",
+    "date": "2020-03-11",
+    "compute": 26289.762
+  },
+  {
+    "system": "Translation-invariant MLP",
+    "date": "1987-06-15",
+    "compute": 1.8032948e-05
+  },
+  {
+    "system": "TrellisNet",
+    "date": "2018-10-15",
+    "compute": 2780.0
+  },
+  {
+    "system": "Turing ULRv5",
+    "date": "2021-09-28",
+    "compute": 28983952.0
+  },
+  {
+    "system": "Turing-NLG",
+    "date": "2020-02-13",
+    "compute": 15700000.0
+  },
+  {
+    "system": "Two Stage Feature Extraction (MNIST)",
+    "date": "2009-09-01",
+    "compute": 0.020754
+  },
+  {
+    "system": "U-Net",
+    "date": "2015-05-18",
+    "compute": 50.832253
+  },
+  {
+    "system": "U-PaLM (540B)",
+    "date": "2022-10-20",
+    "compute": 2530000100.0
+  },
+  {
+    "system": "UDSMProt",
+    "date": "2019-09-04",
+    "compute": 637.0
+  },
+  {
+    "system": "UL2",
+    "date": "2022-05-10",
+    "compute": 120000000.0
+  },
+  {
+    "system": "UnifiedQA",
+    "date": "2020-05-02",
+    "compute": 16500.0
+  },
+  {
+    "system": "Unsupervised High-level Feature Learner",
+    "date": "2012-07-12",
+    "compute": 600.0
+  },
+  {
+    "system": "VALL-E",
+    "date": "2023-01-05",
+    "compute": 10100.0
+  },
+  {
+    "system": "VD-LSTM+REAL Large",
+    "date": "2016-11-04",
+    "compute": 21.3
+  },
+  {
+    "system": "VGG16",
+    "date": "2014-09-04",
+    "compute": 12291.0
+  },
+  {
+    "system": "VGG19",
+    "date": "2014-09-04",
+    "compute": 11000.0
+  },
+  {
+    "system": "VILA-13B",
+    "date": "2023-12-12",
+    "compute": 2300313.5
+  },
+  {
+    "system": "VILA1.5-13B",
+    "date": "2024-05-03",
+    "compute": 2300313.5
+  },
+  {
+    "system": "Variational (untied weights, MC) LSTM (Large)",
+    "date": "2015-12-16",
+    "compute": 5.886144
+  },
+  {
+    "system": "Vega v2",
+    "date": "2022-12-04",
+    "compute": 77600000.0
+  },
+  {
+    "system": "ViT-22B",
+    "date": "2023-02-10",
+    "compute": 193248000.0
+  },
+  {
+    "system": "ViT-G (model soup)",
+    "date": "2022-03-10",
+    "compute": 3400000.2
+  },
+  {
+    "system": "ViT-G/14",
+    "date": "2021-06-08",
+    "compute": 58500000.0
+  },
+  {
+    "system": "ViT-Huge/14",
+    "date": "2020-10-22",
+    "compute": 4262000.0
+  },
+  {
+    "system": "VideoMAE V2",
+    "date": "2023-03-29",
+    "compute": 9700000.0
+  },
+  {
+    "system": "Visualizing CNNs",
+    "date": "2013-11-12",
+    "compute": 532.0
+  },
+  {
+    "system": "Volcano 13B",
+    "date": "2023-11-13",
+    "compute": 45600000.0
+  },
+  {
+    "system": "WeNet (Penn Treebank)",
+    "date": "2019-04-08",
+    "compute": 730.0
+  },
+  {
+    "system": "Weight Decay",
+    "date": "1991-12-02",
+    "compute": 7.5474e-05
+  },
+  {
+    "system": "Whisper",
+    "date": "2022-09-21",
+    "compute": 4207266.5
+  },
+  {
+    "system": "Word2Vec (large)",
+    "date": "2013-10-16",
+    "compute": 38.879997
+  },
+  {
+    "system": "XGLM-7.5B",
+    "date": "2021-12-20",
+    "compute": 22500000.0
+  },
+  {
+    "system": "XLM-RoBERTa",
+    "date": "2019-11-05",
+    "compute": 20760000.0
+  },
+  {
+    "system": "XLMR-XXL",
+    "date": "2021-08-17",
+    "compute": 33660000.0
+  },
+  {
+    "system": "XLNet",
+    "date": "2019-06-01",
+    "compute": 6190000.0
+  },
+  {
+    "system": "Xception",
+    "date": "2016-10-07",
+    "compute": 436000.0
+  },
+  {
+    "system": "YOLOX-X",
+    "date": "2021-08-06",
+    "compute": 634275.0
+  },
+  {
+    "system": "YOLOv3",
+    "date": "2018-04-08",
+    "compute": 13416.381
+  },
+  {
+    "system": "Yi-34B",
+    "date": "2023-11-02",
+    "compute": 610000060.0
+  },
+  {
+    "system": "Yi-Large",
+    "date": "2024-05-13",
+    "compute": 1800000000.0
+  },
+  {
+    "system": "Yi-Lightning",
+    "date": "2024-10-16",
+    "compute": 1500000000.0
+  },
+  {
+    "system": "Yuan 1.0",
+    "date": "2021-10-12",
+    "compute": 353800030.0
+  },
+  {
+    "system": "Zidong Taichu",
+    "date": "2021-08-11",
+    "compute": 801600.0
+  },
+  {
+    "system": "Zip CNN",
+    "date": "1989-12-01",
+    "compute": 0.001496338
+  },
+  {
+    "system": "aLSTM(depth-2)+RecurrentPolicy (WT2)",
+    "date": "2018-05-22",
+    "compute": 72.96
+  },
+  {
+    "system": "base LM+GNN+kNN",
+    "date": "2021-10-17",
+    "compute": 52587.457
+  },
+  {
+    "system": "eDiff-I",
+    "date": "2022-11-02",
+    "compute": 54600.004
+  },
+  {
+    "system": "genCNN + dyn eval",
+    "date": "2015-03-17",
+    "compute": 34.15345
+  },
+  {
+    "system": "gpt-oss-120b",
+    "date": "2025-08-05",
+    "compute": 4940000000.0
+  },
+  {
+    "system": "gpt-oss-20b",
+    "date": "2025-08-05",
+    "compute": 549000000.0
+  },
+  {
+    "system": "iCCCP",
+    "date": "2010-06-13",
+    "compute": 1.08
+  },
+  {
+    "system": "mT5-XXL",
+    "date": "2020-10-20",
+    "compute": 82000000.0
+  },
+  {
+    "system": "nekomata-14b",
+    "date": "2023-12-21",
+    "compute": 255620000.0
+  },
+  {
+    "system": "trRosetta",
+    "date": "2019-08-22",
+    "compute": 38047.97
+  },
+  {
+    "system": "wave2vec 2.0 LARGE",
+    "date": "2020-10-22",
+    "compute": 3870720.0
+  },
+  {
+    "system": "xTrimoPGLM -100B",
+    "date": "2023-07-06",
+    "compute": 620000000.0
+  }
+]
