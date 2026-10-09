@@ -23,3 +23,26 @@
 .support-letter{display:inline-block}
 @media(hover:hover) and (prefers-reduced-motion:no-preference){.header-support:hover .support-letter{animation:support-letter-hop 280ms cubic-bezier(.22,1,.36,1) both}}
 @keyframes support-letter-hop{0%,100%{transform:translateY(0)}45%{transform:translateY(-4px)}}
+.home-upcoming{display:flex;flex-direction:column;align-items:center;gap:28px;max-width:1240px;margin:0 auto;padding:72px 28px 80px;overflow:clip;color:#111}
+.home-upcoming h2{margin:0;font:700 clamp(24px,3vw,36px)/1.1 Wix Madefor Display,sans-serif;letter-spacing:-.03em}
+.home-upcoming .brand-logo{display:block;width:76%;max-width:600px;height:auto;overflow:visible}
+@media(max-width:700px){.home-upcoming{gap:20px;padding:48px 20px 56px}}
+.brand-logo-guide-draw{stroke-dasharray:1;stroke-dashoffset:0}
+.brand-logo-incoming-line{opacity:0;stroke-dasharray:1;stroke-dashoffset:0}
+@media(prefers-reduced-motion:no-preference){
+  .home-upcoming[data-animate=true] .brand-logo-pixel{transform-box:fill-box;transform-origin:center;animation:upcoming-pixel-fill 320ms cubic-bezier(.22,1,.36,1) both paused}
+  .home-upcoming[data-animate=true] .brand-logo-guide-draw{animation:upcoming-guide-draw 1275ms cubic-bezier(.45,0,.55,1) both paused}
+  .home-upcoming[data-animate=true] .brand-logo-guide-diagonal{animation-name:upcoming-diagonal-draw;animation-duration:1275ms;animation-delay:102ms}
+  .home-upcoming[data-animate=true] .brand-logo-incoming-line{animation:upcoming-incoming-line 1275ms linear 102ms both paused}
+  .home-upcoming[data-animate=true] .brand-logo-upcoming-solids path{--letter-end:0px;animation:upcoming-letter-slide 978ms cubic-bezier(.22,1,.36,1) 1403ms both paused}
+  .home-upcoming[data-animate=true] .brand-logo-upcoming-solids path:first-child{--letter-start:180px}
+  .home-upcoming[data-animate=true] .brand-logo-upcoming-solids path:last-child{--letter-start:-180px}
+  .home-upcoming[data-animate=true] .brand-logo-upcoming-edges .brand-logo-edge{animation:upcoming-letter-slide 978ms cubic-bezier(.22,1,.36,1) 1403ms both paused}
+  .home-upcoming[data-animate=true] .brand-logo-upcoming-edges .brand-logo-edge-start{--letter-start:3000px;--letter-end:0px}
+  .home-upcoming[data-animate=true] .brand-logo-upcoming-edges .brand-logo-edge-end{--letter-start:6414px;--letter-end:9414px}
+}
+@keyframes upcoming-guide-draw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+@keyframes upcoming-pixel-fill{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}
+@keyframes upcoming-incoming-line{0%{stroke-dasharray:0 1;stroke-dashoffset:0;opacity:1;animation-timing-function:cubic-bezier(.22,.8,.36,.84)}60%{stroke-dasharray:.55 1;stroke-dashoffset:-.1;opacity:1;animation-timing-function:cubic-bezier(.4,.124,.7,.2)}99%{opacity:1}100%{stroke-dasharray:0 1;stroke-dashoffset:-1;opacity:0}}
+@keyframes upcoming-diagonal-draw{0%{stroke-dashoffset:1;animation-timing-function:cubic-bezier(.22,.8,.36,.84)}60%{stroke-dashoffset:.35;animation-timing-function:cubic-bezier(.4,.124,.7,.2)}100%{stroke-dashoffset:0}}
+@keyframes upcoming-letter-slide{from{opacity:0;transform:translateX(var(--letter-start))}to{opacity:1;transform:translateX(var(--letter-end))}}
