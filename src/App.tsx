@@ -50,6 +50,8 @@ import { distributionVisualDefaults, isBarChart, isDistributionChart as isDistri
 import { createDefaultChartConfig } from './entities/chart/model/defaultChartConfig'
 import { useEditorHistory } from './features/editor/model/useEditorHistory'
 import { EditorHeader } from './features/editor/ui/EditorHeader'
+import { MAX_PROJECT_BYTES, parseProject, serializeProject, type EditorProject } from './features/projects/project'
+import { useProjectAutosave } from './features/projects/useProjectAutosave'
 import { EditorStepper, type EditorStep } from './features/editor/ui/EditorStepper'
 import { MultiplesControls } from './features/editor/ui/MultiplesControls'
 import { MultiplesCanvas } from './features/editor/ui/MultiplesCanvas'
@@ -332,6 +334,44 @@ function App() {
     setAnnotationTool(null); setPickingDecorationAnchor(null)
     setSelectedElement(null); setSelectedSeries(null); setSelectedAnnotation(null); setSelectedDecoration(null); setSelectedSettingsSection(null)
   }
+  const [projectError, setProjectError] = useState('')
+  const project = useMemo<EditorProject | null>(() => hasData ? {
+    format: 'viiiz-project', version: 1, updatedAt: new Date().toISOString(), table, types,
+    config: documentConfig, step, multiplesMode: wantsMultiples && !!documentConfig.multiples,
+  } : null, [hasData, table, types, documentConfig, step, wantsMultiples])
+  const restoreProject = (saved: EditorProject) => {
+    ++importSequence.current
+    processingController.current?.abort()
+    clearCanvasSelection(); dataHistory.clear(); designHistory.clear()
+    skipDesignHistory.current = true; lastDesignCommit.current = 0; lastDesignChange.current = ''
+    lastSelectedPanel.current = null
+    setSelectedPanel(null); setMultiplesMode(saved.multiplesMode)
+    setTable(saved.table); setTypes(saved.types); setDocumentConfig(saved.config)
+    setHasData(true); setStep(saved.step); setSettingsCategory('chart')
+    setExcelWorkbook(null); setLoading(false); setError(''); setProjectError('')
+  }
+  const autosave = useProjectAutosave(project, restoreProject)
+  const saveProjectFile = () => {
+    if (!project) return
+    try {
+      const url = URL.createObjectURL(new Blob([serializeProject(project)], { type: 'application/json' }))
+      const link = document.createElement('a')
+      link.href = url; link.download = `${table.name.replace(/[\\/:*?"<>|]/g, '-').slice(0, 100)}.viiiz`
+      link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      setProjectError('')
+    } catch (cause) { setProjectError(cause instanceof Error ? cause.message : 'Не удалось сохранить файл проекта') }
+  }
+  const openProjectFile = async (file: File) => {
+    const sequence = ++importSequence.current
+    processingController.current?.abort()
+    setLoading(true); setProjectError('')
+    try {
+      if (file.size > MAX_PROJECT_BYTES) throw new Error('Файл проекта больше 64 МБ')
+      const saved = parseProject(await file.text())
+      if (sequence === importSequence.current) restoreProject(saved)
+    } catch (cause) { if (sequence === importSequence.current) setProjectError(cause instanceof Error ? cause.message : 'Не удалось открыть проект') }
+    finally { if (sequence === importSequence.current) setLoading(false) }
+  }
   const selectPanel = (index: number | null) => { clearCanvasSelection(); if (index !== null) lastSelectedPanel.current = index; setSelectedPanel(index) }
   const selectLastPanel = () => {
     const panels = documentConfig.multiples?.panels ?? []
@@ -507,6 +547,7 @@ function App() {
   }
 
   const openFile = async (file: File) => {
+    if (file.name.toLowerCase().endsWith('.viiiz')) { await openProjectFile(file); return }
     setExcelWorkbook(null)
     if (file.name.toLowerCase().endsWith('.xlsx')) {
       const sequence = ++importSequence.current
@@ -785,15 +826,18 @@ function App() {
   }
   const renderCanvas = (panelConfig: ChartConfig, ref: Ref<ChartCanvasHandle>, active: boolean) => <ChartCanvas directLabelControlsHost={active ? directLabelControlsHost : null} onDirectLabelPositionsChange={active ? (directLabelPositions) => setConfig((current) => ({ ...current, directLabelPositions })) : undefined} onDecorationLayout={active ? updateDecorationLayouts : undefined} pickingDecorationText={active && pickingDecorationAnchor === 'text'} onDecorationAnchorRequest={(kind, endpoint) => { setPickingDecorationEndpoint(endpoint ?? (kind === 'text' ? 'start' : 'end')); setPickingDecorationAnchor(kind) }} onDecorationTextPick={(annotationId, position) => { const decoration = decorationLayouts.find((item) => item.id === selectedDecoration); if (decoration) updateDecoration({ ...decoration, type: decoration.type === 'horizontal-line' || decoration.type === 'vertical-line' ? 'line' : decoration.type, [pickingDecorationEndpoint === 'start' ? 'startAnchor' : 'endAnchor']: { annotationId, position, side: 'auto' } }); setPickingDecorationAnchor(null) }} pickingDecorationPoint={active && pickingDecorationAnchor === 'data'} onDecorationPointCancel={() => setPickingDecorationAnchor(null)} onDecorationPointPick={(elementKey) => { const decoration = decorationLayouts.find((item) => item.id === selectedDecoration); if (decoration) updateDecoration({ ...decoration, type: decoration.type === 'horizontal-line' || decoration.type === 'vertical-line' ? 'line' : decoration.type, [pickingDecorationEndpoint === 'start' ? 'startAnchor' : 'endAnchor']: { elementKey } }); setPickingDecorationAnchor(null) }} annotationTool={active ? annotationTool : null} onAnnotationPlace={placeAnnotation} onAnnotationCancel={() => setAnnotationTool(null)} ref={ref} table={table} config={panelConfig} disableViewGestures={multiplesMode} viewZoom={multiplesMode ? 1 : canvasZoom} selectedSettingsSection={active ? selectedSettingsSection : null} onSettingsFocus={focusSettings} onClearSettingsFocus={() => setSelectedSettingsSection(null)} onTextStyleChange={(field, style) => setConfig((current) => { const key = `${field}Text` as 'titleText' | 'subtitleText' | 'noteText' | 'sourceText'; return { ...current, [key]: { ...current[key], ...style } } })} onRichTextChange={(field, html, text) => setConfig((current) => ({ ...current, [field]: text, [`${field}Html`]: html }))} onCategoryLabelChange={(axis, category, text) => setConfig((current) => ({ ...current, categoryLabelOverrides: { ...current.categoryLabelOverrides, [axis]: { ...current.categoryLabelOverrides?.[axis], [category]: text } } }))} onTreemapMove={moveTreemapElement} selectedSeriesName={active ? selectedSeries?.name : undefined} selectedElementKey={active ? selectedElement?.key : undefined} selectedElementTarget={active ? selectedElement?.target : undefined} selectedAnnotationId={active ? selectedAnnotation : null} selectedDecorationId={active ? selectedDecoration : null} onDecorationChange={updateDecoration} onSeriesSelect={(selection) => { dismissCanvasHint(); setSettingsCategory('chart'); setSelectedSeries(selection); setSelectedElement(config.kind === 'treemap' ? { key: `treemap-group:${selection.name}`, seriesName: selection.name, category: selection.name, value: '', color: selection.color, target: 'value-label' } : null); setSelectedAnnotation(null); setSelectedDecoration(null) }} onSelect={(selection) => { dismissCanvasHint(); setSettingsCategory('chart'); const resolved = valueLabels.find((item) => item.key === selection.key); setSelectedElement({ ...resolved, ...selection, target: selection.target ?? 'element' }); setSelectedAnnotation(null); setSelectedDecoration(null) }} onAnnotationSelect={(id) => { dismissCanvasHint(); setSettingsCategory('annotations'); setSelectedAnnotation(id); setSelectedSettingsSection(null); setSelectedDecoration(null); setSelectedElement(null); setSelectedSeries(null) }} onAnnotationChange={(changed) => setConfig((current) => ({ ...current, annotations: current.annotations.map((item) => item.id === changed.id ? changed : item) }))} onAnnotationDuplicate={duplicateAnnotation} onAnnotationDelete={(id) => { setConfig((current) => ({ ...current, annotations: current.annotations.filter((item) => item.id !== id), decorations: current.decorations?.map((item) => detachDecorationText(item, id, decorationLayouts.find((layout) => layout.id === item.id))) })); setSelectedAnnotation(null) }}/>
 
+  const editorHeader = <EditorHeader projectName={hasData ? table.name : 'Новый проект'} projectMeta={hasData ? `${table.rows.length.toLocaleString('ru-RU')} строк · ${autosave.status}` : 'не сохранён'} canSave={hasData} busy={loading || !autosave.ready} saveStatus={autosave.status} onSaveProject={saveProjectFile} onOpenProject={(file) => { void openProjectFile(file) }} canExport={step === 'design' && (!multiplesMode || !!documentConfig.multiples?.panels.some(Boolean))} onExportSvg={(options) => { void exportCanvas('svg', options) }} onExportPng={(options) => { void exportCanvas('png', options) }}/>
+  if (!autosave.ready) return <div className="app-shell">{editorHeader}<main className="source-step"><p role="status">Восстанавливаем проект…</p></main></div>
   return (
     <div className="app-shell">
-      <EditorHeader projectName={hasData ? table.name : 'Новый проект'} projectMeta={hasData ? `${table.rows.length.toLocaleString('ru-RU')} строк` : 'не сохранён'} canExport={step === 'design' && (!multiplesMode || !!documentConfig.multiples?.panels.some(Boolean))} onExportSvg={(options) => { void exportCanvas('svg', options) }} onExportPng={(options) => { void exportCanvas('png', options) }}/>
+      {editorHeader}
+      {(projectError || autosave.error) && <p className="project-error" role="alert">{projectError || autosave.error}</p>}
       <EditorStepper step={step} canVisit={canVisit} onChange={(next) => { clearCanvasSelection(); setStep(next) }}/>{error && (step === 'chart' || step === 'design') && <p className="source-error" role="alert">{error}</p>}
 
       {step === 'source' && <main className={`source-step${fileDragging ? ' file-dragging' : ''}`} aria-busy={loading}>
         <div className="step-heading"><h1>Добавьте данные</h1><p>Перетащите файл на страницу или подключите публичную таблицу Google Sheets.</p></div>
         <div className="source-grid">
-          <label className="source-card upload-card">{(fileDragging || fileDropBurst) && <div className="file-drop-effect" aria-hidden="true"><HeroSymbolTrail fileDrop initialPoint={fileDragOrigin.current}/></div>}<input type="file" accept=".csv,.xlsx,.parquet" disabled={loading} onChange={(event) => { const file = event.target.files?.[0]; if (file) openFile(file); event.target.value = '' }} /><span className="source-icon"><FileUp size={22}/></span><strong aria-live="polite">{loading ? 'Читаем данные…' : fileDragging ? 'Отпустите файл для загрузки' : 'Загрузить файл'}</strong><p>CSV, XLSX или Parquet</p><span className="source-card-action">{loading ? 'Подождите…' : 'Выбрать с компьютера'}</span></label>
+          <label className="source-card upload-card">{(fileDragging || fileDropBurst) && <div className="file-drop-effect" aria-hidden="true"><HeroSymbolTrail fileDrop initialPoint={fileDragOrigin.current}/></div>}<input type="file" accept=".csv,.xlsx,.parquet,.viiiz" disabled={loading} onChange={(event) => { const file = event.target.files?.[0]; if (file) openFile(file); event.target.value = '' }} /><span className="source-icon"><FileUp size={22}/></span><strong aria-live="polite">{loading ? 'Читаем данные…' : fileDragging ? 'Отпустите файл для загрузки' : 'Загрузить файл'}</strong><p>CSV, XLSX, Parquet или проект .viiiz</p><span className="source-card-action">{loading ? 'Подождите…' : 'Выбрать с компьютера'}</span></label>
           <div className="source-card sheet-card"><span className="source-icon sheets"><Sheet size={21}/></span><strong>Google Sheets</strong><p>Вставьте ссылку на таблицу с доступом для просмотра</p><div className="source-sheet-form"><input className="text-input" aria-label="Ссылка на Google Sheets" value={sheetUrl} disabled={loading} onChange={(event) => setSheetUrl(event.target.value)} placeholder="https://docs.google.com/spreadsheets/…"/><button className="button primary" disabled={!sheetUrl || loading} onClick={openGoogleSheet}>Подключить</button></div></div>
         </div>
         {error && <p className="source-error" role="alert"><CircleAlert size={16}/>{error}</p>}

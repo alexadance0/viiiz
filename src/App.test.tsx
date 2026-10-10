@@ -10,7 +10,8 @@ describe('editor startup', () => {
   it('renders the initial editor route without a runtime exception', () => {
     const html = renderToString(<MemoryRouter><App/></MemoryRouter>)
     expect(html).toContain('Добавьте данные')
-    expect(html).toContain('Трудности бизнеса')
+    expect(html).toContain('Восстанавливаем проект…')
+    expect(html).toContain('Открыть файл проекта')
   })
 
   it.each(['horizontal-bar', 'horizontal-stacked-bar', 'horizontal-normalized-stacked-bar', 'horizontal-lollipop', 'butterfly', 'dumbbell'] as const)('%s starts with a vertical value grid', (kind) => {
@@ -38,9 +39,9 @@ describe('editor startup', () => {
   })
 
   it('resets the entire chart presentation while retaining the document and mapping', () => {
-    const previous = { ...createDefaultChartConfig(), kind: 'marimekko' as const, title: 'Мой график', canvasWidth: 1200, yFields: ['a', 'b'], xAxisLabelRotate: 0 as const, xAxisLabelOverflow: 'wrap' as const, showValues: true, showLegend: true, showVerticalGrid: true, yAxisPosition: 'right' as const, legendPosition: 'right' as const, yAxisMin: 10, elementStyles: { a: { color: '#ffffff' } }, butterflyCategoryPosition: 'right' as const }
+    const previous = { ...createDefaultChartConfig(), kind: 'marimekko' as const, title: 'Мой график', canvasWidth: 1200, distributionGroupField: 'region', yFields: ['a', 'b'], xAxisLabelRotate: 0 as const, xAxisLabelOverflow: 'wrap' as const, showValues: true, showLegend: true, showVerticalGrid: true, yAxisPosition: 'right' as const, legendPosition: 'right' as const, yAxisMin: 10, elementStyles: { a: { color: '#ffffff' } }, butterflyCategoryPosition: 'right' as const }
     const next = resetChartPresentation(previous)
-    expect(next).toMatchObject({ title: 'Мой график', canvasWidth: 1200, yFields: ['a', 'b'], xAxisLabelRotate: 'auto', xAxisLabelOverflow: 'auto', showValues: false, showLegend: false, showVerticalGrid: false, yAxisPosition: 'left', legendPosition: 'top', yAxisMin: null, elementStyles: {} })
+    expect(next).toMatchObject({ title: 'Мой график', canvasWidth: 1200, distributionGroupField: 'region', yFields: ['a', 'b'], xAxisLabelRotate: 'auto', xAxisLabelOverflow: 'auto', showValues: false, showLegend: false, showVerticalGrid: false, yAxisPosition: 'left', legendPosition: 'top', yAxisMin: null, elementStyles: {} })
     expect(next.butterflyCategoryPosition).toBeUndefined()
     expect(previous.showValues).toBe(true)
   })

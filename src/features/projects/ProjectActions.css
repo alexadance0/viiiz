@@ -1,0 +1,13 @@
+.project-menu{position:relative}
+.project-menu>summary{cursor:pointer;list-style:none}
+.project-menu>summary::-webkit-details-marker{display:none}
+.project-menu-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:30;width:260px;padding:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
+.project-menu-panel>button{display:block;width:100%;min-height:44px;padding:10px;text-align:left;border:0;background:transparent;color:inherit;font:600 13px/1.3 'Wix Madefor Text',sans-serif;cursor:pointer}
+.project-menu-panel>button:hover:not(:disabled){background:var(--surface-subtle)}
+.project-menu-panel>button:disabled{opacity:.45;cursor:not-allowed}
+.project-menu-panel>p{margin:8px 10px;font:600 12px/1.4 'Wix Madefor Text',sans-serif}
+.project-menu-panel>small{display:block;margin:8px 10px;color:var(--ink);font:400 12px/1.5 'Wix Madefor Text',sans-serif}
+.project-menu>summary:focus-visible,.project-menu-panel>button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.project-error{margin:0;padding:12px 20px;border-bottom:1px solid var(--line);color:var(--ink);background:var(--surface-subtle);font-size:13px}
+@media(max-width:400px){.project-menu-panel{width:240px}.topbar .editor-nav .brand{width:84px;min-width:84px}.topbar .export-actions{gap:6px}.topbar .export-actions .button{padding:8px 10px}}
+@media(max-width:360px){.topbar .editor-nav .brand{width:64px;min-width:64px}}
