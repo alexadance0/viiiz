@@ -10,26 +10,26 @@ describe('attached callouts', () => {
     const points = [{ key: 'point', label: 'Peak', x: 400, y: 200 }]
     const before = resolveDecoration(line, [text], points, { text: 60 })
     const after = resolveDecoration(line, [{ ...text, x: 150, y: 70 }], points, { text: 60 })
-    expect([before.x, before.y]).toEqual([206, 80])
-    expect([after.x, after.y]).toEqual([256, 100])
+    expect([before.x, before.y]).toEqual([201, 80])
+    expect([after.x, after.y]).toEqual([251, 100])
     expect([after.x + after.width, after.y + after.height]).toEqual([400, 200])
   })
   it('follows changes in data coordinates and picks the nearest text side', () => {
     const resolved = resolveDecoration({ ...line, startAnchor: { annotationId: 'text', side: 'auto' } }, [text], [{ key: 'point', label: 'Peak', x: 150, y: 300 }], { text: 60 })
-    expect([resolved.x, resolved.y]).toEqual([150, 116])
+    expect([resolved.x, resolved.y]).toEqual([150, 111])
     expect([resolved.x + resolved.width, resolved.y + resolved.height]).toEqual([150, 300])
   })
   it('follows a fixed corner when the text moves, resizes or wraps', () => {
     const anchored = { ...line, startAnchor: { annotationId: 'text', side: 'auto' as const, position: { x: 1, y: 1 } } }
     const before = resolveDecoration(anchored, [text], [], { text: 60 })
     const after = resolveDecoration(anchored, [{ ...text, x: 150, y: 70, width: 140 }], [], { text: 100 })
-    expect([before.x, before.y]).toEqual([206, 116])
-    expect([after.x, after.y]).toEqual([296, 176])
+    expect([before.x, before.y]).toEqual([201, 111])
+    expect([after.x, after.y]).toEqual([291, 171])
     expect([after.x + after.width, after.y + after.height]).toEqual([400, 200])
   })
   it('keeps custom control offsets attached to their own endpoints', () => {
     const resolved = resolveDecoration({ ...line, controlPoints: { first: { x: 50, y: 0 }, second: { x: 0, y: -80 } } }, [text], [{ key: 'point', label: 'Peak', x: 600, y: 300 }], { text: 60 })
-    expect(decorationControls(resolved)).toEqual({ first: { x: 256, y: 80 }, second: { x: 600, y: 220 } })
+    expect(decorationControls(resolved)).toEqual({ first: { x: 251, y: 80 }, second: { x: 600, y: 220 } })
   })
   it('supports reversed endpoints, screen-distance snapping and detaches deleted text without moving the curve', () => {
     const points = [{ key: 'point', label: 'Peak', x: 400, y: 200 }]
@@ -39,7 +39,7 @@ describe('attached callouts', () => {
     expect(nearestDecorationTarget({ x: 420, y: 200 }, targets, 1, 1)).toBeNull()
     const reversed = { ...line, startAnchor: { elementKey: 'point' }, endAnchor: { annotationId: 'text', side: 'auto' as const, position: { x: 0, y: .5 } } }
     const resolved = resolveDecoration(reversed, [text], points, { text: 60 })
-    expect([resolved.x, resolved.y, resolved.x + resolved.width, resolved.y + resolved.height]).toEqual([400, 200, 94, 80])
+    expect([resolved.x, resolved.y, resolved.x + resolved.width, resolved.y + resolved.height]).toEqual([400, 200, 99, 80])
     const detached = detachDecorationText(reversed, 'text', resolved)
     expect(detached.endAnchor).toBeUndefined()
     expect(detached.startAnchor).toEqual({ elementKey: 'point' })

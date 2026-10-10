@@ -58,11 +58,13 @@ export function compileNativeSlopeScene(table: DataTable, config: ChartConfig): 
       const rowIndex = sourceRowIndex(table, config, category, source.name)
       const datumId = config.aggregation === 'none' && rowIndex >= 0 ? rawDatumId(rowIndex, source.name) : aggregateDatumId(category, source.name)
       const legacyKey = legacyPointElementKey(source.name, category)
+      const override = config.elementStyles[legacyKey]
       return {
         type: 'point', id: markElementId(id, datumId), datumId, seriesId: id, legacyKey, category, categoryIndex, value,
         displayCategory: formatTimeValue(category, table.timeProfiles?.[config.xField], config.dateLabelFormat),
-        displayValue: value == null ? 'пропуск' : formatChartNumber(value, config), marker,
-        label: { visible: false, text: value == null ? '' : formatChartNumber(value, config), style: config.valueText, position: 'auto' },
+        displayValue: value == null ? 'пропуск' : formatChartNumber(value, config),
+        marker: { ...marker, shape: override?.markerShape ?? marker.shape, size: override?.markerSize ?? marker.size, fill: override?.markerFill ?? override?.color ?? marker.fill, stroke: override?.markerBorder ?? override?.color ?? marker.stroke, strokeWidth: override?.markerBorderWidth ?? marker.strokeWidth, opacity: override?.fillOpacity ?? 1 },
+        label: { visible: override?.showLabel ?? false, text: override?.label || (value == null ? '' : formatChartNumber(value, config)), style: override?.valueText ?? config.valueText, position: override?.labelPosition ?? 'top' },
       }
     }) as [CartesianPointScene, CartesianPointScene]
     const start = points[0].value, end = points[1].value
@@ -101,9 +103,10 @@ export function compileNativeSlopeScene(table: DataTable, config: ChartConfig): 
   const showValues = config.slopeShowValues ?? true, showNames = config.slopeShowSeriesNames ?? true
   const endpointItems: SlopeEndpointLabelScene[] = []
   series.forEach((item) => item.points.forEach((point, index) => {
-    if (point.value == null || index === 0 && !showValues || index === 1 && !showValues && !showNames) return
+    const endpointValue = showValues && config.elementStyles[point.legacyKey]?.showLabel == null
+    if (point.value == null || index === 0 && !endpointValue || index === 1 && !endpointValue && !showNames) return
     const color = item.change?.colorByDirection ? item.change.resolvedColor : item.color
-    endpointItems.push({ id: `slope-label:${point.id}`, pointId: point.id, seriesId: item.id, side: index === 0 ? 'left' : 'right', valueText: showValues ? point.displayValue : undefined, seriesText: index === 1 && showNames ? config.seriesStyles[item.name]?.legendLabel?.trim() || item.name : undefined, color, style: { ...config.valueText, color } })
+    endpointItems.push({ id: `slope-label:${point.id}`, pointId: point.id, seriesId: item.id, side: index === 0 ? 'left' : 'right', valueText: endpointValue ? point.displayValue : undefined, seriesText: index === 1 && showNames ? config.seriesStyles[item.name]?.legendLabel?.trim() || item.name : undefined, color, style: { ...config.valueText, color } })
   }))
   const plot: CartesianSlopePlotScene = {
     kind: 'slope', positions, series, valueDomain, categoryAxis, valueAxis,

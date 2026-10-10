@@ -18,7 +18,7 @@ test('random palette changes the chart on every click and is retained in SVG exp
   const first = await colors()
   await button.click()
   await expect.poll(colors).not.toEqual(first)
-  await expect(page.locator('.custom-palette > span')).toHaveCount(7)
+  await expect(page.locator('.custom-palette > span')).toHaveCount(11)
   const palette = await colors()
   await page.screenshot({ path: '/tmp/viiiz-random-palette.png', fullPage: true })
   await page.locator('.export-menu > summary').click()

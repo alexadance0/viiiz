@@ -28,9 +28,16 @@ export function compileNativeWaterfallScene(table: DataTable, sourceConfig: Char
     marks.push({ ...source.marks[0], id, datumId, seriesId: source.id, legacyKey, category: totalLabel, categoryIndex: marks.length, value: total, start: 0, end: total, total: true, displayCategory: totalLabel, displayChange: formatWaterfallChange(total, config), displayCumulative: formatChartNumber(total, config), displayValue: formatChartNumber(total, config), style: { ...source.marks[0]?.style, color, opacity: override?.fillOpacity ?? config.barFillOpacity ?? 1, borderColor: override?.borderColor ?? config.barBorderColor ?? color, borderWidth: override?.borderWidth ?? config.barBorderWidth ?? 0, borderRadius: config.barBorderRadius ?? 0, width: override?.barWidth }, label: { ...source.marks[0]?.label, visible: (override?.showLabel ?? config.showValues) && (config.waterfallShowTotalValue ?? true), text: override?.label || formatChartNumber(total, config), style: override?.valueText ?? config.valueText, position: override?.waterfallLabelPosition ?? config.valueLabelPosition ?? 'auto', autoContrast: config.valueLabelAutoContrast ?? true } })
   }
   const categories = marks.map((mark, index) => index < base.plot.categories.length ? base.plot.categories[index] : { id: mark.datumId, value: totalLabel, coordinate: `total:${field}`, label: totalLabel })
+  const categoryAxis = { ...base.plot.categoryAxis }
+  if (categoryAxis.timeScale && showTotal) {
+    const scale = categoryAxis.timeScale
+    // The summary occupies a separate slot after the dated observations.
+    const gap = Math.max(86400000, (scale.max - scale.min) / Math.max(2, categories.length))
+    categoryAxis.timeScale = { ...scale, max: scale.max + gap }
+  }
   const automatic = niceNumericScale(marks.flatMap((mark) => [mark.start, mark.end]), true)
   const valueDomain = { min: config.yAxisMin ?? automatic.min, max: config.yAxisMax ?? automatic.max, step: config.yAxisStep ?? automatic.step }
   const connectors = marks.slice(0, -1).map((mark, index) => ({ id: `waterfall-connector:${mark.id}`, fromId: mark.id, toId: marks[index + 1].id, value: mark.end, color: config.waterfallConnectorColor ?? '#8a8791' }))
   const elements: ChartElement[] = [...marks.map((mark): ChartElement => ({ id: mark.id, role: 'mark', coordinateSpace: 'data', selectable: true, seriesId: mark.seriesId, datumId: mark.datumId, legacyKey: mark.legacyKey })), ...categories.map((category): ChartElement => ({ id: `category-label:${category.id}`, role: 'category-label', coordinateSpace: 'canvas', selectable: true, axisId: 'category', datumId: category.id, text: category.label }))]
-  return { ...base, document: chartDocumentFromLegacy(table, sourceConfig), compatibilityConfig: config, elements, guides: [], plot: { kind: 'waterfall', categories, categoryAxis: base.plot.categoryAxis, valueAxis: base.plot.valueAxis, valueDomain, barWidth: config.barWidth ?? 68, marks, connectors } }
+  return { ...base, document: chartDocumentFromLegacy(table, sourceConfig), compatibilityConfig: config, elements, guides: [], plot: { kind: 'waterfall', categories, categoryAxis, valueAxis: base.plot.valueAxis, valueDomain, barWidth: config.barWidth ?? 68, marks, connectors } }
 }

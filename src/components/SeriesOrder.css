@@ -1,8 +1,6 @@
-.series-order-hint{margin:0 0 8px;color:#918e98;font-size:8px;line-height:1.45}
-.ordered-series-list>div{grid-template-columns:18px minmax(0,1fr) 25px 30px;transition:border-color .15s,box-shadow .15s,transform .15s}
-.series-drag[draggable=true]{cursor:grab}
-.series-drag[draggable=true]:active{cursor:grabbing}
-.series-drag{display:grid;place-items:center;height:100%;color:#bdbdbd;font-size:14px;user-select:none}
+.series-order-hint{margin:0 0 8px;color:var(--muted);font-size:8px;line-height:1.45}
+.ordered-series-list>div{grid-template-columns:18px minmax(0,1fr) 25px;transition:border-color .15s,box-shadow .15s,transform .15s}
+.series-drag{display:grid;place-items:center;height:100%;color:var(--muted);font-size:14px;user-select:none}
 .ordered-series-list .series-name-button{height:42px;padding:0 4px}
 .ordered-series-list .series-name-button span{min-width:0}
 .series-order-buttons{display:flex;flex-direction:column;border-left:1px solid var(--line);border-right:1px solid var(--line)}
@@ -10,3 +8,6 @@
 .series-order-buttons button:first-child{border-bottom:1px solid var(--line)}
 .series-order-buttons button:hover:not(:disabled){background:#eeeeee;color:var(--accent)}
 .series-order-buttons button:disabled{color:#d2cfd6;cursor:default}
+
+.ordered-series-list>div{cursor:grab;position:relative}
+.ordered-series-list>div .series-name-button{cursor:grab}

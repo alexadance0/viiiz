@@ -88,6 +88,13 @@ test('gallery page exposes examples and animated navigation states', async ({ pa
 
   await expect(page.getByRole('heading', { name: 'Галерея', level: 1 })).toBeVisible()
   await expect(page.locator('.gallery-grid .chart-gallery-card')).toHaveCount(15)
+  for (const title of ['ИИ и закон Мура', 'География выручки ASML']) {
+    const link = page.getByRole('link', { name: `Открыть график «${title}» в полном размере` })
+    await link.scrollIntoViewIfNeeded()
+    await expect(link).toHaveAttribute('target', '_blank')
+    await expect.poll(() => link.locator('img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true)
+    await expect(link.locator('img')).toHaveCSS('object-fit', 'contain')
+  }
   const navigation = page.getByRole('navigation', { name: 'Основная навигация' })
   await expect(navigation.getByRole('link')).toHaveCount(2)
   const galleryLink = navigation.getByRole('link', { name: 'Галерея' })

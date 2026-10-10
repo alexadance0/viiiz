@@ -4,6 +4,7 @@ import type { NativeWaterfallChartScene, ResolvedNativeChartScene } from '../../
 import type { LayoutReservation } from '../../chart-layout/reservations'
 import { resolveNativeCartesianScene } from '../bar/layout'
 import { waterfallLabelPlacement } from './transform'
+import { categoryAxisFraction } from '../../chart-layout/axisLayout'
 
 export interface ResolvedWaterfallMarkGeometry { rect: { x: number; y: number; width: number; height: number }; label?: { x: number; y: number; width: number; height: number; align: 'center'; verticalAlign: 'top' | 'middle' | 'bottom'; inside: boolean } }
 export type ResolvedWaterfallScene = ResolvedNativeChartScene & { plot: NativeWaterfallChartScene['plot']; waterfallGeometry: { marks: Record<ElementId, ResolvedWaterfallMarkGeometry>; connectors: Record<string, { x1: number; y1: number; x2: number; y2: number }> } }
@@ -27,7 +28,7 @@ export function resolveNativeWaterfallScene(source: NativeWaterfallChartScene): 
   const marks: ResolvedWaterfallScene['waterfallGeometry']['marks'] = {}
   source.plot.marks.forEach((mark, index) => {
     if (mark.value == null) return
-    const width = band * Math.max(.1, Math.min(1, (mark.style.width ?? source.plot.barWidth) / 100)), x = plot.x + band * (index + .5) - width / 2
+    const width = band * Math.max(.1, Math.min(1, (mark.style.width ?? source.plot.barWidth) / 100)), x = plot.x + plot.width * categoryAxisFraction(source.plot.categories, base.plot.categoryAxis, index) - width / 2
     const startY = project(mark.start), endY = project(mark.end), rect = { x, y: Math.min(startY, endY), width, height: Math.max(1, Math.abs(startY - endY)) }
     let label: ResolvedWaterfallMarkGeometry['label']
     if (mark.label.visible) {
@@ -35,7 +36,8 @@ export function resolveNativeWaterfallScene(source: NativeWaterfallChartScene): 
       const labelHeight = Math.round(mark.label.style.size * mark.label.style.lineHeight / 100) * Math.max(1, mark.label.text.split('\n').length)
       const requested = mark.total && mark.label.position === 'bottom' ? 'top' : mark.total && mark.label.position === 'inside-bottom' ? 'inside-top' : mark.label.position ?? 'auto'
       const placement = waterfallLabelPlacement(startY, endY, width, labelWidth, labelHeight, requested, source.compatibilityConfig.waterfallLabelGap ?? 6)
-      label = { x: x + width / 2, y: placement.y, width: labelWidth + 8, height: labelHeight + 4, align: 'center', verticalAlign: placement.verticalAlign, inside: placement.inside }
+      const center = Math.max((labelWidth + 8) / 2, Math.min(x + width / 2, base.geometry.canvas.width - (labelWidth + 8) / 2))
+      label = { x: center, y: placement.y, width: labelWidth + 8, height: labelHeight + 4, align: 'center', verticalAlign: placement.verticalAlign, inside: placement.inside }
     }
     marks[mark.id] = { rect, label }
     base.geometry.elements[mark.id] = rect
@@ -51,7 +53,7 @@ export function resolveNativeWaterfallScene(source: NativeWaterfallChartScene): 
     const fromMark = source.plot.marks[index], toMark = source.plot.marks[index + 1]
     const width = (mark: typeof fromMark) => band * Math.max(.1, Math.min(1, (mark.style.width ?? source.plot.barWidth) / 100))
     const y = project(connector.value)
-    return [connector.id, { x1: plot.x + band * (index + .5) + width(fromMark) / 2, y1: y, x2: plot.x + band * (index + 1.5) - width(toMark) / 2, y2: y }]
+    return [connector.id, { x1: plot.x + plot.width * categoryAxisFraction(source.plot.categories, base.plot.categoryAxis, index) + width(fromMark) / 2, y1: y, x2: plot.x + plot.width * categoryAxisFraction(source.plot.categories, base.plot.categoryAxis, index + 1) - width(toMark) / 2, y2: y }]
   }))
   return { ...source, plot: { ...source.plot, categoryAxis: base.plot.categoryAxis, valueAxis: base.plot.valueAxis }, geometry: base.geometry, resolvedReservations: base.resolvedReservations, waterfallGeometry: { marks, connectors } }
 }

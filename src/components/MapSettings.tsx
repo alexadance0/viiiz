@@ -18,6 +18,6 @@ export function MapSettings({ config, onChange }: { config: ChartConfig; onChang
     <label>Толщина границ, px<NumberInput min="0" max="5" step="0.2" value={config.mapBorderWidth ?? .8} onValueChange={(mapBorderWidth) => patch({ mapBorderWidth })}/></label>
     {config.kind === 'map-usa' && <small className="settings-note">Аляска и Гавайи показаны отдельными вставками в изменённом масштабе.</small>}
     {config.kind === 'map-world' && <small className="settings-note">241 страна и территория. Антарктида не показана.</small>}
-    {config.kind === 'map-europe' && <small className="settings-note">Россия показана до 60° восточной долготы. В набор включены Турция, Кипр и страны Южного Кавказа.</small>}
-  </div></details><HeatmapSettings config={config} onChange={onChange}/></>
+    {config.kind === 'map-europe' && <small className="settings-note">Европейская часть России показана до Уральских гор и реки Урал. В набор включены Турция, Кипр и страны Южного Кавказа.</small>}
+  </div></details>{!config.colorEncoding && <HeatmapSettings config={config} onChange={onChange}/>}</>
 }

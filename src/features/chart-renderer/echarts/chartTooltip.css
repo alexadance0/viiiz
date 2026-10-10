@@ -1,0 +1,18 @@
+.chart-tooltip{font-family:Wix Madefor Text,sans-serif!important;font-size:10.5px!important;color:#202027!important;line-height:1.4!important}
+.chart-tooltip-content{padding:6px 8px;min-width:144px;max-width:260px;max-height:min(440px,calc(100svh - 32px));overflow:auto}
+.chart-tooltip-header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-bottom:4px;margin-bottom:2px;border-bottom:1px solid #d4d4d4}
+.chart-tooltip-header strong{font-size:12px;font-weight:700;line-height:1.3}
+.chart-tooltip-unit{font-size:10px;color:#55515e;white-space:nowrap}
+.chart-tooltip-table{width:100%;border-collapse:collapse;table-layout:auto}
+.chart-tooltip-row td{padding:1px 0;vertical-align:top;font-size:10.5px;line-height:1.35}
+.chart-tooltip-name{display:flex;align-items:baseline;gap:5px;max-width:160px;overflow-wrap:anywhere}
+.chart-tooltip-name small{display:block;font-size:10px;color:#55515e}
+.chart-tooltip-swatch{width:5px;height:5px;flex:0 0 5px;border-radius:50%;align-self:center}
+.chart-tooltip-row .chart-tooltip-value{padding-left:10px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600}
+.chart-tooltip-row.is-muted{color:#55515e}
+.chart-tooltip-row.is-muted .chart-tooltip-value{font-weight:400}
+.chart-tooltip-row[data-active=true]{background:#f3f3f3;color:#202027}
+.chart-tooltip-row[data-active=true] .chart-tooltip-name{font-weight:600}
+.chart-tooltip-row[data-active=true] .chart-tooltip-value{font-weight:700}
+
+@media(max-width:480px){.chart-tooltip-content{max-width:240px}.chart-tooltip-name{max-width:150px}}

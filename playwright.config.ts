@@ -14,6 +14,8 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
   webServer: {
+    // Concurrent dev servers must not replace each other's optimized ECharts modules.
+    env: { VITE_CACHE_DIR: 'node_modules/.vite-playwright' },
     command: 'npm run dev -- --host 127.0.0.1 --port 5175',
     url: 'http://127.0.0.1:5175',
     reuseExistingServer: process.env.PW_REUSE_SERVER === '1',

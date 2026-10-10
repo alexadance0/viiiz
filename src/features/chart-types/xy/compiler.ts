@@ -124,7 +124,7 @@ export function compileNativeXYScene(table: DataTable, config: ChartConfig): Nat
         x: coordinate(sourceX), y: sourceY, sourceX, sourceY,
         displayX: sourceX instanceof Date ? formatTimeValue(sourceX, table.timeProfiles?.[config.xField], config.dateLabelFormat) : formatXAxisNumber(sourceX, config),
         displayY: formatChartNumber(sourceY, config),
-        marker: { shape: override?.markerShape ?? style?.markerShape ?? 'circle', size, fill: config.scatterHollow ? 'transparent' : override?.markerFill ?? override?.color ?? style?.markerFill ?? color, stroke, strokeWidth: override?.markerBorderWidth ?? style?.markerBorderWidth ?? config.scatterBorderWidth ?? 1, opacity: clamp01(override?.fillOpacity ?? style?.fillOpacity ?? config.scatterOpacity ?? .78) },
+        marker: { shape: override?.markerShape ?? style?.markerShape ?? 'circle', size, fill: override?.markerFill ?? style?.markerFill ?? (config.scatterHollow ? 'transparent' : override?.color ?? color), stroke, strokeWidth: override?.markerBorderWidth ?? style?.markerBorderWidth ?? config.scatterBorderWidth ?? 1, opacity: clamp01(override?.fillOpacity ?? style?.fillOpacity ?? config.scatterOpacity ?? .78) },
         label: { visible: override?.showLabel ?? globalLabelVisible, text: override?.label || (labelField ? String(row[labelField] ?? '') : formatChartNumber(sourceY, config)), position: override?.labelPosition ?? config.scatterLabelPosition ?? 'right', style: override?.valueText ?? config.valueText, collision: 'shift-y-hide-overlap' },
         displayOrder: config.scatterOrderField && row[config.scatterOrderField] != null ? row[config.scatterOrderField] instanceof Date ? formatTimeValue(row[config.scatterOrderField] as Date, table.timeProfiles?.[config.scatterOrderField], 'day-month-year') : String(row[config.scatterOrderField]) : undefined,
         sizeValue, displaySizeValue: sizeValue == null ? undefined : formatChartNumber(sizeValue, config), colorGroup: config.scatterColorField ? group : undefined,
@@ -187,6 +187,7 @@ export function compileNativeXYScene(table: DataTable, config: ChartConfig): Nat
     const values = niceSizeGuideValue(maximumMagnitude) === minimumMagnitude ? [minimumMagnitude] : [niceSizeGuideValue(maximumMagnitude), minimumMagnitude]
     guides.push({ id: 'size-scale', kind: 'size-scale', visible: true, coordinateSpace: 'plot', position: config.scatterSizeLegendPosition ?? 'top-left', title: config.scatterSizeLegendTitle || sizeField!, items: values.map((value) => ({ value, label: formatChartNumber(value, config), diameter: encodeBubbleDiameter(value, { ...sizeRange, maximumMagnitude, missingDiameter }) })), style: config.legendText, marker: { stroke: config.legendText.color, strokeWidth: 1 } })
   }
+  xAxis.timeScale = calendarAxis
   const elements: ChartElement[] = [
     ...series.flatMap((item) => item.points.map((point): ChartElement => ({ id: point.id, role: 'mark', coordinateSpace: 'data', selectable: true, seriesId: point.seriesId, datumId: point.datumId, legacyKey: point.legacyKey }))),
     ...series.map((item): ChartElement => ({ id: `legend-item:${item.id}`, role: 'legend-item', coordinateSpace: 'canvas', selectable: true, seriesId: item.id, text: item.name })),

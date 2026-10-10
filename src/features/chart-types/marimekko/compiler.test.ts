@@ -9,6 +9,19 @@ const config: ChartConfig = { ...createDefaultChartConfig(), ...getChartPlugin('
 const source: DataTable = { name: 'markets', columns: ['Группа', 'А', 'Б'], rows: [{ Группа: 'Большая', А: 60, Б: 30 }, { Группа: 'Малая', А: 10, Б: 20 }, { Группа: 'Нулевая', А: 0, Б: null }] }
 
 describe('Marimekko', () => {
+  it('shows all series for the hovered category even when earlier zero segments are omitted', () => {
+    const table: DataTable = { ...source, rows: [{ Группа: 'Первая', А: 0, Б: 30 }, { Группа: 'Вторая', А: 10, Б: 0 }] }
+    const option = renderScene(compileMarimekkoScene(table, config)) as { series: Array<{ hoverScope: string; data: Array<{ markIndex: number }> }>; tooltip: { formatter: (input: unknown) => string } }
+    expect(option.series[0].hoverScope).toBe('series')
+    expect(option.series[0].data[0].markIndex).toBe(1)
+    const html = option.tooltip.formatter({ data: option.series[0].data[0], dataIndex: 0 })
+    expect(html).toContain('<strong>Вторая</strong>')
+    expect(html).toContain('data-series="А"')
+    expect(html).toContain('data-series="Б"')
+    expect(html).toContain('10 · 100%')
+    expect(html).toContain('0 · 0%')
+    expect(html).not.toContain('Первая')
+  })
   it('preserves volume in widths, shares in heights, and volume in every segment area', () => {
     const scene = compileMarimekkoScene(source, config)
     expect(scene.plot.categories.map((category) => category.value)).toEqual(['Большая', 'Малая'])

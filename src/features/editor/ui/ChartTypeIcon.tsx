@@ -51,7 +51,7 @@ function glyph(kind: ChartKind): ReactNode {
     case 'area': return <><path className="soft-fill" d="M4 24v-4c6-2 8-11 14-9s8 7 13-2c2-3 3-3 5-3v18z"/><path d="M4 20c6-2 8-11 14-9s8 7 13-2c2-3 3-3 5-3" fill="none"/></>
     case 'stacked-area': return <><path className="tone-3" d="M4 24V11c6-4 10-5 16-3s9-5 16-3v19z"/><path className="tone-2" d="M4 24V15c6-3 10-2 16-1s9-6 16-4v14z"/><path className="tone-1" d="M4 24v-5c6-2 10 1 16-1s10-4 16-2v8z"/></>
     case 'normalized-stacked-area': return <><path className="tone-3" d="M4 4h32v20H4z"/><path className="tone-2" d="M4 24V12c6-3 10 2 16 0s10-4 16-2v14z"/><path className="tone-1" d="M4 24v-5c6-3 10 1 16-1s10-4 16-2v8z"/></>
-    case 'stream-graph': return <><path className="tone-3" d="M4 12C12 2 22 3 36 10V15C22 8 12 7 4 15Z"/><path className="tone-2" d="M4 15C12 7 22 8 36 15V20C22 13 12 12 4 18Z"/><path className="tone-1" d="M4 18C12 12 22 13 36 20V23C22 21 12 24 4 20Z"/></>
+    case 'stream-graph': return <><path className="tone-3" d="M4 11C10 11 12 4 20 4C28 4 30 9 36 9V12C30 13 28 10 20 10C12 9 10 14 4 13Z"/><path className="tone-2" d="M4 13C10 14 12 9 20 10C28 10 30 13 36 12V16C30 16 28 17 20 17C12 18 10 16 4 15Z"/><path className="tone-1" d="M4 15C10 16 12 18 20 17C28 17 30 16 36 16V19C30 19 28 24 20 24C12 24 10 17 4 17Z"/></>
     case 'connected-scatter': return <>{line('7,21 14,16 11,9 24,5 32,12 22,18')}{dots([[7,21],[14,16],[11,9],[24,5],[32,12],[22,18]], 1.8)}</>
     case 'scatter': return <>{dots([[5,21],[9,16],[13,22],[16,11],[20,18],[24,7],[28,14],[32,4],[36,10]],1.45)}</>
     case 'bubble': return <>{dots([[7,20,3],[15,14,4.5],[25,17,2.5],[31,7,6],[36,21,2]])}</>

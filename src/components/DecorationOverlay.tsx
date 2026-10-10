@@ -2,8 +2,10 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { decorationControls, decorationSnapTargets, nearestDecorationTarget, annotationHeight, textAnchorPoint, textAnchorPositions, type DecorationPoint, type DecorationTarget } from './decorationGeometry'
 import { annotationTextHtml, sanitizeAnnotationHtml } from '../core/annotationHtml'
 import type { ChartAnnotation, ChartDecoration } from '../core/types'
+import './AnnotationText.css'
+import { readAlignmentBoxes, snapAnnotationBox, type AlignmentProps } from './annotationAlignment'
 
-interface Props {
+interface Props extends AlignmentProps {
   decoration: ChartDecoration
   annotations?: ChartAnnotation[]
   targets?: DecorationTarget[]
@@ -19,7 +21,6 @@ interface Props {
 }
 
 type DragMode = 'move' | 'start' | 'end' | 'control-first' | 'control-second' | 'nw' | 'ne' | 'sw' | 'se' | 'left' | 'right' | 'top' | 'bottom'
-const dash = (type: ChartDecoration['lineType']) => type === 'dashed' ? '8 6' : type === 'dotted' ? '2 5' : undefined
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
 export function DecorationAnchorPicker({ points, width, height, label = 'Выберите точку для стрелки', outlines, onSelect, onCancel }: { points: DecorationTarget[]; width: number; height: number; label?: string; outlines?: Array<{ id: string; x: number; y: number; width: number; height: number }>; onSelect(key: string): void; onCancel(): void }) {
@@ -33,7 +34,7 @@ export function DecorationAnchorPicker({ points, width, height, label = 'Выб�
     const x = (event.clientX - bounds.left) * width / bounds.width, y = (event.clientY - bounds.top) * height / bounds.height
     const nearest = points.reduce<DecorationTarget | null>((best, point) => !best || Math.hypot(point.x - x, point.y - y) < Math.hypot(best.x - x, best.y - y) ? point : best, null)
     if (nearest && Math.hypot(nearest.x - x, nearest.y - y) < 24) onSelect(nearest.key)
-  }}>{outlines?.map((box) => <rect key={box.id} x={box.x} y={box.y} width={box.width} height={box.height} className="annotation-anchor-outline"/>)}{points.map((point) => <g key={point.key} className="annotation-anchor-target" role="button" tabIndex={0} aria-label={point.label} onClick={(event) => { if (event.detail === 0) { event.stopPropagation(); onSelect(point.key) } }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(point.key) } }}><title>{point.label}</title><circle cx={point.x} cy={point.y} r={18} fill="transparent"/><circle className="annotation-anchor-dot" cx={point.x} cy={point.y} r={6} fill="#fff" stroke="#1923e3" strokeWidth={2} pointerEvents="none"/></g>)}</svg>
+  }}>{outlines?.map((box) => <rect key={box.id} x={box.x} y={box.y} width={box.width} height={box.height} className="annotation-anchor-outline"/>)}{points.map((point) => <g key={point.key} className="annotation-anchor-target" role="button" tabIndex={0} aria-label={point.label} onClick={(event) => { if (event.detail === 0) { event.stopPropagation(); onSelect(point.key) } }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(point.key) } }}><title>{point.label}</title><circle cx={point.x} cy={point.y} r={6} fill="transparent"/><circle className="annotation-anchor-dot" cx={point.x} cy={point.y} r={6} fill="#fff" stroke="#1923e3" strokeWidth={2} pointerEvents="none"/></g>)}</svg>
 }
 
 export function DecorationTextAnchorPicker({ annotations, heights, width, height, onSelect, onCancel }: { annotations: ChartAnnotation[]; heights: Record<string, number>; width: number; height: number; onSelect(id: string, position: DecorationPoint): void; onCancel(): void }) {
@@ -47,7 +48,7 @@ export function DecorationTextAnchorPicker({ annotations, heights, width, height
   return <DecorationAnchorPicker points={points} label="Выберите точку у текста" width={width} height={height} outlines={visible.map((annotation) => ({ ...annotation, height: annotationHeight(annotation, heights[annotation.id]) }))} onCancel={onCancel} onSelect={(key) => { const point = points.find((point) => point.key === key); if (point) onSelect(point.annotationId, { x: point.position.x, y: point.position.y }) }}/>
 }
 
-export function DecorationOverlay({ decoration, annotations = [], targets = [], annotationHeights = {}, canvasWidth, canvasHeight, plotTop, plotBottom, plotLeft, plotRight, onPickAnchor, onChange }: Props) {
+export function DecorationOverlay({ decoration, annotations = [], targets = [], annotationHeights = {}, canvasWidth, canvasHeight, plotTop, plotBottom, plotLeft, plotRight, onPickAnchor, onChange, alignmentBoxes = [], onGuidesChange }: Props) {
   const overlay = useRef<SVGSVGElement>(null)
   const [screenScale, setScreenScale] = useState(1)
   // Parent canvas transforms change on zoom; measure after every render.
@@ -78,6 +79,12 @@ export function DecorationOverlay({ decoration, annotations = [], targets = [], 
     const bounds = svg.getBoundingClientRect(), original = decoration, originalShownHeight = shownHeight
     const point = (next: PointerEvent) => ({ x: (next.clientX - bounds.left) * canvasWidth / Math.max(1, bounds.width), y: (next.clientY - bounds.top) * canvasHeight / Math.max(1, bounds.height) })
     dragCleanup.current?.()
+    const alignmentTargets = readAlignmentBoxes(svg.closest('.chart-canvas-shell'), alignmentBoxes, `decoration:${decoration.id}`)
+    const align = (box: { x: number; y: number; width: number; height: number }, next: PointerEvent, options?: Parameters<typeof snapAnnotationBox>[3]) => {
+      const snapped = next.shiftKey ? { ...box, guides: [] } : snapAnnotationBox({ ...box, id: decoration.id }, alignmentTargets, 6 * canvasWidth / Math.max(1, bounds.width), options)
+      onGuidesChange?.(snapped.guides)
+      return snapped
+    }
     const start = point(event.nativeEvent)
     let moved = false
     const endpoint = mode === 'start' || mode === 'end'
@@ -89,7 +96,8 @@ export function DecorationOverlay({ decoration, annotations = [], targets = [], 
       if (endpoint) {
         const target = next.shiftKey ? null : nearestDecorationTarget(current, snapTargets, bounds.width / canvasWidth, bounds.height / canvasHeight)
         setSnapKey(target?.key ?? null)
-        const position = target ?? { x: clamp(current.x, 0, canvasWidth), y: clamp(current.y, 0, canvasHeight) }
+        const position = target ?? align({ x: clamp(current.x, 0, canvasWidth), y: clamp(current.y, 0, canvasHeight), width: 0, height: 0 }, next, { x: original.type === 'vertical-line' ? [] : [0], y: original.type === 'horizontal-line' ? [] : [0], gaps: false })
+        if (target) onGuidesChange?.([])
         const type = target && (original.type === 'horizontal-line' || original.type === 'vertical-line') ? 'line' : original.type
         if (mode === 'start') {
           const x = type === 'vertical-line' ? original.x : position.x, y = type === 'horizontal-line' ? original.y : position.y
@@ -103,24 +111,23 @@ export function DecorationOverlay({ decoration, annotations = [], targets = [], 
         if (original.startAnchor || original.endAnchor) return
         const minX = -Math.min(0, original.width), maxX = canvasWidth - Math.max(0, original.width)
         const minY = -Math.min(0, originalShownHeight), maxY = canvasHeight - Math.max(0, originalShownHeight)
-        onChange({ ...original, x: fittedWidth ? original.x : clamp(original.x + dx, minX, maxX), y: fitted ? original.y : clamp(original.y + dy, minY, maxY) }); return
+        const x = fittedWidth ? original.x : clamp(original.x + dx, minX, maxX), y = fitted ? original.y : clamp(original.y + dy, minY, maxY)
+        const snapped = align({ x: x + Math.min(0, original.width), y: y + Math.min(0, originalShownHeight), width: Math.abs(original.width), height: Math.abs(originalShownHeight) }, next, { x: fittedWidth ? [] : undefined, y: fitted ? [] : undefined })
+        onChange({ ...original, x: fittedWidth ? original.x : clamp(snapped.x - Math.min(0, original.width), minX, maxX), y: fitted ? original.y : clamp(snapped.y - Math.min(0, originalShownHeight), minY, maxY) }); return
       }
       if (original.type === 'area') {
-        if (fitted) {
-          if (mode === 'left') { const x = clamp(original.x + dx, 0, original.x + original.width - 10); onChange({ ...original, x, width: original.width + original.x - x }) }
-          if (mode === 'right') onChange({ ...original, width: clamp(original.width + dx, 10, canvasWidth - original.x) })
-          return
-        }
-        if (fittedWidth) {
-          if (mode === 'top') { const y = clamp(original.y + dy, 0, original.y + original.height - 10); onChange({ ...original, y, height: original.height + original.y - y }) }
-          if (mode === 'bottom') onChange({ ...original, height: clamp(original.height + dy, 10, canvasHeight - original.y) })
-          return
-        }
         let x = original.x, y = original.y, width = original.width, height = original.height
-        if (mode === 'nw' || mode === 'sw') { x = clamp(original.x + dx, 0, original.x + original.width - 10); width = original.width + original.x - x }
-        if (mode === 'ne' || mode === 'se') width = clamp(original.width + dx, 10, canvasWidth - original.x)
-        if (mode === 'nw' || mode === 'ne') { y = clamp(original.y + dy, 0, original.y + original.height - 10); height = original.height + original.y - y }
-        if (mode === 'sw' || mode === 'se') height = clamp(original.height + dy, 10, canvasHeight - original.y)
+        const left = mode === 'nw' || mode === 'sw' || mode === 'left', right = mode === 'ne' || mode === 'se' || mode === 'right'
+        const top = mode === 'nw' || mode === 'ne' || mode === 'top', bottom = mode === 'sw' || mode === 'se' || mode === 'bottom'
+        if (left) { x = clamp(original.x + dx, 0, original.x + original.width - 10); width = original.width + original.x - x }
+        if (right) width = clamp(original.width + dx, 10, canvasWidth - original.x)
+        if (top) { y = clamp(original.y + dy, 0, original.y + original.height - 10); height = original.height + original.y - y }
+        if (bottom) height = clamp(original.height + dy, 10, canvasHeight - original.y)
+        const snapped = align({ x, y, width, height }, next, { x: left ? [0] : right ? [1] : [], y: top ? [0] : bottom ? [1] : [], gaps: false })
+        if (left) { x = clamp(snapped.x, 0, original.x + original.width - 10); width = original.x + original.width - x }
+        if (right) width = clamp(width + snapped.x - x, 10, canvasWidth - x)
+        if (top) { y = clamp(snapped.y, 0, original.y + original.height - 10); height = original.y + original.height - y }
+        if (bottom) height = clamp(height + snapped.y - y, 10, canvasHeight - y)
         onChange({ ...original, x, y, width, height }); return
       }
       if (mode === 'control-first' || mode === 'control-second') {
@@ -133,7 +140,7 @@ export function DecorationOverlay({ decoration, annotations = [], targets = [], 
     }
     const cleanup = () => {
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', cancel); window.removeEventListener('keydown', escape, true)
-      dragCleanup.current = null; setDraggingEnd(null); setSnapKey(null)
+      dragCleanup.current = null; setDraggingEnd(null); setSnapKey(null); onGuidesChange?.([])
     }
     const cancel = () => { onChange(original); cleanup() }
     const escape = (next: KeyboardEvent) => { if (next.key === 'Escape') { next.preventDefault(); next.stopPropagation(); cancel() } }
@@ -170,21 +177,21 @@ export function DecorationOverlay({ decoration, annotations = [], targets = [], 
     return <g className="decoration-attached-anchor" data-drag-mode={endpoint} role="button" tabIndex={0} aria-label={kind === 'text' ? 'Изменить точку у текста' : 'Изменить точку на графике'} onPointerDown={(event) => drag(event, endpoint)} onKeyDown={(event) => {
       if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onPickAnchor?.(kind, endpoint) }
       else keyboard(event, endpoint)
-    }}><title>Перетащите конец линии к тексту или точке графика. Shift — без привязки.</title><circle cx={cx} cy={cy} r={16 / screenScale} fill="transparent"/><circle cx={cx} cy={cy} r={5 / screenScale} fill="#1923e3" stroke="#fff" strokeWidth={1.5} pointerEvents="none"/></g>
+    }}><title>Перетащите конец линии к тексту или точке графика. Shift — без привязки.</title><circle cx={cx} cy={cy} r={16 / screenScale} fill="transparent"/><circle className="decoration-anchor-dot" cx={cx} cy={cy} r={3.5 / screenScale} style={{ r: 3.5 / screenScale }} fill="#fff" stroke="#202027" strokeWidth={1} pointerEvents="none"/></g>
   }
   const handle = (cx: number, cy: number, mode: DragMode, cursor = 'nwse-resize') => <g className={`decoration-handle-group ${mode.startsWith('control') ? 'decoration-curve-control' : ''}`} data-drag-mode={mode} role="button" tabIndex={0} aria-label={mode === 'control-first' ? 'Первая опорная точка изгиба' : mode === 'control-second' ? 'Вторая опорная точка изгиба' : mode === 'start' ? 'Начало линии' : mode === 'end' ? 'Конец линии' : 'Изменить размер области'} style={{ cursor }} onPointerDown={(event) => drag(event, mode)} onKeyDown={(event) => keyboard(event, mode)}>
     <title>{mode.startsWith('control') ? 'Перетащите опорную точку, чтобы изменить изгиб' : 'Перетащите конец линии. Shift — без привязки'}</title>
     <circle cx={cx} cy={cy} r={14 / screenScale} fill="transparent" className="decoration-handle-hit"/>
-    <circle className="decoration-handle" cx={cx} cy={cy} r={(mode.startsWith('control') ? 6 : 5) / screenScale} pointerEvents="none"/>
+    <circle className="decoration-handle" cx={cx} cy={cy} r={(mode.startsWith('control') ? 2.5 : 3.5) / screenScale} pointerEvents="none"/>
   </g>
   return <svg ref={overlay} className="decoration-overlay" viewBox={`0 0 ${canvasWidth} ${canvasHeight}`} aria-label="Выбранный визуальный акцент">
     {decoration.type === 'area' ? <g>
-      <rect className="decoration-selection" x={shownX} y={shownY} width={Math.max(1, shownWidth)} height={Math.max(1, shownHeight)} fill="#2020270b" stroke={selectedStroke} strokeWidth="1.5" onPointerDown={(event) => drag(event, 'move')}/>
+      <rect className="decoration-selection" x={shownX} y={shownY} width={Math.max(1, shownWidth)} height={Math.max(1, shownHeight)} fill="transparent" style={{ pointerEvents: 'all' }} stroke={selectedStroke} strokeWidth="1" strokeDasharray="4 3" onPointerDown={(event) => drag(event, 'move')}/>
       {fitted && !fittedWidth ? <>{handle(shownX, (shownY + endY) / 2, 'left', 'ew-resize')}{handle(endX, (shownY + endY) / 2, 'right', 'ew-resize')}</> : fittedWidth && !fitted ? <>{handle((shownX + endX) / 2, shownY, 'top', 'ns-resize')}{handle((shownX + endX) / 2, endY, 'bottom', 'ns-resize')}</> : !fitted && !fittedWidth ? <>{handle(shownX, shownY, 'nw')}{handle(endX, shownY, 'ne', 'nesw-resize')}{handle(shownX, endY, 'sw', 'nesw-resize')}{handle(endX, endY, 'se')}</> : null}
     </g> : <g>
       {decoration.type === 'curved-line'
-        ? <path className="decoration-selection" d={`M ${decoration.x} ${shownY} C ${controls.first.x} ${controls.first.y} ${controls.second.x} ${controls.second.y} ${endX} ${endY}`} fill="none" stroke={selectedStroke} strokeWidth={Math.max(5, decoration.lineWidth + 3)} strokeOpacity=".42" strokeDasharray={dash(decoration.lineType)} onPointerDown={(event) => drag(event, 'move')}/>
-        : <line className="decoration-selection" x1={decoration.x} y1={shownY} x2={endX} y2={endY} stroke={selectedStroke} strokeWidth={Math.max(5, decoration.lineWidth + 3)} strokeOpacity=".42" strokeDasharray={dash(decoration.lineType)} onPointerDown={(event) => drag(event, 'move')}/>} 
+        ? <path className="decoration-selection" d={`M ${decoration.x} ${shownY} C ${controls.first.x} ${controls.first.y} ${controls.second.x} ${controls.second.y} ${endX} ${endY}`} fill="none" stroke="transparent" style={{ pointerEvents: 'stroke' }} strokeWidth={Math.max(14 / screenScale, decoration.lineWidth + 10)} onPointerDown={(event) => drag(event, 'move')}/>
+        : <line className="decoration-selection" x1={decoration.x} y1={shownY} x2={endX} y2={endY} stroke="transparent" style={{ pointerEvents: 'stroke' }} strokeWidth={Math.max(14 / screenScale, decoration.lineWidth + 10)} onPointerDown={(event) => drag(event, 'move')}/>}
       {decoration.startAnchor ? anchor(decoration.x, shownY, 'start') : handle(decoration.x, shownY, 'start', 'crosshair')}{decoration.endAnchor ? anchor(endX, endY, 'end') : handle(endX, endY, 'end', 'crosshair')}
       {decoration.type === 'curved-line' && <><line x1={decoration.x} y1={shownY} x2={controls.first.x} y2={controls.first.y} className="decoration-control-guide"/><line x1={endX} y1={endY} x2={controls.second.x} y2={controls.second.y} className="decoration-control-guide"/>{handle(controls.first.x, controls.first.y, 'control-first', 'grab')}{handle(controls.second.x, controls.second.y, 'control-second', 'grab')}</>}
     </g>}

@@ -74,10 +74,12 @@ describe('native ECharts Slope adapter', () => {
   it('keeps fake hit targets out of tooltip output', () => {
     const option = renderScene(nativeSlope({ numberPrefix: '<', numberSuffix: '&' })) as unknown as RenderedSlope
     const formatter = option.tooltip.formatter
-    expect(formatter([
+    const tooltip = formatter([
       { seriesName: 'actual', data: { displayCategory: '<A>', displayValue: '<12&' } },
       { seriesName: '__hit__:actual', data: { displayCategory: '<A>', displayValue: '<12&' } },
-    ])).toBe('<b>&lt;A&gt;</b><br/>actual: <b>&lt;12&amp;</b><br/>Изменение: <b>+&lt;12&amp;</b>')
+    ])
+    expect(tooltip).toContain('<b>&lt;A&gt;</b><br/>actual: <b>&lt;12&amp;</b><br/>Изменение: <b>+&lt;12&amp;</b>')
+    expect(tooltip).not.toContain('__hit__')
   })
 
   it('renders endpoint ownership, leaders, change labels, and centered category labels as semantic graphics', () => {

@@ -45,7 +45,7 @@ export function renderWaffleScene(scene: ResolvedScene & NativeWaffleChartScene)
   const naturalLabelWidth = Math.max(0, ...labels.map((slice) => {
     const descriptionStyle = config.waffleDescriptionText ?? { ...slice.label.style, size: Math.max(6, Math.round(slice.label.style.size * .85)), weight: 400 }
     const width = (text: string, style: typeof slice.label.style) => Math.max(0, ...text.split('\n').map((line) => measureTextWidth(line, style.size, style.fontFamily, style.weight)))
-    return Math.max(width(slice.label.text, slice.label.style), width(config.seriesStyles[slice.name]?.legendNote ?? '', descriptionStyle))
+    return Math.max(slice.label.style.size * 2, width(slice.label.text, slice.label.style), width(config.seriesStyles[slice.name]?.legendNote ?? '', descriptionStyle))
   }))
   const labelWidth = labels.length && placement === 'right' ? Math.min(plot.width * .35, naturalLabelWidth + 8) : 0
   const availableWidth = Math.max(1, plot.width - labelWidth - (labelWidth ? 24 : 0))

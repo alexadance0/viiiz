@@ -1,3 +1,4 @@
+import { validateColorEncoding } from './colorEncoding'
 import { compileStreamScene, validateStreamMapping } from '../features/chart-types/stream/compiler'
 import { compileMarimekkoScene, validateMarimekkoMapping } from '../features/chart-types/marimekko/compiler'
 import { compileNativeMapScene, validateMapMapping } from '../features/chart-types/map/compiler'
@@ -59,6 +60,7 @@ const validateMapping = (table: DataTable, config: ChartConfig) => {
   if ((config.kind === 'range-line' || config.kind === 'step-range-line') && (!numeric(config.rangeLowerField) || !numeric(config.rangeUpperField) || config.rangeLowerField === config.rangeUpperField)) errors.push({ field: 'rangeFields', message: 'Выберите две разные числовые границы диапазона.' })
   if (config.kind === 'confidence-line' && !(config.intervalGroups?.some((group) => new Set([group.main, group.lower, group.upper]).size === 3 && numeric(group.main) && numeric(group.lower) && numeric(group.upper)) || config.yFields.length >= 3 && new Set(config.yFields.slice(0, 3)).size === 3 && config.yFields.slice(0, 3).every(numeric))) errors.push({ field: 'intervalGroups', message: 'Настройте три разных числовых поля: основное значение и две границы.' })
   if (config.aggregation === 'none' && repeatedChartCategories(table, config).length) errors.push({ field: 'aggregation', message: 'Для повторяющихся значений X выберите способ агрегации.' })
+  if (isNativeBarKind(config.kind)) errors.push(...validateColorEncoding(table, config))
   return { ok: errors.length === 0, errors }
 }
 
@@ -151,7 +153,7 @@ const barSettings = (id: typeof barChartDefinitions[number][0], category: ChartP
 
 const relationshipSettings: ChartPlugin['settings'] = { sections: ['series', 'annotations', 'grid', 'text', 'headings', 'axes', 'legend-values', 'credits'], series: ['color', 'markers'], features: { directLabels: false, barLayout: false, dataPreparation: false, normalizedStack: false, areaLayout: false, scatterLayout: true, distributionLayout: false, lineVariant: false } }
 const distributionSettings: ChartPlugin['settings'] = { sections: ['series', 'annotations', 'grid', 'text', 'headings', 'axes', 'legend-values', 'credits'], series: ['color', 'markers'], features: { directLabels: false, barLayout: false, dataPreparation: false, normalizedStack: false, areaLayout: false, scatterLayout: false, distributionLayout: true, lineVariant: false } }
-const heatmapSettings: ChartPlugin['settings'] = { sections: ['annotations', 'grid', 'text', 'headings', 'axes', 'legend-values', 'credits'], series: ['color'], features: { directLabels: false, barLayout: false, dataPreparation: false, normalizedStack: false, areaLayout: false, scatterLayout: false, distributionLayout: false, lineVariant: false } }
+const heatmapSettings: ChartPlugin['settings'] = { sections: ['series', 'annotations', 'grid', 'text', 'headings', 'axes', 'legend-values', 'credits'], series: ['color'], features: { directLabels: false, barLayout: false, dataPreparation: false, normalizedStack: false, areaLayout: false, scatterLayout: false, distributionLayout: false, lineVariant: false } }
 const treemapSettings: ChartPlugin['settings'] = { sections: ['series', 'annotations', 'text', 'headings', 'legend-values', 'credits'], series: ['color'], features: { directLabels: false, barLayout: false, dataPreparation: false, normalizedStack: false, areaLayout: false, scatterLayout: false, distributionLayout: false, lineVariant: false } }
 
 const descriptors: Descriptor[] = [
@@ -161,7 +163,7 @@ const descriptors: Descriptor[] = [
   ...lineChartDefinitions.map(([id, label]) => ({ id, label, category: 'trend' as const, settings: lineSettings(id), ...(id === 'bump' ? { defaultConfig: { kind: id, bumpMode: 'value' as const, bumpShowStartLabels: false, showDirectLabels: true, showLegend: false } } : {}) })),
   ...smoothingChartDefinitions.map(([id, label]) => ({ id, label, category: 'smoothing' as const, settings: genericSettings(id, 'smoothing') })),
   ...intervalChartDefinitions.map(([id, label]) => ({ id, label, category: 'trend' as const, settings: { ...genericSettings('line', 'trend'), features: { ...genericSettings('line', 'trend').features, lineVariant: true } } })),
-  { id: 'stream-graph', label: 'Stream Graph', category: 'area', defaultConfig: { kind: 'stream-graph', aggregation: 'sum', missingMode: 'zero', areaFillOpacity: .85, showLegend: true, showYAxisLabels: false, showYAxisLine: false, showYTicks: false, showYAxisTitle: false, showHorizontalGrid: false, showZeroLine: false, yAxisScaleType: 'linear' }, settings: { ...genericSettings('stream-graph', 'area'), features: { ...genericSettings('stream-graph', 'area').features, lineVariant: true } } },
+  { id: 'stream-graph', label: 'Stream Graph', category: 'area', defaultConfig: { kind: 'stream-graph', aggregation: 'sum', missingMode: 'zero', streamBaseline: 'centered', areaFillOpacity: .85, showLegend: false, showDirectLabels: true, showYAxisLabels: false, showYAxisLine: false, showYTicks: false, showYAxisTitle: false, showHorizontalGrid: false, showZeroLine: false, yAxisScaleType: 'linear' }, settings: { ...genericSettings('stream-graph', 'area'), features: { ...genericSettings('stream-graph', 'area').features, lineVariant: true } } },
   ...areaChartDefinitions.map(([id, label]) => ({ id, label, category: 'area' as const, settings: genericSettings(id, 'area') })),
   ...relationshipChartDefinitions.map(([id, label]) => ({ id, label, category: 'relationship' as const, settings: relationshipSettings, ...(id === 'connected-scatter' ? { defaultConfig: { kind: id, aggregation: 'none' as const, missingMode: 'gap' as const, scatterOrderDirection: 'asc' as const } } : {}) })),
   ...distributionChartDefinitions.map(([id, label]) => ({ id, label, category: 'distribution' as const, settings: distributionSettings })),

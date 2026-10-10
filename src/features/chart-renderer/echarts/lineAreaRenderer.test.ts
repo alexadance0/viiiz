@@ -19,6 +19,14 @@ function resolve(kind: 'bar' | 'line' | 'area', categories: Array<string | Date>
 }
 
 describe('native ECharts line and area adapter', () => {
+  it('keeps spline tangents natural instead of horizontal at every sample', () => {
+    const fixture = lineAreaFixtures[0]
+    const option = renderScene(getChartPlugin('spline').compile(fixture.table, { ...fixture.config, kind: 'spline' })) as { series: Array<{ type: string; smooth?: number; smoothMonotone?: string }> }
+    for (const series of option.series.filter((item) => item.type === 'line')) {
+      expect(series.smooth).toBe(.45)
+      expect(series.smoothMonotone).toBeUndefined()
+    }
+  })
   it.each([...NATIVE_LINE_KINDS, ...NATIVE_AREA_KINDS])('%s never reaches the legacy builder', (kind) => {
     const fixture = lineAreaFixtures[10]
     const table = kind === 'seasonal-line' ? { ...fixture.table, rows: [...fixture.table.rows, ...fixture.table.rows.map((row) => ({ ...row, period: new Date((row.period as Date).getFullYear() + 1, (row.period as Date).getMonth(), 1) }))] } : fixture.table

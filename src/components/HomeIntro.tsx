@@ -9,7 +9,7 @@ const afterLayout = () => new Promise<void>((resolve) => requestAnimationFrame((
 
 async function waitForPageAssets() {
   await afterLayout()
-  const images = [...document.images]
+  const images = [...document.images].filter((image) => image.loading !== 'lazy')
   await Promise.all(images.map((image) => image.complete
     ? image.naturalWidth && image.decode ? image.decode().catch(() => undefined) : Promise.resolve()
     : new Promise<void>((resolve) => {

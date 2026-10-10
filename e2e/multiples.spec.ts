@@ -55,7 +55,7 @@ test('category spacing gives taller rows to longer groups and keeps preview and 
   const toggle = page.locator('.multiples-layout .settings-checkbox').filter({ hasText: 'Одинаковая высота столбцов и интервалы' })
   await toggle.click()
   const expectEqualBars = () => expect.poll(async () => {
-    const heights = await page.locator('.multiples-cell svg path[fill="#0072b2"]').evaluateAll((paths) => paths.map((path) => path.getBoundingClientRect().height))
+    const heights = await page.locator('.multiples-cell svg path[fill="#9e0142"]').evaluateAll((paths) => paths.map((path) => path.getBoundingClientRect().height))
     return heights.length === 6 && heights.every((height) => height > 0 && Math.abs(height - heights[0]) < 1)
   }).toBe(true)
   await expectEqualBars()
@@ -98,6 +98,7 @@ for (const scenario of [
   await page.getByText('Общие шкалы и категории', { exact: true }).click()
   await page.locator('.multiples-shared .settings-checkbox').filter({ hasText: /^Общая шкала значений$/ }).click()
   await page.locator('.multiples-shared').getByLabel('Максимум', { exact: true }).fill('100')
+  await page.locator('.multiples-shared').getByLabel('Шаг', { exact: true }).fill('20')
   const labels = page.locator('.multiples-cell svg text').filter({ hasText: /^100$/ })
   const selector = page.getByRole('combobox', { name: 'Подписи общих шкал', exact: true })
   await selector.selectOption('all')
@@ -174,7 +175,7 @@ test('shared bar scale, one category rail and a composition font stay proportion
   await expect(page.locator('.multiples-category-label')).toHaveCount(3)
   for (const chart of await page.locator('.multiples-cell .chart-canvas-shell').all()) await expect(chart).toHaveAttribute('data-render-status', 'settled')
   await expect.poll(async () => {
-    const widths = await page.locator('.multiples-cell').evaluateAll((cells) => cells.map((cell) => (cell.querySelector('svg path[fill="#0072b2"]') as SVGGraphicsElement | null)?.getBBox().width ?? 0))
+    const widths = await page.locator('.multiples-cell').evaluateAll((cells) => cells.map((cell) => (cell.querySelector('svg path[fill="#9e0142"]') as SVGGraphicsElement | null)?.getBBox().width ?? 0))
     return widths.length === 3 && widths.every((width) => width > 0)
       && Math.abs(widths[0] / widths[1] - 2) < 0.05
       && Math.abs(widths[2] / widths[0] - 1.5) < 0.05

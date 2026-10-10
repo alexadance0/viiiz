@@ -29,7 +29,7 @@ function normalizedDomain(values: number[], config: ChartConfig) {
 
 export function compileNativeHeatmapScene(table: DataTable, sourceConfig: ChartConfig): NativeHeatmapChartScene {
   if (sourceConfig.kind !== 'heatmap') throw new Error(`Native heatmap compiler cannot compile ${sourceConfig.kind}.`)
-  const base = compileNativeBarScene(table, { ...sourceConfig, kind: 'bar', barOrientation: 'vertical', seriesField: '', showLegend: false, showDirectLabels: false })
+  const base = compileNativeBarScene(table, { ...sourceConfig, colorEncoding: undefined, kind: 'bar', barOrientation: 'vertical', seriesField: '', showLegend: false, showDirectLabels: false })
   const values = base.plot.categories.map((item) => item.value)
   const planned = categoryLabelPlan(values, planCategoryDateLabels(values, table, sourceConfig), sourceConfig).labels
   const categories = base.plot.categories.map((category, index) => ({ ...category, label: planned[index] ?? category.label }))
@@ -55,7 +55,7 @@ export function compileNativeHeatmapScene(table: DataTable, sourceConfig: ChartC
     sourceKey: series.name,
     name: sourceConfig.categoryLabelOverrides?.y?.[series.name] ?? series.name,
     cells: series.marks.map((mark, columnIndex): HeatmapCellScene => {
-      const fill = mark.value == null ? missingColor : color(mark.value)
+      const fill = mark.value == null ? missingColor : sourceConfig.seriesStyles[series.name]?.color ?? color(mark.value)
       return { id: mark.id, datumId: mark.datumId, seriesId: mark.seriesId, legacyKey: mark.legacyKey, rowIndex, columnIndex, value: mark.value, displayCategory: `${categories[columnIndex]?.label ?? ''} · ${series.name}`, displayValue: mark.value == null ? missingLabel : formatChartNumber(mark.value, sourceConfig), color: sourceConfig.elementStyles[mark.legacyKey]?.color ?? fill, label: { visible: sourceConfig.elementStyles[mark.legacyKey]?.showLabel ?? sourceConfig.showValues, text: sourceConfig.elementStyles[mark.legacyKey]?.label || (mark.value == null ? missingLabel : formatChartNumber(mark.value, sourceConfig)), style: sourceConfig.elementStyles[mark.legacyKey]?.valueText ?? sourceConfig.valueText, color: sourceConfig.valueLabelAutoContrast ?? true ? contrastText(sourceConfig.elementStyles[mark.legacyKey]?.color ?? fill) : sourceConfig.valueText.color } }
     }),
   }))

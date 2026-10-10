@@ -11,7 +11,7 @@ interface Props { config: ChartConfig; numericColumns?: string[]; table: DataTab
 export function LineVariantSettings({ config, numericColumns = config.yFields, table, onChange }: Props) {
   const patch = (values: Partial<ChartConfig>) => onChange({ ...config, ...values })
   if (config.kind === 'stream-graph') return <details className="settings-group line-variant-settings" open><summary>Компоновка потоков</summary><div>
-    <label>Базовая линия<select value={config.streamBaseline ?? 'wiggle'} onChange={(event) => patch({ streamBaseline: event.target.value as ChartConfig['streamBaseline'] })}><option value="wiggle">Минимум колебаний</option><option value="centered">Симметрично относительно центра</option></select></label>
+    <label>Базовая линия<select value={config.streamBaseline ?? 'centered'} onChange={(event) => patch({ streamBaseline: event.target.value as ChartConfig['streamBaseline'] })}><option value="centered">Симметрично относительно центра</option><option value="wiggle">Минимум колебаний</option></select></label>
     <label>Порядок потоков<select value={config.streamOrder ?? 'inside-out'} onChange={(event) => patch({ streamOrder: event.target.value as ChartConfig['streamOrder'], ...(event.target.value === 'inside-out' ? { seriesOrder: [] } : {}) })}><option value="inside-out">От центра к краям</option><option value="data">Как в данных</option></select></label>
     <SettingsCheckbox isSelected={config.streamSmooth ?? true} onChange={(streamSmooth) => patch({ streamSmooth })}>Плавные границы потоков</SettingsCheckbox>
     <small>Толщина ленты показывает значение. Положение по вертикали задаёт компоновка. Используйте неотрицательные значения.</small>
@@ -48,7 +48,6 @@ export function LineVariantSettings({ config, numericColumns = config.yFields, t
     </div></details>
   }
   if (config.kind === 'slope') return <details className="settings-group line-variant-settings"><summary>Наклонный график</summary><div>
-    <SettingsCheckbox isSelected={config.slopeShowValues ?? true} onChange={(slopeShowValues) => patch({ slopeShowValues })}>Подписывать значения</SettingsCheckbox>
     <SettingsCheckbox isSelected={config.slopeShowSeriesNames ?? true} onChange={(slopeShowSeriesNames) => patch({ slopeShowSeriesNames })}>Подписывать названия рядов справа</SettingsCheckbox>
     <SettingsCheckbox isSelected={config.slopeShowYAxis ?? false} onChange={(slopeShowYAxis) => patch({ slopeShowYAxis, ...(slopeShowYAxis ? { showHorizontalGrid: true } : {}) })}>Показывать подписи шкалы Y</SettingsCheckbox>
     <small className="settings-note">Значения показываются у обеих точек ряда. Их формат и шрифт настраиваются в разделе «Подписи значений».</small>

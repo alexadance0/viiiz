@@ -10,11 +10,11 @@ export const textAnchorPositions = [
 ] as const
 
 export function textAnchorPoint(annotation: ChartAnnotation, position: DecorationPoint, height: number) {
-  return { x: annotation.x + annotation.width * position.x + (position.x * 2 - 1) * 6, y: annotation.y + height * position.y + (position.y * 2 - 1) * 6 }
+  return { x: annotation.x + annotation.width * position.x + (position.x * 2 - 1), y: annotation.y + height * position.y + (position.y * 2 - 1) }
 }
 
 export function annotationHeight(annotation: ChartAnnotation, measured?: number) {
-  return measured ?? annotation.height ?? Math.max(42, annotation.fontSize * 1.35 + 20)
+  return measured ?? annotation.fontSize * 1.35 + 6
 }
 
 export interface DecorationSnapTarget extends DecorationTarget { anchor: DecorationAnchor }
@@ -47,7 +47,7 @@ export function resolveDecoration(decoration: ChartDecoration, annotations: Char
       const dx = opposite.x - center.x, dy = opposite.y - center.y
       side = Math.abs(dx) / annotation.width > Math.abs(dy) / height ? dx < 0 ? 'left' : 'right' : dy < 0 ? 'top' : 'bottom'
     }
-    return anchor.position ? textAnchorPoint(annotation, anchor.position, height) : side === 'left' ? { x: annotation.x - 6, y: center.y } : side === 'right' ? { x: annotation.x + annotation.width + 6, y: center.y } : side === 'top' ? { x: center.x, y: annotation.y - 6 } : { x: center.x, y: annotation.y + height + 6 }
+    return anchor.position ? textAnchorPoint(annotation, anchor.position, height) : side === 'left' ? { x: annotation.x - 1, y: center.y } : side === 'right' ? { x: annotation.x + annotation.width + 1, y: center.y } : side === 'top' ? { x: center.x, y: annotation.y - 1 } : { x: center.x, y: annotation.y + height + 1 }
   }
   const initialStart = { x: decoration.x, y: decoration.y }, initialEnd = { x: decoration.x + decoration.width, y: decoration.y + decoration.height }
   const end = resolve(decoration.endAnchor, initialEnd, initialStart)

@@ -1,20 +1,32 @@
+import { seriesTooltip } from './chartTooltip'
+import { layoutColorScale } from '../../chart-layout/guides/colorScale'
+import { renderColorScale } from './renderColorScale'
+import { missingDecal, renderColorLegend } from './renderColorLegend'
 import { contrastText } from '../../../core/color'
 import { legendLabelText } from '../../chart-layout/legendLayout'
 import { formatXAxisNumber, formatYAxisNumber } from '../../../core/numberFormat'
 import { absorbedBarLabelPlacement, barSeriesGeometry, denseValueLabelStride, showDenseValueLabel, valueLabelAlignment, valueLabelPosition } from '../../../core/chartLabels'
 import { measureTextWidth, wrapMeasuredText } from '../../../core/textMetrics'
+import { formatDateLabel, moveDateContextToVisibleLabels, stackedContextFormat } from '../../../core/chartDateAxis'
+import { layoutText, plainTextDocument } from '../../chart-layout/textLayout'
 import type { ChartTextStyle } from '../../../core/types'
 import type { CartesianBarPlotScene, NativeChartScene, ResolvedSceneGeometry } from '../../../entities/chart/model/ChartScene'
 import type { ResolvedReservation } from '../../chart-layout/reservations'
 import { horizontalCategoryLabelPlacement, verticalAxisLabelPlacement, reservedAxisLabelGap } from '../../chart-layout/axisLabelPlacement'
 import type { ResolvedComparisonStemScene } from '../../chart-types/comparison-stem/layout'
+import { renderTimeAxis } from './renderTimeAxis'
 
 export type ResolvedNativeBarScene = NativeChartScene & { plot: CartesianBarPlotScene; geometry: ResolvedSceneGeometry; resolvedReservations: ResolvedReservation[] }
 export const nativeTextStyle = (style: ChartTextStyle) => ({ color: style.color, fontFamily: style.fontFamily, fontSize: style.size, fontWeight: style.weight, fontStyle: style.italic ? 'italic' : 'normal', lineHeight: Math.round(style.size * style.lineHeight / 100), align: style.align })
 export const nativeGraphicTextStyle = (style: ChartTextStyle) => { const { color, ...rest } = nativeTextStyle(style); return { ...rest, fill: color } }
 const textStyle = nativeTextStyle
 const graphicTextStyle = nativeGraphicTextStyle
-const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!)
+
+const categoryCoordinate = (scene: ResolvedNativeBarScene, index: number) => scene.plot.categoryAxis.timeScale ? scene.plot.categories[index]?.value instanceof Date ? Number(scene.plot.categories[index].value) : scene.plot.categoryAxis.timeScale.max : index
+const categoryBand = (scene: ResolvedNativeBarScene) => {
+  const length = scene.plot.orientation === 'horizontal' ? scene.geometry.plot.height : scene.geometry.plot.width
+  return length / Math.max(1, scene.plot.categories.length)
+}
 
 function customBarSeries(scene: ResolvedNativeBarScene) {
   const config = scene.compatibilityConfig
@@ -26,18 +38,19 @@ function customBarSeries(scene: ResolvedNativeBarScene) {
       return Math.sign(value) === Math.sign(mark.value!) ? sum + value : sum
     }, 0) : 0
     return [{
-      name: `__native-bar:${series.name}:${mark.categoryIndex}`, type: 'custom', coordinateSystem: 'cartesian2d', customBarOf: series.name, silent: false, z: 4,
-      data: [{ id: mark.id, value: [mark.categoryIndex, mark.value], elementId: mark.id, datumId: mark.datumId, seriesId: mark.seriesId, elementKey: mark.legacyKey, sourceSeriesName: series.name, displayValue: mark.displayValue, displayCategory: mark.displayCategory, displayColor: mark.style.color, itemStyle: { color: mark.style.color, opacity: mark.style.opacity, borderColor: mark.style.borderColor, borderWidth: mark.style.borderWidth } }],
+      name: `__native-bar:${series.name}:${mark.categoryIndex}`, type: 'custom', coordinateSystem: 'cartesian2d', customBarOf: series.name, hoverScope: 'series', silent: false, z: 4,
+      encode: { x: scene.plot.orientation === 'horizontal' ? 1 : 0, y: scene.plot.orientation === 'horizontal' ? 0 : 1 },
+      data: [{ id: mark.id, value: [categoryCoordinate(scene, mark.categoryIndex), mark.value], elementId: mark.id, datumId: mark.datumId, seriesId: mark.seriesId, elementKey: mark.legacyKey, sourceSeriesName: series.name, displayValue: mark.displayValue, colorLabel: mark.colorLabel, displayCategory: mark.displayCategory, displayColor: mark.style.color, itemStyle: { color: mark.style.color, opacity: mark.style.opacity, borderColor: mark.style.borderColor, borderWidth: mark.style.borderWidth } }],
       renderItem: (_params: unknown, api: { value(index: number): number; coord(value: [number, number]): [number, number]; size(value: [number, number]): [number, number] }) => {
         const categoryIndex = api.value(0), value = api.value(1)
         const start = api.coord(scene.plot.orientation === 'horizontal' ? [previous, categoryIndex] : [categoryIndex, previous])
         const end = api.coord(scene.plot.orientation === 'horizontal' ? [previous + value, categoryIndex] : [categoryIndex, previous + value])
-        const band = Math.abs(api.size(scene.plot.orientation === 'horizontal' ? [0, 1] : [1, 0])[scene.plot.orientation === 'horizontal' ? 1 : 0])
+        const band = scene.plot.categoryAxis.timeScale ? categoryBand(scene) : Math.abs(api.size(scene.plot.orientation === 'horizontal' ? [0, 1] : [1, 0])[scene.plot.orientation === 'horizontal' ? 1 : 0])
         const geometry = barSeriesGeometry(band, { ...config, barWidth: mark.style.width ?? scene.plot.barWidth }, scene.plot.series.length, seriesIndex, stacked)
         const shape = scene.plot.orientation === 'horizontal'
           ? { x: Math.min(start[0], end[0]), y: end[1] + geometry.offset - geometry.width / 2, width: Math.abs(end[0] - start[0]), height: geometry.width, r: mark.style.borderRadius }
           : { x: end[0] + geometry.offset - geometry.width / 2, y: Math.min(start[1], end[1]), width: geometry.width, height: Math.abs(end[1] - start[1]), r: mark.style.borderRadius }
-        return { type: 'rect', info: { elementId: mark.id, datumId: mark.datumId, seriesId: mark.seriesId, elementKey: mark.legacyKey, sourceSeriesName: series.name, displayValue: mark.displayValue, displayCategory: mark.displayCategory, displayColor: mark.style.color }, shape, style: { fill: mark.style.color, opacity: mark.style.opacity, stroke: mark.style.borderColor, lineWidth: mark.style.borderWidth } }
+        return { type: 'rect', info: { elementId: mark.id, datumId: mark.datumId, seriesId: mark.seriesId, elementKey: mark.legacyKey, sourceSeriesName: series.name, displayValue: mark.displayValue, colorLabel: mark.colorLabel, displayCategory: mark.displayCategory, displayColor: mark.style.color }, shape, style: { fill: mark.style.color, decal: missingDecal(mark.style.pattern), opacity: mark.style.opacity, stroke: mark.style.borderColor, lineWidth: mark.style.borderWidth } }
       },
     }]
   }))
@@ -53,18 +66,20 @@ function absorbedLabelSeries(scene: ResolvedNativeBarScene) {
     const maximumLabelWidth = Math.max(...marks.map((mark) => measureTextWidth(mark.label.text, mark.label.style.size, mark.label.style.fontFamily, mark.label.style.weight)))
     const maximumLabelHeight = Math.max(...marks.map((mark) => Math.round(mark.label.style.size * mark.label.style.lineHeight / 100)))
     return [{
-      name: `__bar-value-labels:${series.name}`, customBarOf: series.name, type: 'custom', coordinateSystem: 'cartesian2d', silent: true, tooltip: { show: false }, clip: false, z: 20,
-      data: marks.map((mark) => ({ value: [mark.categoryIndex, mark.value], elementId: mark.id, elementKey: mark.legacyKey, sourceSeriesName: series.name, displayValue: mark.displayValue, displayCategory: mark.displayCategory })),
+      name: `__bar-value-labels:${series.name}`, customBarOf: series.name, hoverScope: 'series', type: 'custom', coordinateSystem: 'cartesian2d', silent: true, tooltip: { show: false }, clip: false, z: 20,
+      encode: { x: horizontal ? 1 : 0, y: horizontal ? 0 : 1 },
+      data: marks.map((mark) => ({ value: [categoryCoordinate(scene, mark.categoryIndex), mark.value, mark.categoryIndex], elementId: mark.id, elementKey: mark.legacyKey, sourceSeriesName: series.name, displayValue: mark.displayValue, colorLabel: mark.colorLabel, displayCategory: mark.displayCategory })),
       renderItem: (_params: unknown, api: { value(index: number): number; coord(value: [number, number]): [number, number]; size(value: [number, number]): [number, number] }) => {
-        const categoryIndex = api.value(0), value = api.value(1), mark = series.marks[categoryIndex]
+        const categoryIndex = scene.plot.categoryAxis.timeScale ? api.value(2) : api.value(0), value = api.value(1), mark = series.marks[categoryIndex]
         if (!mark) return null
         const previous = stacked ? scene.plot.series.slice(0, seriesIndex).reduce((sum, candidate) => {
           const part = candidate.marks[categoryIndex]?.value ?? 0
           return Math.sign(part) === Math.sign(value) ? sum + part : sum
         }, 0) : 0
-        const start = api.coord(horizontal ? [previous, categoryIndex] : [categoryIndex, previous])
-        const end = api.coord(horizontal ? [previous + value, categoryIndex] : [categoryIndex, previous + value])
-        const band = Math.abs(api.size(horizontal ? [0, 1] : [1, 0])[horizontal ? 1 : 0])
+        const coordinate = categoryCoordinate(scene, categoryIndex)
+        const start = api.coord(horizontal ? [previous, coordinate] : [coordinate, previous])
+        const end = api.coord(horizontal ? [previous + value, coordinate] : [coordinate, previous + value])
+        const band = scene.plot.categoryAxis.timeScale ? categoryBand(scene) : Math.abs(api.size(horizontal ? [0, 1] : [1, 0])[horizontal ? 1 : 0])
         const geometry = barSeriesGeometry(band, { ...config, barWidth: mark.style.width ?? scene.plot.barWidth }, scene.plot.series.length, seriesIndex, stacked)
         const category = end[horizontal ? 1 : 0] + geometry.offset
         const width = Math.max(...mark.label.text.split('\n').map((line) => measureTextWidth(line, mark.label.style.size, mark.label.style.fontFamily, mark.label.style.weight)))
@@ -72,7 +87,7 @@ function absorbedLabelSeries(scene: ResolvedNativeBarScene) {
         const stride = denseValueLabelStride(horizontal, band, maximumLabelWidth, maximumLabelHeight, config.valueLabelHideOverlap ?? false)
         if (!showDenseValueLabel(categoryIndex, scene.plot.categories.length, stride)) return null
         const placement = absorbedBarLabelPlacement(horizontal, start[horizontal ? 0 : 1], end[horizontal ? 0 : 1], category, width, height, config.barValueLabelAbsorptionPadding ?? 10, config.barValueLabelInsidePosition ?? 'end', config.barValueLabelOutsidePosition ?? 'end', geometry.width)
-        return { type: 'text', info: { elementId: mark.id, datumId: mark.datumId, seriesId: mark.seriesId, elementKey: mark.legacyKey, sourceSeriesName: series.name, displayValue: mark.displayValue, displayCategory: mark.displayCategory, displayColor: mark.style.color }, style: { x: placement.x, y: placement.y, text: mark.label.text, ...graphicTextStyle(mark.label.style), fill: placement.inside && mark.label.autoContrast ? contrastText(mark.style.color, 4.5, mark.style.opacity, config.canvasBackground) : mark.label.style.color, align: placement.align, verticalAlign: placement.verticalAlign } }
+        return { type: 'text', info: { elementId: mark.id, datumId: mark.datumId, seriesId: mark.seriesId, elementKey: mark.legacyKey, sourceSeriesName: series.name, displayValue: mark.displayValue, colorLabel: mark.colorLabel, displayCategory: mark.displayCategory, displayColor: mark.style.color }, style: { x: placement.x, y: placement.y, text: mark.label.text, ...graphicTextStyle(mark.label.style), fill: placement.inside && mark.label.autoContrast ? contrastText(mark.style.color, 4.5, mark.style.opacity, config.canvasBackground) : mark.label.style.color, align: placement.align, verticalAlign: placement.verticalAlign } }
       },
     }]
   })
@@ -92,12 +107,14 @@ function directLabelSeries(scene: ResolvedNativeBarScene) {
       const value = candidate.marks[index]?.value ?? 0
       return Math.sign(value) === Math.sign(mark.value!) ? sum + value : sum
     }, 0)
-    const data = { value: [index, (previous + (scene.plot.stacking === 'none' ? mark.value : previous + mark.value)) / 2], elementId: mark.id, elementKey: mark.legacyKey, sourceSeriesName: series.name, directLegendLabel: true, selectionTarget: 'guide' }
+    const data = { value: [categoryCoordinate(scene, index), (previous + (scene.plot.stacking === 'none' ? mark.value : previous + mark.value)) / 2], elementId: mark.id, elementKey: mark.legacyKey, sourceSeriesName: series.name, directLegendLabel: true, selectionTarget: 'guide' }
     return [{
-      name: `__bar-direct-label:${series.name}`, customBarOf: series.name, type: 'custom', coordinateSystem: 'cartesian2d', clip: false, z: 30, tooltip: { show: false }, data: [data],
+      name: `__bar-direct-label:${series.name}`, customBarOf: series.name, hoverScope: 'series', type: 'custom', coordinateSystem: 'cartesian2d', clip: false, z: 30, tooltip: { show: false }, data: [data],
+      encode: { x: horizontal ? 1 : 0, y: horizontal ? 0 : 1 },
       renderItem: (_params: unknown, api: { coord(value: [number, number]): [number, number]; size(value: [number, number]): [number, number] }) => {
-        const anchor = api.coord(horizontal ? [data.value[1], index] : [index, data.value[1]])
-        const band = Math.abs(api.size(horizontal ? [0, 1] : [1, 0])[horizontal ? 1 : 0])
+        const coordinate = categoryCoordinate(scene, index)
+        const anchor = api.coord(horizontal ? [data.value[1], coordinate] : [coordinate, data.value[1]])
+        const band = scene.plot.categoryAxis.timeScale ? categoryBand(scene) : Math.abs(api.size(horizontal ? [0, 1] : [1, 0])[horizontal ? 1 : 0])
         const geometry = barSeriesGeometry(band, { ...config, barWidth: mark.style.width ?? scene.plot.barWidth }, scene.plot.series.length, seriesIndex, scene.plot.stacking !== 'none')
         const gap = config.directLabelGap ?? 14
         const left = guide.side === 'left'
@@ -121,7 +138,7 @@ function valueEdgeAffixSeries(scene: ResolvedNativeBarScene) {
   const style = config.yAxisLabelText ?? config.axisLabelText
   return [{
     name: '__y-axis-edge-affixes', type: 'custom', coordinateSystem: 'cartesian2d', silent: true, tooltip: { show: false }, clip: false, z: 100,
-    data: positions.map(([position, value]) => [0, value, position === 'first' ? 0 : 1]),
+    data: positions.map(([position, value]) => [categoryCoordinate(scene, 0), value, position === 'first' ? 0 : 1]),
     renderItem: (params: { coordSys: { x: number; width: number } }, api: { value(index: number): number; coord(value: [number, number]): [number, number] }) => {
       const value = Number(api.value(1)), position = api.value(2) === 0 ? 'first' : 'last'
       const bare = formatYAxisNumber(value, { ...config, numberPrefix: '', numberSuffix: '', yAxisAffixScope: 'all' })
@@ -130,7 +147,7 @@ function valueEdgeAffixSeries(scene: ResolvedNativeBarScene) {
       const bareWidth = measureTextWidth(bare, style.size, style.fontFamily, style.weight) + measureTextWidth(prefix, style.size, style.fontFamily, style.weight)
       const left = config.yAxisPosition === 'left'
       const edge = left ? params.coordSys.x - (config.yAxisLabelGap ?? 8) : params.coordSys.x + params.coordSys.width + (config.yAxisLabelGap ?? 8)
-      return { type: 'text', style: { x: left ? edge - bareWidth : edge + bareWidth, y: api.coord([0, value])[1], text: label, ...graphicTextStyle(style), align: left ? 'left' : 'right', verticalAlign: 'middle', backgroundColor: config.canvasBackground, padding: left ? [1, 3, 1, 0] : [1, 0, 1, 3] } }
+      return { type: 'text', style: { x: left ? edge - bareWidth : edge + bareWidth, y: api.coord([categoryCoordinate(scene, 0), value])[1], text: label, ...graphicTextStyle(style), align: left ? 'left' : 'right', verticalAlign: 'middle', backgroundColor: config.canvasBackground, padding: left ? [1, 3, 1, 0] : [1, 0, 1, 3] } }
     },
   }]
 }
@@ -165,13 +182,36 @@ function categoryGridGraphics(scene: ResolvedNativeBarScene) {
 
 export function calendarCategoryGraphics(scene: ResolvedCartesianAxisScene) {
   const axis = scene.plot.categoryAxis, config = scene.compatibilityConfig, plot = scene.geometry.plot
-  if (!axis.calendarTicks) return []
+  if (!axis.calendarTicks || axis.timeScale) return []
   const horizontal = axis.orientation === 'horizontal', side = axis.placement.kind === 'side' ? axis.placement.side : horizontal ? 'bottom' : 'left'
   const rotation = axis.labels.rotation ?? 0, count = Math.max(1, scene.plot.categories.length)
   const grid = horizontal ? config.showVerticalGrid : config.showHorizontalGrid
   const dash = (type: string) => type === 'dashed' ? [6, 4] : type === 'dotted' ? [2, 3] : undefined
   const vertical = verticalAxisLabelPlacement(side as 'left' | 'right', axis.labels.size, reservedAxisLabelGap(axis, plot, scene.geometry.axes.category), axis.ticks.visible ? axis.ticks.length : 0, config.categoryAxisLabelAlignment)
-  return axis.calendarTicks.flatMap((tick) => {
+  // Calendar intervals can occupy just a few pixels on an observation-based axis.
+  // Keep the first and last marks when they fit, then fill the space between them.
+  const bounds = axis.calendarTicks.map((tick) => {
+    const center = (horizontal ? plot.width : plot.height) * (tick.position + .5) / count
+    const override = config.categoryLabelOverrides?.x?.[new Date(tick.value).toISOString()]
+    const label = override ?? (stackedContextFormat(config.dateLabelFormat) ? formatDateLabel(new Date(tick.value), undefined, config.dateLabelFormat, true) : tick.label)
+    const size = layoutText({ document: plainTextDocument(label, axis.labels.style), maxWidth: plot.width, rotation, wrap: false, breakWords: false }).rotatedSize
+    const half = horizontal ? size.width / (rotation ? 1 : 2) : size.height / 2
+    return { start: center - half, end: center + half }
+  })
+  const visible = new Set<number>()
+  const last = bounds.length - 1
+  if (bounds.length) visible.add(0)
+  if (last > 0 && bounds[last].start >= bounds[0].end + 8) visible.add(last)
+  let end = bounds[0]?.end ?? -Infinity
+  bounds.forEach((bound, index) => {
+    if (index === 0 || index === last || bound.start < end + 8 || visible.has(last) && bound.end + 8 > bounds[last].start) return
+    visible.add(index)
+    end = bound.end
+  })
+  const dates = axis.calendarTicks.map((tick) => new Date(tick.value))
+  const labels = moveDateContextToVisibleLabels(axis.calendarTicks.map((tick) => tick.label), dates, config.dateLabelFormat, (index) => visible.has(index))
+    .map((label, index) => config.categoryLabelOverrides?.x?.[dates[index].toISOString()] ?? label)
+  return axis.calendarTicks.flatMap((tick, index) => {
     const fraction = (tick.position + .5) / count
     const coordinate = horizontal ? plot.x + plot.width * fraction : plot.y + plot.height * ((config.categoryAxisInverse ?? true) ? fraction : 1 - fraction)
     const edge = horizontal ? side === 'top' ? plot.y : plot.y + plot.height : side === 'left' ? plot.x : plot.x + plot.width
@@ -180,7 +220,7 @@ export function calendarCategoryGraphics(scene: ResolvedCartesianAxisScene) {
     return [
       ...(grid ? [{ id: `${id}:grid`, type: 'line', silent: true, z: 1, shape: horizontal ? { x1: coordinate, y1: plot.y, x2: coordinate, y2: plot.y + plot.height } : { x1: plot.x, y1: coordinate, x2: plot.x + plot.width, y2: coordinate }, style: { stroke: config.gridColor, lineWidth: config.gridWidth, lineDash: dash(config.gridType) } }] : []),
       ...(axis.ticks.visible ? [{ id: `${id}:tick`, type: 'line', silent: true, shape: horizontal ? { x1: coordinate, y1: edge, x2: coordinate, y2: edge + outward * axis.ticks.length } : { x1: edge, y1: coordinate, x2: edge + outward * axis.ticks.length, y2: coordinate }, style: { stroke: config.axisLineColor, lineWidth: config.axisLineWidth, lineDash: dash(config.axisLineType) } }] : []),
-      ...(axis.labels.visible ? [{ id: `${id}:label`, type: 'text', silent: true, z: 30, x: horizontal ? coordinate : edge + outward * vertical.margin, y: horizontal ? edge + outward * axis.labels.gap : coordinate, rotation: horizontal ? rotation * Math.PI / 180 : 0, style: { text: tick.label, ...graphicTextStyle(axis.labels.style), ...(horizontal ? horizontalCategoryLabelPlacement(side as 'top' | 'bottom', rotation) : { align: vertical.align, verticalAlign: 'middle' }) } }] : []),
+      ...(axis.labels.visible && visible.has(index) ? [{ id: `${id}:label`, type: 'text', silent: true, z: 30, x: horizontal ? coordinate : edge + outward * vertical.margin, y: horizontal ? edge + outward * axis.labels.gap : coordinate, rotation: horizontal ? rotation * Math.PI / 180 : 0, style: { text: labels[index], ...graphicTextStyle(axis.labels.style), ...(horizontal ? horizontalCategoryLabelPlacement(side as 'top' | 'bottom', rotation) : { align: vertical.align, verticalAlign: 'middle' }) } }] : []),
     ]
   })
 }
@@ -192,6 +232,7 @@ export function renderNativeCartesianAxis(scene: ResolvedCartesianAxisScene, cha
   const lineStyle = { color: config.axisLineColor, width: config.axisLineWidth, type: config.axisLineType }
   const nameGap = (axis.ticks.visible ? axis.ticks.length : 0) + (axis.labels.visible ? axis.labels.gap + axis.labels.size : 0) + (axis.title?.gap ?? 0)
   if (channel === 'category') {
+    if (axis.timeScale) return renderTimeAxis(axis, config, scene.geometry.plot, scene.geometry.axes.category)
     const labels = new Map(scene.plot.categories.map((category) => [category.coordinate, category.label]))
     const slot = (axis.orientation === 'horizontal' ? scene.geometry.plot.width : scene.geometry.plot.height) / Math.max(1, scene.plot.categories.length)
     const interval = categoryLabelInterval(scene)
@@ -254,8 +295,11 @@ function directLeaderGraphics(scene: ResolvedNativeBarScene) {
     const dash = config.directLabelLineType === 'dashed' ? [6, 4] : config.directLabelLineType === 'dotted' ? [2, 3] : undefined
     const categoryBand = plot.height / Math.max(1, scene.plot.categories.length)
     const barGeometry = barSeriesGeometry(categoryBand, config, scene.plot.series.length, seriesIndex, scene.plot.stacking !== 'none')
+    const dateAxis = scene.plot.categoryAxis.timeScale
+    const fraction = dateAxis ? (categoryCoordinate(scene, index) - dateAxis.min) / Math.max(1, dateAxis.max - dateAxis.min) : (index + .5) / Math.max(1, scene.plot.categories.length)
+    const categoryY = plot.y + plot.height * ((config.categoryAxisInverse ?? true) ? fraction : 1 - fraction)
     const points: Array<[number, number]> = horizontal
-      ? [[middle, plot.y + (index + 0.5) * categoryBand + barGeometry.offset], [middle, plot.y - Math.max(3, config.directLabelGap ?? 14)]]
+      ? [[middle, categoryY + barGeometry.offset], [middle, plot.y - Math.max(3, config.directLabelGap ?? 14)]]
       : guide?.kind === 'direct-series' && guide.side === 'left'
         ? [[plot.x, middle], [(rail?.x ?? plot.x) + (rail?.width ?? 0), middle]]
         : [[plot.x + plot.width, middle], [rail?.x ?? plot.x + plot.width, middle]]
@@ -271,12 +315,16 @@ export function renderNativeBarScene(scene: ResolvedNativeBarScene): Record<stri
   const legendItems = legendGuide?.items.flatMap((item) => item.visible && item.target.kind === 'series' ? [{ ...item, rendererName: seriesNames.get(item.target.seriesId) ?? item.target.seriesId }] : []) ?? []
   const legendLabels = new Map(legendItems.map((item) => [item.rendererName, item.label]))
   const legendRail = scene.geometry.reservations['guide:legend']
+  const colorScaleGuide = scene.guides.find((guide) => guide.kind === 'color-scale')
+  const colorScaleRail = colorScaleGuide && scene.geometry.reservations[`guide:${colorScaleGuide.id}`]
+  const colorScaleGraphics = renderColorScale(colorScaleGuide, colorScaleGuide && colorScaleRail ? layoutColorScale(colorScaleGuide, scene.geometry.plot, colorScaleRail, config) : undefined, config)
   const series = scene.plot.series.map((item) => {
     const seriesStyle = config.seriesStyles[item.name]
     const resolvedLabelPosition = valueLabelPosition(config, config.kind)
     return {
       id: item.id, name: item.name, type: 'bar', stack: scene.plot.stacking === 'none' ? undefined : 'total', triggerEvent: true, clip: true,
       barCategoryGap: `${100 - Math.max(10, Math.min(100, scene.plot.barWidth))}%`, barGap: `${scene.plot.seriesGap}%`,
+      ...(scene.plot.categoryAxis.timeScale ? { barWidth: barSeriesGeometry(categoryBand(scene), config, scene.plot.series.length, 0, scene.plot.stacking !== 'none').width, encode: { x: horizontal ? 1 : 0, y: horizontal ? 0 : 1 } } : {}),
       itemStyle: { color: item.color, opacity: seriesStyle?.fillOpacity ?? config.barFillOpacity ?? 1, borderWidth: 0, borderRadius: config.barBorderRadius ?? 0 },
       label: { show: config.showValues && !config.barValueLabelAbsorption, position: resolvedLabelPosition, formatter: (params: { dataIndex?: number; value?: unknown }) => params.dataIndex == null ? formatYAxisNumber(params.value, config) : item.marks[params.dataIndex]?.label.text ?? '', ...textStyle(config.valueText), ...valueLabelAlignment(resolvedLabelPosition), color: config.valueLabelAutoContrast !== false && (config.valueLabelPosition ?? '').startsWith('inside-') ? contrastText(item.color, 4.5, seriesStyle?.fillOpacity ?? config.barFillOpacity ?? 1, config.canvasBackground) : config.valueText.color, hideOverlap: config.valueLabelHideOverlap ?? false },
       labelLayout: () => ({ hideOverlap: config.valueLabelHideOverlap ?? false, moveOverlap: horizontal && config.showDirectLabels ? 'shiftX' : horizontal ? 'shiftY' : 'shiftX' }),
@@ -286,8 +334,8 @@ export function renderNativeBarScene(scene: ResolvedNativeBarScene): Record<stri
 
         const custom = mark.style.width != null || mark.style.borderWidth > 0
         return {
-          id: mark.id, value: mark.value, name: scene.plot.categories[index]?.coordinate, elementId: mark.id, datumId: mark.datumId, seriesId: mark.seriesId, elementKey: mark.legacyKey, sourceSeriesName: item.name, displayValue: mark.displayValue, displayCategory: mark.displayCategory, displayColor: mark.style.color,
-          ...(custom ? { itemStyle: { color: 'rgba(0,0,0,0)', opacity: 1 } } : mark.style.color !== item.color || mark.style.opacity !== (seriesStyle?.fillOpacity ?? config.barFillOpacity ?? 1) ? { itemStyle: { color: mark.style.color, opacity: mark.style.opacity } } : {}),
+          id: mark.id, value: scene.plot.categoryAxis.timeScale ? [categoryCoordinate(scene, index), mark.value] : mark.value, name: scene.plot.categories[index]?.coordinate, elementId: mark.id, datumId: mark.datumId, seriesId: mark.seriesId, elementKey: mark.legacyKey, sourceSeriesName: item.name, displayValue: mark.displayValue, colorLabel: mark.colorLabel, displayCategory: mark.displayCategory, displayColor: mark.style.color,
+          ...(mark.style.pattern && !custom ? { itemStyle: { color: mark.style.color, opacity: mark.style.opacity, decal: missingDecal(mark.style.pattern) } } : custom ? { itemStyle: { color: 'rgba(0,0,0,0)', opacity: 1 } } : mark.style.color !== item.color || mark.style.opacity !== (seriesStyle?.fillOpacity ?? config.barFillOpacity ?? 1) ? { itemStyle: { color: mark.style.color, opacity: mark.style.opacity } } : {}),
           label: config.barValueLabelAbsorption ? { show: false } : pointLabel,
           emphasis: { label: config.barValueLabelAbsorption ? { show: false } : pointLabel },
           valueLabel: pointLabel, barWidthIntent: mark.style.width,
@@ -305,12 +353,12 @@ export function renderNativeBarScene(scene: ResolvedNativeBarScene): Record<stri
   return {
     animation: true, backgroundColor: scene.document.canvas.background, color: scene.plot.series.map((item) => item.color), textStyle: { fontFamily: scene.document.theme.fontFamily },
     title: { text: titleElement?.text ?? '', subtext: subtitleElement?.text ?? '', left: scene.geometry.content.x, top: Math.max(0, scene.geometry.content.y - 8), textStyle: titleElement ? textStyle(titleElement.style) : undefined, subtextStyle: subtitleElement ? textStyle(subtitleElement.style) : undefined, itemGap: scene.document.composition.titleSubtitle, triggerEvent: true },
-    tooltip: { trigger: 'axis', formatter: (input: unknown) => { const items = (Array.isArray(input) ? input : [input]) as Array<{ dataIndex?: number; seriesName?: string; value?: unknown; data?: { displayValue?: string; displayCategory?: string } }>; const index = items[0]?.dataIndex ?? 0; return [`<b>${escapeHtml(items[0]?.data?.displayCategory ?? scene.plot.series[0]?.marks[index]?.displayCategory ?? '')}</b>`, ...items.filter((item) => item.seriesName).map((item) => `${escapeHtml(item.seriesName)}: <b>${escapeHtml(item.data?.displayValue ?? formatYAxisNumber(item.value, config))}</b>`)].join('<br/>') } },
+    tooltip: { trigger: 'axis', formatter: (input: unknown) => seriesTooltip(input, config, scene.plot.series, (index) => scene.plot.series[0]?.marks[index]?.displayCategory ?? '') },
     legend: { show: Boolean(legendGuide?.visible && legendItems.length), data: legendItems.map((item) => ({ name: item.rendererName, icon: config.legendMarker === 'circle' ? 'circle' : config.legendMarker === 'diamond' ? 'diamond' : config.legendMarker === 'triangle' ? 'triangle' : 'rect', itemStyle: { color: item.color, borderWidth: 0 } })), formatter: (name: string) => legendLabelText(legendLabels.get(name) ?? name, config.legendText, legendRail, config.legendPosition), orient: legendGuide?.kind === 'categorical-legend' && (legendGuide.position === 'left' || legendGuide.position === 'right') ? 'vertical' : 'horizontal', left: legendRail?.x ?? scene.geometry.content.x, top: legendRail?.y, right: legendGuide?.kind === 'categorical-legend' && legendGuide.position === 'right' ? canvas.width - (legendRail?.x ?? 0) - (legendRail?.width ?? 0) : undefined, itemWidth: 10, itemHeight: 10, itemGap: 18, textStyle: textStyle(config.legendText) },
     grid: { left: plot.x, top: plot.y, right: canvas.width - plot.x - plot.width, bottom: canvas.height - plot.y - plot.height, containLabel: false, outerBoundsMode: 'none' },
     xAxis: horizontal ? renderNativeCartesianAxis(scene, 'value') : renderNativeCartesianAxis(scene, 'category'),
     yAxis: horizontal ? renderNativeCartesianAxis(scene, 'category') : renderNativeCartesianAxis(scene, 'value'),
     series: [...series, ...customBarSeries(scene), ...absorbedLabelSeries(scene), ...directLabelSeries(scene), ...valueEdgeAffixSeries(scene)],
-    graphic: [...categoryGridGraphics(scene), ...calendarCategoryGraphics(scene), ...verticalTitle, ...footerGraphics, ...directLeaderGraphics(scene)],
+    graphic: [...colorScaleGraphics, ...renderColorLegend(scene.guides, scene.geometry.reservations, config), ...categoryGridGraphics(scene), ...calendarCategoryGraphics(scene), ...verticalTitle, ...footerGraphics, ...directLeaderGraphics(scene)],
   }
 }

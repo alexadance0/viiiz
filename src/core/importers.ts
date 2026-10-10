@@ -33,14 +33,18 @@ function makeTable(name: string, input: Record<string, unknown>[], importWarning
 function sheetToTable(fileName: string, sheetName: string, data: SheetData): DataTable {
   const [headers = [], ...values] = data
   const columns = uniqueHeaders(headers)
-  const rows = values.map((row) => Object.fromEntries(columns.map((column, index) => [column, row[index] ?? null])))
+  const rows = values.map((row) => Object.fromEntries(columns.map((column, index) => {
+    const value = row[index]
+    return [column, typeof value === 'string' ? value.trim() || null : value ?? null]
+  })))
   return makeTable(`${fileName} · ${sheetName}`, rows)
 }
 
 export async function importExcelSheets(file: File): Promise<Array<{ name: string; table: DataTable }>> {
   const extension = file.name.split('.').pop()?.toLowerCase()
   if (extension !== 'xlsx') throw new Error('Для выбора листов нужен файл XLSX')
-  const sheets = await readWorkbook(file)
+  // Empty string/formula cells can have no cached value; the reader's trim assumes a string.
+  const sheets = await readWorkbook(file, { trim: false })
   return sheets.map(({ sheet, data }) => ({ name: sheet, table: sheetToTable(file.name, sheet, data) }))
 }
 

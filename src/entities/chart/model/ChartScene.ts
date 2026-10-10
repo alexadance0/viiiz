@@ -23,7 +23,8 @@ export interface BarMarkScene {
   value: number | null
   displayCategory: string
   displayValue: string
-  style: { color: string; opacity: number; borderColor: string; borderWidth: number; borderRadius: number; width?: number }
+  colorLabel?: string
+  style: { color: string; opacity: number; borderColor: string; borderWidth: number; borderRadius: number; width?: number; pattern?: 'diagonal' }
   label: { visible: boolean; text: string; style: ChartTextStyle; position: ChartConfig['valueLabelPosition']; autoContrast: boolean }
 }
 
@@ -37,6 +38,7 @@ export interface BarSeriesScene {
 
 export interface CartesianBarPlotScene {
   kind: 'bar'
+  dateAxis?: CartesianPointPlotScene['dateAxis']
   categoryPlacement: 'band'
   orientation: 'vertical' | 'horizontal'
   stacking: 'none' | 'stacked' | 'normalized'
@@ -136,7 +138,7 @@ export interface CartesianPointScene {
   value: number | null
   displayCategory: string
   displayValue: string
-  marker: { visible: boolean; shape: 'circle' | 'rect' | 'roundRect' | 'triangle' | 'diamond'; size: number; fill: string; stroke: string; strokeWidth: number }
+  marker: { visible: boolean; shape: 'circle' | 'rect' | 'roundRect' | 'triangle' | 'diamond'; size: number; fill: string; stroke: string; strokeWidth: number; opacity?: number }
   label: { visible: boolean; text: string; style: ChartTextStyle; position: 'auto' | 'top' | 'right' | 'bottom' | 'left' | 'inside-top' | 'inside-center' | 'inside-bottom' }
 }
 
@@ -157,7 +159,7 @@ interface CartesianPointSeriesScene {
   interpolation: 'linear' | 'spline' | 'step-start' | 'step-end'
   missing: 'gap' | 'zero' | 'connect'
   stroke: { color: string; width: number; type: 'solid' | 'dashed' | 'dotted'; opacity: number }
-  marker: { visible: boolean; shape: 'circle' | 'rect' | 'roundRect' | 'triangle' | 'diamond'; size: number; fill: string; stroke: string; strokeWidth: number }
+  marker: { visible: boolean; shape: 'circle' | 'rect' | 'roundRect' | 'triangle' | 'diamond'; size: number; fill: string; stroke: string; strokeWidth: number; opacity?: number }
   points: CartesianPointScene[]
   presentation?: { opacity?: number; emphasis?: 'normal' | 'accent' | 'muted'; layerPriority?: number }
 }
@@ -299,7 +301,7 @@ export interface SlopeSeriesScene {
   color: string
   visible: boolean
   stroke: { color: string; width: number; type: 'solid' | 'dashed' | 'dotted'; opacity: number }
-  marker: { visible: true; shape: 'circle' | 'rect' | 'roundRect' | 'triangle' | 'diamond'; size: number; fill: string; stroke: string; strokeWidth: number }
+  marker: { visible: true; shape: 'circle' | 'rect' | 'roundRect' | 'triangle' | 'diamond'; size: number; fill: string; stroke: string; strokeWidth: number; opacity?: number }
   points: [CartesianPointScene, CartesianPointScene]
   change?: SlopeChangeScene
 }
@@ -722,7 +724,9 @@ export interface MapRegionScene {
   id: ElementId; datumId: DatumId; seriesId: SeriesId; legacyKey: string
   regionId: string; name: string; value: number | null
   displayCategory: string; displayValue: string; displayLabel: string; color: string
+  colorLabel?: string; colorPattern?: 'diagonal'
   disputed: boolean; polygons: number[][][][]; center: [number, number]; area: number
+  claimedPolygons?: number[][][][]
   label: { visible: boolean; explicit: boolean; text: string; style: ChartTextStyle }
 }
 export interface MapPlotScene {

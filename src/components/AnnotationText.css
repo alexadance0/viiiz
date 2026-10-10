@@ -1,0 +1,31 @@
+.chart-canvas-shell .canvas-annotation .annotation-content,
+.chart-canvas-shell .canvas-annotation .annotation-halo{min-height:1lh;height:auto;padding:2px;box-sizing:border-box;overflow:visible}
+.chart-canvas-shell .canvas-annotation.selected{outline:1px dashed var(--canvas-ui-ink,var(--muted));outline-offset:0}
+.chart-canvas-shell .canvas-annotation.selected:is(.editing,:focus-within){outline-color:var(--canvas-ui-ink,var(--ink))}
+.chart-canvas-shell .canvas-annotation.selected.editing{outline-style:solid}
+.chart-canvas-shell .canvas-annotation.selected:not(.editing) .annotation-content{cursor:grab;user-select:none}
+.chart-canvas-shell .canvas-annotation .annotation-content:focus{box-shadow:none}
+.chart-canvas-shell .canvas-annotation .annotation-foreground *{background-color:transparent!important}
+.chart-canvas-shell .canvas-annotation .annotation-foreground,
+.chart-canvas-shell .canvas-annotation .annotation-foreground *{-webkit-text-fill-color:transparent!important;text-decoration-color:transparent!important}
+.chart-canvas-shell .annotation-halo [data-text-layer="foreground"] text{-webkit-text-fill-color:currentColor!important;text-decoration-color:currentColor!important}
+.chart-canvas-shell .annotation-foreground::selection,
+.chart-canvas-shell .annotation-foreground ::selection{background:rgba(32,32,39,.18)}
+.chart-canvas-shell .annotation-display:hover{outline-color:var(--canvas-ui-ink,var(--muted))}
+.chart-canvas-shell .annotation-move-edge{position:absolute;left:12px;right:12px;top:-10px;height:10px;padding:0;border:0;background:transparent;cursor:grab;touch-action:none}
+.chart-canvas-shell .annotation-move-edge:focus-visible{outline:1px solid var(--canvas-ui-ink,var(--ink));outline-offset:1px}
+.chart-canvas-shell .annotation-resize.horizontal{top:50%;bottom:auto;width:24px;height:32px;min-width:0;min-height:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;transform:translateY(-50%);cursor:ew-resize;touch-action:none}
+.chart-canvas-shell .annotation-resize.horizontal:after{content:'';position:absolute;left:50%;top:50%;width:3px;height:18px;border-radius:2px;transform:translate(-50%,-50%);background:var(--canvas-ui-ink,var(--ink));box-shadow:0 0 0 1px var(--canvas-ui-paper,var(--paper));pointer-events:none}
+.chart-canvas-shell .annotation-resize.horizontal:is(:hover,:focus-visible):after{width:4px;height:22px}
+.chart-canvas-shell .annotation-resize.horizontal:focus-visible{outline:2px solid var(--canvas-ui-ink,var(--ink));outline-offset:3px}
+.chart-canvas-shell .canvas-annotation.moving .annotation-resize{visibility:hidden}
+.chart-canvas-shell .annotation-resize.horizontal.left{left:-28px}
+.chart-canvas-shell .annotation-resize.horizontal.right{right:-28px}
+.chart-canvas-shell .annotation-resize.horizontal.left:after{left:auto;right:0;transform:translateY(-50%)}
+.chart-canvas-shell .annotation-resize.horizontal.right:after{left:0;transform:translateY(-50%)}
+.chart-canvas-shell .decoration-handle-group .decoration-handle{fill:var(--canvas-ui-paper,var(--paper));stroke:var(--canvas-ui-ink,var(--ink));stroke-width:1;filter:none}
+.chart-canvas-shell .decoration-handle-group:is(:hover,:focus-visible) .decoration-handle{stroke:var(--canvas-ui-ink,var(--ink));stroke-width:1.5}
+.chart-canvas-shell .decoration-attached-anchor:is(:hover,:focus-visible){filter:none}
+.chart-canvas-shell .decoration-attached-anchor .decoration-anchor-dot{fill:var(--canvas-ui-paper,var(--paper));stroke:var(--canvas-ui-ink,var(--ink));stroke-width:1;vector-effect:non-scaling-stroke}
+.chart-canvas-shell .decoration-attached-anchor:is(:hover,:focus-visible) .decoration-anchor-dot{stroke:var(--canvas-ui-ink,var(--ink));stroke-width:1.5}
+.chart-canvas-shell .decoration-control-guide{stroke:var(--canvas-ui-ink,var(--muted));stroke-width:1;stroke-dasharray:3 4;vector-effect:non-scaling-stroke}

@@ -1,18 +1,39 @@
-import { createElement, createRef } from 'react'
+import { createElement, createRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { flushSync } from 'react-dom'
 import { ChartCanvas, type ChartCanvasHandle } from '../components/ChartCanvas'
 import { auditFixture, auditCases, browserAuditCases, type AuditSetting } from './chartAudit'
 import { chartRegistry } from '../core/chartRegistry'
-import type { DataTable, ChartKind, ChartConfig } from '../core/types'
+import type { DataTable, ChartKind, ChartConfig, ChartElementSelection, ChartSeriesSelection } from '../core/types'
 
+document.getElementById('chart-audit-host')?.remove()
 const host = document.createElement('div')
 host.id = 'chart-audit-host'
 host.style.cssText = 'position:fixed;inset:0;background:white;z-index:100;overflow:auto'
 document.body.append(host)
 const root = createRoot(host)
+import.meta.hot?.dispose(() => { root.unmount(); host.remove() })
 const ref = createRef<ChartCanvasHandle>()
 let revision = 0
+export let editSelected: (values: Partial<ChartConfig['elementStyles'][string]>) => void
+export let resetSelection: () => void
+
+function InteractiveCanvas({ table, initialConfig }: { table: DataTable; initialConfig: ChartConfig }) {
+  const [config, setConfig] = useState(initialConfig)
+  const [series, setSeries] = useState<ChartSeriesSelection | null>(null)
+  const [element, setElement] = useState<ChartElementSelection | null>(null)
+  host.dataset.selection = JSON.stringify({ series, element })
+  editSelected = (values) => { if (element) setConfig((current) => ({ ...current, elementStyles: { ...current.elementStyles, [element.key]: { ...current.elementStyles[element.key], ...values } } })) }
+  resetSelection = () => { setElement(null); setSeries(null) }
+  return createElement(ChartCanvas, { ref, table, config, disableViewGestures: true, viewZoom: 1, selectedSeriesName: series?.name, selectedElementKey: element?.key, selectedElementTarget: element?.target, onSeriesSelect: (series) => { setSeries(series); setElement(null) }, onSelect: setElement })
+}
+
+export function renderInteractive(kind: ChartKind, patch: Partial<ChartConfig> = {}) {
+  const fixture = auditFixture(kind), config = { ...fixture.config, ...patch, autoFitCanvas: false }
+  host.style.width = `${config.canvasWidth! + 32}px`
+  host.style.height = `${config.canvasHeight! + 32}px`
+  flushSync(() => root.render(createElement(InteractiveCanvas, { key: ++revision, table: fixture.table, initialConfig: config })))
+}
 
 export const catalog = chartRegistry.map((plugin) => ({ id: plugin.id, label: plugin.label, cases: browserAuditCases(plugin.id).map((scenario) => ({ id: scenario.id, export: scenario.export })) }))
 

@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { prepareVisibleChartData } from './chartScale'
 import { indexSeriesToBase, prepareChartData, prepareSeasonalChartData, repeatedChartCategories } from './chartData'
 import type { ChartConfig, DataTable } from './types'
 
@@ -18,6 +19,26 @@ const config = (overrides: Partial<ChartConfig> = {}): ChartConfig => ({
 function style(size: number) { return { fontFamily: 'Arial', size, color: '#000', weight: 400, italic: false, lineHeight: 120, align: 'left' as const } }
 
 describe('chart data preparation', () => {
+  it('reuses aggregation across styling changes and invalidates it when inputs change', () => {
+    const source = { ...table, rows: [...table.rows] }
+    const passes = vi.spyOn(source.rows, 'forEach')
+    const first = prepareChartData(source, config())
+    const count = passes.mock.calls.length
+    first.series[0].data[0] = -999
+    const styled = prepareChartData(source, config({ color: '#1677a6', title: 'New title', annotations: [] }))
+    expect(passes.mock.calls.length).toBe(count)
+    expect(styled.series[0].data).toEqual([30, 20])
+    expect(prepareChartData(source, config({ aggregation: 'average' })).series[0].data[0]).toBe(10)
+    expect(passes.mock.calls.length).toBeGreaterThan(count)
+    expect(prepareChartData({ ...source, rows: [...source.rows, { month: 'Фев', country: 'A', sales: 5, cost: 1 }] }, config()).series[0].data).toEqual([30, 25])
+    passes.mockRestore()
+  })
+
+  it('keeps cached absolute values intact after normalized stacking', () => {
+    const settings = config({ kind: 'normalized-stacked-bar', yFields: ['sales', 'cost'] })
+    expect(prepareVisibleChartData(table, settings)).toEqual(prepareVisibleChartData(table, settings))
+    expect(prepareChartData(table, settings).series[0].data).toEqual([30, 20])
+  })
   it('aggregates repeated categories', () => {
     expect(prepareChartData(table, config()).series[0].data).toEqual([30, 20])
   })

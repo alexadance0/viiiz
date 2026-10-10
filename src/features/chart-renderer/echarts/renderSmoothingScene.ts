@@ -17,10 +17,13 @@ export function renderSmoothingScene(scene: ResolvedSmoothingScene): Record<stri
   const option = renderCartesianPointBase(pointScene)
   const layers = new Map<string, (typeof scene.plot.layers)[number]>(scene.plot.layers.map((layer) => [layer.id, layer]))
   option.series = (option.series as Array<Record<string, unknown>>).map((series) => {
-    const layer = layers.get(String(series.id ?? ''))
+    const layer = layers.get(String(series.id ?? '')) ?? scene.plot.layers.find((layer) => series.name === `__hit__:${layer.name}`)
     if (!layer) return series
+    const sourceName = scene.plot.sourceGroups.find((group) => group.sourceSeriesId === layer.sourceSeriesId)!.sourceName
+    const data = (series.data as Array<Record<string, unknown> | null>).map((point) => point ? { ...point, sourceSeriesName: sourceName } : point)
+    if (series.interactionLayer === 'hit') return { ...series, data }
     return {
-      ...series,
+      ...series, sourceSeriesName: sourceName, data,
       type: layer.renderMode === 'points' ? 'scatter' : 'line',
       showSymbol: layer.renderMode === 'points' || (series.data as Array<{ label?: { show?: boolean } }>).some((point) => point.label?.show),
       lineStyle: { ...(series.lineStyle as object), opacity: layer.stroke.opacity },

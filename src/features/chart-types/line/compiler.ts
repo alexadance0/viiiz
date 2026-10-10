@@ -102,9 +102,9 @@ export function compilePreparedPointScene(table: DataTable, config: ChartConfig,
           size: override?.markerSize ?? marker.size,
           fill: override?.markerFill ?? marker.fill,
           stroke: override?.markerBorder ?? override?.color ?? marker.stroke,
-          strokeWidth: override?.markerBorderWidth ?? marker.strokeWidth,
+          strokeWidth: override?.markerBorderWidth ?? marker.strokeWidth, opacity: override?.fillOpacity ?? style?.fillOpacity ?? 1,
         },
-        label: { visible: override?.showLabel ?? config.showValues, text: override?.label || formatChartNumber(value, config), style: override?.valueText ?? config.valueText, position: config.valueLabelPosition ?? 'auto' },
+        label: { visible: override?.showLabel ?? config.showValues, text: override?.label || formatChartNumber(value, config), style: override?.valueText ?? config.valueText, position: override?.labelPosition ?? config.valueLabelPosition ?? 'auto' },
       }
     })
     if (area) return { id, name: source.name, color, visible: true, interpolation: 'linear', missing: config.missingMode, stroke, marker, points, fill: { color, opacity: style?.fillOpacity ?? config.areaFillOpacity ?? .32 }, presentation: policy.presentation?.(source, seriesIndex) }
@@ -152,6 +152,7 @@ export function compilePreparedPointScene(table: DataTable, config: ChartConfig,
     { id: 'legend', kind: 'categorical-legend', visible: Boolean(config.showLegend && !directRequested && legendItems.some((item) => item.visible)), coordinateSpace: 'content', position: config.legendPosition ?? 'top', items: legendItems },
     { id: 'direct-series', kind: 'direct-series', visible: directItems.some((item) => item.visible), coordinateSpace: 'plot', side: policy.directSide ?? (config.yAxisPosition === 'right' ? 'left' : 'right'), items: directItems },
   ]
+  categoryAxis.timeScale = dateAxis
   const elements: ChartElement[] = [
     ...series.flatMap((item) => item.points.map((point): ChartElement => ({ id: point.id, role: 'mark', coordinateSpace: 'data', selectable: true, seriesId: point.seriesId, datumId: point.datumId, legacyKey: point.legacyKey }))),
     ...categories.map((category): ChartElement => ({ id: `category-label:${category.id}`, role: 'category-label', coordinateSpace: 'canvas', selectable: true, axisId: 'category', datumId: category.id, text: category.label })),

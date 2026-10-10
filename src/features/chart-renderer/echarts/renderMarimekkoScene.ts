@@ -2,8 +2,7 @@ import { contrastText } from '../../../core/color'
 import { measureTextWidth, wrapMeasuredText } from '../../../core/textMetrics'
 import { nativeGraphicTextStyle, renderNativeBarScene, type ResolvedNativeBarScene } from './renderBarScene'
 import { horizontalCategoryLabelPlacement, verticalAxisLabelPlacement, reservedAxisLabelGap } from '../../chart-layout/axisLabelPlacement'
-
-const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!)
+import { seriesTooltip } from './chartTooltip'
 
 export function renderMarimekkoScene(scene: ResolvedNativeBarScene): Record<string, unknown> {
   const config = scene.compatibilityConfig, plot = scene.geometry.plot
@@ -30,7 +29,7 @@ export function renderMarimekkoScene(scene: ResolvedNativeBarScene): Record<stri
     ]
   })
   const series = scene.plot.series.map((series, seriesIndex) => ({
-    id: series.id, name: series.name, type: 'custom', coordinateSystem: 'cartesian2d', triggerEvent: true, clip: true, z: 4,
+    id: series.id, name: series.name, type: 'custom', hoverScope: 'series', coordinateSystem: 'cartesian2d', triggerEvent: true, clip: true, z: 4,
     itemStyle: { color: series.color },
     data: series.marks.flatMap((mark) => {
       if (mark.value == null || mark.value <= 0) return []
@@ -59,7 +58,14 @@ export function renderMarimekkoScene(scene: ResolvedNativeBarScene): Record<stri
   return { ...option, animation: false,
     xAxis: horizontal ? valueAxis : categoryAxis,
     yAxis: horizontal ? categoryAxis : valueAxis,
-    tooltip: { trigger: 'item', formatter: (input: { seriesName?: string; data?: { displayCategory: string; displayValue: string } }) => `<b>${escapeHtml(input.data?.displayCategory)}</b><br/>${escapeHtml(input.seriesName)}: ${escapeHtml(input.data?.displayValue)}` },
+    tooltip: { trigger: 'item', formatter: (input: { data?: { markIndex?: number } }) => {
+      const index = input.data?.markIndex
+      if (index == null || !scene.plot.categories[index]) return ''
+      return seriesTooltip(scene.plot.series.flatMap((series) => {
+        const mark = series.marks[index]
+        return mark ? [{ seriesName: series.name, dataIndex: index, data: { displayCategory: mark.displayCategory, displayValue: mark.displayValue, displayColor: mark.style.color } }] : []
+      }), config, scene.plot.series, (index) => scene.plot.categories[index].label)
+    } },
     series, graphic: [...(option.graphic as Array<{ id?: string }>).filter((graphic) => !graphic.id?.startsWith('bar-category-grid:')), ...categoryGraphics],
   }
 }

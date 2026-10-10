@@ -29,9 +29,9 @@ export function compileNativeSmoothingScene(table: DataTable, config: ChartConfi
     const rawPoints = source.points.map((point): SmoothingPointScene => ({
       ...point, id: markElementId(rawId, point.datumId), seriesId: rawId, layerId: rawId, role: 'observed', editable: true,
       marker: config.kind === 'moving-average-scatter'
-        ? { visible: true, shape: source.marker.shape, size: config.seriesStyles[source.name]?.markerSize ?? 7, fill: source.color, stroke: source.color, strokeWidth: 0 }
-        : { ...point.marker, visible: false },
-      label: { ...point.label, visible: false },
+        ? { ...point.marker, visible: true, size: config.elementStyles[point.legacyKey]?.markerSize ?? config.seriesStyles[source.name]?.markerSize ?? 7, fill: config.elementStyles[point.legacyKey]?.markerFill ?? config.elementStyles[point.legacyKey]?.color ?? source.color, stroke: config.elementStyles[point.legacyKey]?.markerBorder ?? config.elementStyles[point.legacyKey]?.color ?? source.color, strokeWidth: config.elementStyles[point.legacyKey]?.markerBorderWidth ?? 0 }
+        : { ...point.marker, visible: config.elementStyles[point.legacyKey]?.showMarker ?? false },
+      label: { ...point.label, visible: config.elementStyles[point.legacyKey]?.showLabel ?? false },
       provenance: { transform: 'moving-average', sourceSeriesId: source.id, sourceDatumId: point.datumId, window },
     }))
     const averages = movingAverage(prepared.series[sourceIndex].data, window)
@@ -41,8 +41,8 @@ export function compileNativeSmoothingScene(table: DataTable, config: ChartConfi
       return {
         ...point, id: markElementId(averageId, datumId), datumId, seriesId: averageId, layerId: averageId, role: 'derived', value, editable: false,
         displayValue: value == null ? 'пропуск' : formatChartNumber(value, config),
-        marker: { ...point.marker, visible: false, fill: source.color, stroke: source.color, strokeWidth: 0 },
-        label: { visible: config.showValues, text: formatChartNumber(value, config), style: config.valueText, position: config.valueLabelPosition ?? 'auto' },
+        marker: { ...point.marker, visible: config.elementStyles[point.legacyKey]?.showMarker ?? false, fill: config.elementStyles[point.legacyKey]?.markerFill ?? config.elementStyles[point.legacyKey]?.color ?? source.color, stroke: config.elementStyles[point.legacyKey]?.markerBorder ?? config.elementStyles[point.legacyKey]?.color ?? source.color, strokeWidth: config.elementStyles[point.legacyKey]?.markerBorderWidth ?? 0 },
+        label: { ...point.label, visible: config.elementStyles[point.legacyKey]?.showLabel ?? config.showValues, text: config.elementStyles[point.legacyKey]?.label || formatChartNumber(value, config) },
         provenance: { transform: 'moving-average', sourceSeriesId: source.id, sourceDatumId: point.datumId, window },
       }
     })

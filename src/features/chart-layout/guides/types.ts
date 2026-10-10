@@ -10,6 +10,7 @@ export interface CategoricalLegendItem {
   label: string
   visible: boolean
   color: string
+  pattern?: 'diagonal'
   marker?: { kind: 'line' | 'point'; opacity?: number }
   target: { kind: 'series'; seriesId: string } | { kind: 'group'; seriesIds: string[] } | { kind: 'layer'; layerId: LayerId; sourceSeriesId: SeriesId; role: 'raw' | 'average' }
 }
@@ -26,12 +27,12 @@ export interface DirectSeriesGuideItem {
 }
 export type GuideSpec =
   | GuideBase & { kind: 'categorical-legend'; position: 'top' | 'right' | 'bottom' | 'left'; items: CategoricalLegendItem[] }
-  | GuideBase & { kind: 'direct-series'; side: 'left' | 'right'; items: DirectSeriesGuideItem[] }
-  | GuideBase & { kind: 'color-scale'; position: 'top' | 'right' | 'bottom' | 'left'; minimum: number; maximum: number; colors: string[]; stops?: Array<{ offset: number; color: string }>; ticks?: Array<{ offset: number; value: number; label: string }>; style?: ChartTextStyle }
+  | GuideBase & { kind: 'direct-series'; side: 'left' | 'right'; placement?: 'inside'; items: DirectSeriesGuideItem[] }
+  | GuideBase & { kind: 'color-scale'; position: 'top' | 'right' | 'bottom' | 'left'; minimum: number; maximum: number; colors: string[]; stops?: Array<{ offset: number; color: string }>; ticks?: Array<{ offset: number; value: number; label: string }>; segments?: Array<{ from: number; to: number; color: string }>; missing?: { label: string; color: string; pattern?: 'diagonal' }; intervalLabels?: boolean; style?: ChartTextStyle }
   | GuideBase & { kind: 'size-scale'; position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'; title: string; items: Array<{ value: number; label: string; diameter: number }>; style: ChartTextStyle; marker: { stroke: string; strokeWidth: number } }
 
 export function guideReservation(guide: GuideSpec, size: number, gap: number, priority = 40): LayoutReservation | undefined {
-  if (!guide.visible || guide.kind === 'size-scale') return undefined
+  if (!guide.visible || guide.kind === 'size-scale' || guide.kind === 'direct-series' && guide.placement === 'inside') return undefined
   if (guide.kind === 'direct-series') return { id: `guide:${guide.id}`, side: guide.side, size, gap, mode: 'outside', priority }
   return { id: `guide:${guide.id}`, side: guide.position, size, gap, mode: 'outside', priority }
 }

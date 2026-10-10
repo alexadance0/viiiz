@@ -1,10 +1,12 @@
 import { measureTextWidth } from '../../core/textMetrics'
-import type { ChartConfig, ChartTextStyle } from '../../core/types'
+import type { ChartConfig, ChartTextStyle, DataValue } from '../../core/types'
+import type { CalendarAxis } from '../../core/chartDateAxis'
 import type { Rect } from './geometry'
 import type { LayoutReservation } from './reservations'
 
 export type AxisPlacement = { kind: 'side'; side: 'top' | 'right' | 'bottom' | 'left' } | { kind: 'internal'; anchor: 'center' | 'zero' }
 export interface AxisSpec {
+  timeScale?: CalendarAxis
   calendarTicks?: Array<{ value: number; label: string; position: number }>
   id: string
   channel: 'category' | 'value' | 'lane' | 'x' | 'y'
@@ -14,6 +16,14 @@ export interface AxisSpec {
   ticks: { visible: boolean; length: number }
   labels: { visible: boolean; size: number; gap: number; rotation?: number; style: ChartTextStyle }
   title?: { visible: boolean; text: string; size: number; gap: number; style: ChartTextStyle }
+}
+
+export function categoryAxisFraction(categories: Array<{ value: DataValue }>, axis: AxisSpec, index: number, placement: 'band' | 'point' = 'band') {
+  if (axis.timeScale) {
+    const value = categories[index]?.value
+    return value instanceof Date ? (+value - axis.timeScale.min) / Math.max(1, axis.timeScale.max - axis.timeScale.min) : 1 - .5 / Math.max(1, categories.length)
+  }
+  return placement === 'point' ? categories.length < 2 ? .5 : index / (categories.length - 1) : (index + .5) / Math.max(1, categories.length)
 }
 export interface AxisLayout { spec: AxisSpec; bounds: Rect; reservation?: LayoutReservation }
 

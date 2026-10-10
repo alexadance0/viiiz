@@ -113,10 +113,10 @@ export const MultiplesCanvas = forwardRef<ChartCanvasHandle, Props>(function Mul
 
   useEffect(() => {
     if (!viewport.current) return
-    const observer = new ResizeObserver(([entry]) => setScale(config.autoFitCanvas === false ? 1 : Math.min((entry.contentRect.width - 24) / width, (entry.contentRect.height - 24) / height, 1)))
+    const observer = new ResizeObserver(([entry]) => setScale(Math.min((entry.contentRect.width - 24) / width, (entry.contentRect.height - 24) / height, 1)))
     observer.observe(viewport.current)
     return () => observer.disconnect()
-  }, [width, height, config.autoFitCanvas])
+  }, [width, height])
 
   const getSvg = async () => {
     await waitForChartFonts(collectFontFamilies(config), config.customFonts)

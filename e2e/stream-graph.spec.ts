@@ -17,16 +17,56 @@ test('Stream Graph shows smooth streams, changes layout, edits captions and expo
   const ribbons = canvas.locator('svg path:not([transform]):is([fill="#2b82d9"], [fill="#35a58e"], [fill="#084f91"], [fill="#c65356"], [fill="#8067a5"], [fill="#ee7b2c"], [fill="#202027"])')
   await expect(ribbons).toHaveCount(7)
   await expect(ribbons.first()).toHaveAttribute('d', /C/)
+  const streamNames = ['8-track', 'Кассеты', 'CD', 'Загрузки', 'Стриминг', 'Винил', 'Прочее']
+  const internalLabels = canvas.locator('svg text:not([stroke])').filter({ hasText: /^(8-track|Кассеты|CD|Загрузки|Стриминг|Винил|Прочее)$/ })
+  const silhouettes = canvas.locator('svg text[stroke]').filter({ hasText: /^(8-track|Кассеты|CD|Загрузки|Стриминг|Винил|Прочее)$/ })
+  await expect(internalLabels).toHaveCount(7)
+  await expect(silhouettes).toHaveCount(3)
+  for (const label of await internalLabels.all()) {
+    const name = (await label.textContent())!
+    const index = streamNames.indexOf(name)
+    const bounds = (await label.boundingBox())!
+    const silhouette = silhouettes.filter({ hasText: name })
+    const overflowing = await silhouette.count() > 0
+    if (overflowing) {
+      const color = (await ribbons.nth(index).getAttribute('fill'))!
+      await expect(silhouette).toHaveAttribute('fill', color)
+      await expect(silhouette).toHaveAttribute('stroke', color)
+      await expect(silhouette).toHaveCSS('stroke-linejoin', 'round')
+    }
+    const inside = await ribbons.nth(index).evaluate((element, { bounds, overflowing }) => {
+      const path = element as SVGGeometryElement
+      const inverse = path.getScreenCTM()!.inverse()
+      const samples = overflowing ? [[bounds.x + bounds.width / 2, bounds.y + bounds.height / 2]] : [[bounds.x, bounds.y], [bounds.x + bounds.width, bounds.y], [bounds.x, bounds.y + bounds.height], [bounds.x + bounds.width, bounds.y + bounds.height]]
+      return samples.every(([x, y]) => path.isPointInFill(new DOMPoint(x, y).matrixTransform(inverse)))
+    }, { bounds, overflowing })
+    expect(inside).toBe(true)
+  }
   await canvas.screenshot({ path: '/tmp/viiiz-stream-graph.png' })
   const layout = page.locator('details').filter({ has: page.getByText('Компоновка потоков', { exact: true }) })
   if (!(await layout.evaluate((element) => element.hasAttribute('open')))) await layout.locator(':scope > summary').click()
-  await page.getByRole('combobox', { name: 'Базовая линия', exact: true }).selectOption('centered')
+  const baseline = page.getByRole('combobox', { name: 'Базовая линия', exact: true })
+  await expect(baseline).toHaveValue('centered')
+  const centeredPath = await ribbons.first().getAttribute('d')
+  await baseline.selectOption('wiggle')
+  await expect(ribbons.first()).not.toHaveAttribute('d', centeredPath!)
+  await baseline.selectOption('centered')
+  await expect(ribbons.first()).toHaveAttribute('d', centeredPath!)
   await page.getByRole('combobox', { name: 'Порядок потоков', exact: true }).selectOption('data')
   await page.getByRole('checkbox', { name: 'Плавные границы потоков', exact: true }).press('Space')
   await expect(ribbons.first()).not.toHaveAttribute('d', /C/)
   await expect(ribbons).toHaveCount(7)
   await page.getByRole('checkbox', { name: 'Плавные границы потоков', exact: true }).press('Space')
   await expect(ribbons.first()).toHaveAttribute('d', /C/)
+  const area = page.locator('details.area-settings')
+  if (!(await area.evaluate((element) => element.hasAttribute('open')))) await area.locator(':scope > summary').click()
+  await page.getByRole('spinbutton', { name: 'Прозрачность заливки', exact: true }).fill('0.5')
+  const downloadsHalo = silhouettes.filter({ hasText: 'Загрузки' })
+  await expect(downloadsHalo).toHaveAttribute('fill', '#e3a9ab')
+  await expect(downloadsHalo).toHaveAttribute('stroke', '#e3a9ab')
+  await expect(downloadsHalo).not.toHaveAttribute('opacity', /0[.,]5/)
+  await expect(internalLabels.filter({ hasText: 'Загрузки' })).toHaveAttribute('fill', '#202027')
+  await canvas.screenshot({ path: '/tmp/viiiz-stream-graph-translucent.png' })
   const captions = page.locator('details.value-label-settings')
   if (!(await captions.evaluate((element) => element.hasAttribute('open')))) await captions.locator(':scope > summary').click()
   await page.getByRole('checkbox', { name: 'Показывать подписи значений', exact: true }).press('Space')
@@ -41,8 +81,12 @@ test('Stream Graph shows smooth streams, changes layout, edits captions and expo
   const svg = await readFile((await (await svgDownload).path())!, 'utf8')
   expect(svg).toContain('От винила к стримингу')
   expect(svg).toContain('Стриминг')
+  for (const name of streamNames) expect(svg).toContain(name)
+  expect(svg).toContain('stroke-linejoin:round')
   expect(svg).toContain('Старт')
   expect(svg).toContain('fill="#084f91"')
+  expect(svg).toContain('fill="#e3a9ab"')
+  expect(svg).toContain('stroke="#e3a9ab"')
   const pngDownload = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Скачать PNG', exact: true }).click()
   expect((await readFile((await (await pngDownload).path())!)).subarray(1, 4).toString()).toBe('PNG')

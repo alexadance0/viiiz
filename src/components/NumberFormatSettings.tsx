@@ -3,11 +3,27 @@ import type { ChartConfig } from '../core/types'
 import { formatChartNumber, formatXAxisNumber, formatYAxisNumber } from '../core/numberFormat'
 import { NumberInput } from './NumberInput'
 import { SettingsCheckbox } from './SettingsCheckbox'
+import './NumberFormatSettings.css'
+
+const affixSymbols = [
+  { label: 'Валюты', items: [['₽', 'Российский рубль'], ['€', 'Евро'], ['$', 'Доллар'], ['£', 'Фунт стерлингов'], ['¥', 'Иена / юань'], ['₸', 'Тенге'], ['₴', 'Гривна'], ['₺', 'Турецкая лира'], ['₹', 'Индийская рупия'], ['₩', 'Южнокорейская вона'], ['₿', 'Биткоин']] },
+  { label: 'Символы', items: [['%', 'Процент'], ['‰', 'Промилле'], ['°', 'Градус'], ['±', 'Плюс-минус'], ['≈', 'Приблизительно'], ['≥', 'Больше или равно'], ['≤', 'Меньше или равно'], ['№', 'Номер'], ['×', 'Умножение'], ['−', 'Минус']] },
+]
+
+function AffixInput({ label, value, placeholder, onChange }: { label: string; value: string; placeholder: string; onChange(value: string): void }) {
+  return <div className="number-affix-field">
+    <label>{label}<input className="text-input" maxLength={40} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)}/></label>
+    <select aria-label={`Добавить символ: ${label.toLowerCase()}`} value="" onChange={(event) => onChange((value + event.target.value).slice(0, 40))}>
+      <option value="" disabled>Символ…</option>
+      {affixSymbols.map(({ label: group, items }) => <optgroup key={group} label={group}>{items.map(([symbol, name]) => <option key={symbol} value={symbol}>{symbol} — {name}</option>)}</optgroup>)}
+    </select>
+  </div>
+}
 
 const AffixFields = ({ prefix, suffix, onChange }: { prefix: string; suffix: string; onChange(values: { prefix?: string; suffix?: string }): void }) =>
   <div className="fred-grid number-affix-fields">
-    <label>Префикс<input className="text-input" maxLength={40} value={prefix} placeholder="₽" onChange={(event) => onChange({ prefix: event.target.value })}/></label>
-    <label>Суффикс<input className="text-input" maxLength={40} value={suffix} placeholder=" тыс." onChange={(event) => onChange({ suffix: event.target.value })}/></label>
+    <AffixInput label="Префикс" value={prefix} placeholder="₽" onChange={(prefix) => onChange({ prefix })}/>
+    <AffixInput label="Суффикс" value={suffix} placeholder=" тыс." onChange={(suffix) => onChange({ suffix })}/>
   </div>
 
 const AffixScopeSelect = ({ value, onChange }: { value: NonNullable<ChartConfig['yAxisAffixScope']>; onChange(value: NonNullable<ChartConfig['yAxisAffixScope']>): void }) =>

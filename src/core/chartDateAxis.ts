@@ -142,7 +142,7 @@ const isCalendarBoundary = (
 
 // Frequency describes the observations; the axis format describes the visible
 // time span. They need not have the same granularity.
-const dateAxisPlan = (categories: DataValue[], table: DataTable, config: ChartConfig) => {
+const dateAxisPlan = (categories: DataValue[], table: DataTable, config: ChartConfig, availableLength?: number, orientation: 'horizontal' | 'vertical' = 'horizontal') => {
   const dates = categories.filter((value): value is Date => value instanceof Date && Number.isFinite(value.getTime()))
   const frequency = table.timeProfiles?.[config.xField]?.frequency ?? inferTimeProfile(categories, categories)?.frequency ?? 'irregular'
   if (!dates.length) return { format: config.dateLabelFormat, unit: effectiveDateStepUnit(config), count: config.xAxisStep ?? 1, frequency }
@@ -156,8 +156,11 @@ const dateAxisPlan = (categories: DataValue[], table: DataTable, config: ChartCo
   const format = !config.dateLabelFormat || config.dateLabelFormat === 'auto' ? unitFormats[explicitUnit ?? automaticUnit] : config.dateLabelFormat
   const unit = effectiveDateStepUnit({ ...config, dateLabelFormat: format }) ?? 'day'
   const style = config.xAxisLabelText ?? config.axisLabelText
-  const width = Math.max(80, (config.canvasWidth ?? 1000) - (config.canvasMarginLeft ?? 32) - (config.canvasMarginRight ?? 24) - 60)
-  const labelWidth = Math.max(...dates.slice(0, 12).map((value) => Math.max(...formatDateLabel(value, undefined, format, true).split('\n').map((line) => measureTextWidth(line, style.size, style.fontFamily, style.weight)))))
+  const width = Math.max(80, availableLength ?? (config.canvasWidth ?? 1000) - (config.canvasMarginLeft ?? 32) - (config.canvasMarginRight ?? 24) - 60)
+  const labelWidth = Math.max(...dates.slice(0, 12).map((value) => {
+    const lines = formatDateLabel(value, undefined, format, true).split('\n')
+    return orientation === 'vertical' ? lines.length * style.size * style.lineHeight / 100 : Math.max(...lines.map((line) => measureTextWidth(line, style.size, style.fontFamily, style.weight)))
+  }))
   const capacity = Math.max(2, Math.floor(width / (labelWidth + 24)))
   const required = Math.max(1, Math.ceil((calendarBucket(new Date(max), unit) - calendarBucket(new Date(min), unit)) / capacity))
   const niceSteps = unit === 'month' ? [1, 2, 3, 6, 12, 24, 60, 120] : unit === 'quarter' ? [1, 2, 4, 8, 20, 40] : [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
@@ -167,11 +170,11 @@ const dateAxisPlan = (categories: DataValue[], table: DataTable, config: ChartCo
 
 // Calendar ticks belong to the axis, not to observations. Holidays and gaps
 // must not remove January 1 or change the elapsed distance between points.
-export const planDateAxisTicks = (categories: DataValue[], table: DataTable, config: ChartConfig) => {
+export const planDateAxisTicks = (categories: DataValue[], table: DataTable, config: ChartConfig, availableLength?: number, orientation: 'horizontal' | 'vertical' = 'horizontal') => {
   const dates = categories.filter((value): value is Date => value instanceof Date && Number.isFinite(value.getTime()))
   if (!dates.length) return undefined
   const { min, max } = dateBounds(dates, table, config)
-  const { format, unit, count, frequency } = dateAxisPlan(categories, table, config)
+  const { format, unit, count, frequency } = dateAxisPlan(categories, table, config, availableLength, orientation)
   if (!unit) return undefined
   const start = new Date(min)
   const parsedAnchor = config.dateAxisAnchor ? new Date(`${config.dateAxisAnchor}T00:00:00`) : null
@@ -199,6 +202,15 @@ export const planDateAxisTicks = (categories: DataValue[], table: DataTable, con
   const labels = moveDateContextToVisibleLabels(tickDates.map((day, index) => formatDateLabel(day, table.timeProfiles?.[config.xField], format, true, index)), tickDates, format, () => true)
   return { min, max, frequency, ticks: tickDates.map((day, index) => ({ value: +day, label: config.categoryLabelOverrides?.x?.[day.toISOString()] ?? labels[index] })) }
 }
+
+export type CalendarAxis = NonNullable<ReturnType<typeof planDateAxisTicks>>
+
+// Layout knows the space left after titles, value labels and legends. All chart
+// families choose their calendar step here, using that actual axis length.
+export const fitCalendarAxis = (axis: CalendarAxis, config: ChartConfig, length: number, orientation: 'horizontal' | 'vertical') =>
+  planDateAxisTicks([new Date(axis.min), new Date(axis.max)], {
+    name: '', columns: [], rows: [], timeProfiles: { [config.xField]: { frequency: axis.frequency, label: '', confidence: 100, source: 'intervals' } },
+  }, { ...config, xAxisMin: new Date(axis.min).toISOString(), xAxisMax: new Date(axis.max).toISOString() }, length, orientation)!
 
 // Band charts retain one band per observation. Calendar marks can fall between
 // bands; interpolating their positions avoids relabeling a later observation.

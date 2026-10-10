@@ -3,11 +3,40 @@ import { getChartPlugin } from './chartRegistry'
 import { planCategoryDateLabels, planCategoryDateTicks, planDateAxisTicks } from './chartDateAxis'
 import { createDefaultChartConfig } from '../entities/chart/model/defaultChartConfig'
 import { keyRateDemoTable, usInflationDemoTable } from '../features/editor/model/timeSeriesDemo'
-import type { DataTable } from './types'
+import type { ChartKind, DataTable } from './types'
+import { resolveNativeScene } from '../features/chart-renderer/echarts/renderScene'
+import { categoryAxisFraction } from '../features/chart-layout/axisLayout'
 
 const config = { ...createDefaultChartConfig(), xField: 'Дата', yField: 'Инфляция', yFields: ['Инфляция'], title: '', subtitle: '', note: '', source: '' }
 
 describe('calendar date labels', () => {
+  const timelineKinds: ChartKind[] = ['bar', 'stacked-bar', 'normalized-stacked-bar', 'horizontal-bar', 'horizontal-stacked-bar', 'horizontal-normalized-stacked-bar', 'lollipop', 'horizontal-lollipop', 'dumbbell', 'dot-plot', 'arrow-plot', 'waterfall', 'butterfly', 'heatmap', 'line', 'spline', 'step-line', 'indexed-line', 'bump', 'area', 'stacked-area', 'normalized-stacked-area', 'stream-graph', 'moving-average-line', 'moving-average-scatter', 'range-line', 'step-range-line', 'confidence-line', 'scatter', 'connected-scatter', 'bubble']
+  it.each(timelineKinds)('%s uses the shared calendar axis even when observations cluster at the end', (kind) => {
+    const dates = [new Date(1950, 0, 1), new Date(2010, 0, 1), ...Array.from({ length: 120 }, (_, index) => new Date(2020, index, 1))]
+    const table: DataTable = { name: 'Clustered dates', columns: ['Дата', 'Инфляция', 'Другой'], rows: dates.map((Дата) => ({ Дата, Инфляция: 1, Другой: 2 })) }
+    const setup = { ...config, kind, yFields: ['Инфляция', 'Другой'], dateLabelFormat: 'year-full' as const, xAxisStep: 10, showValues: false, showLegend: false, showDirectLabels: false, waterfallShowTotal: false, dumbbellStartField: 'Инфляция', dumbbellEndField: 'Другой', rangeLowerField: 'Инфляция', rangeUpperField: 'Другой' }
+    const scene = resolveNativeScene(getChartPlugin(kind).compile(table, setup))
+    const axis = scene.plot.kind === 'xy' ? scene.plot.xAxis : 'categoryAxis' in scene.plot ? scene.plot.categoryAxis : undefined
+    expect(axis?.timeScale?.ticks.map((tick) => tick.label)).toEqual(['1950', '1960', '1970', '1980', '1990', '2000', '2010', '2020'])
+    if ('categories' in scene.plot && axis) {
+      const fraction = categoryAxisFraction(scene.plot.categories, axis, 1)
+      expect(fraction).toBeGreaterThan(.7)
+      // Precomputed/custom marks must use the same scale as native marks.
+      const id = scene.plot.kind === 'comparison-stem' ? scene.plot.series[0].points[1].id
+        : scene.plot.kind === 'heatmap' ? scene.plot.rows[0].cells[1].id
+          : scene.plot.kind === 'waterfall' ? scene.plot.marks[1].id
+            : scene.plot.kind === 'butterfly' ? scene.plot.series[0].marks[1].id : undefined
+      const rect = id && scene.geometry.elements[id]
+      if (rect) {
+        const actual = axis.orientation === 'horizontal' ? (rect.x + rect.width / 2 - scene.geometry.plot.x) / scene.geometry.plot.width : (rect.y + rect.height / 2 - scene.geometry.plot.y) / scene.geometry.plot.height
+        expect(actual).toBeCloseTo(fraction, 5)
+      }
+    }
+    const option = getChartPlugin(kind).buildOption(table, setup) as Record<string, { type: string } | Array<{ type: string }>>
+    expect([option.xAxis, option.yAxis].flat().some((axis) => axis.type === 'time')).toBe(true)
+    expect(table.rows).toHaveLength(dates.length)
+  })
+
   it.each([1, 31])('includes January at the left edge for imported monthly dates on day %s', (day) => {
     const dates = [new Date(2000, 0, day, 3), new Date(2025, 10, 1, 3)]
     const table: DataTable = { name: 'imported monthly dates', columns: ['Дата', 'Инфляция'], rows: dates.map((Дата) => ({ Дата, Инфляция: 1 })), timeProfiles: { Дата: { frequency: 'monthly', label: 'Месячные', confidence: 100, source: 'intervals' } } }
@@ -99,7 +128,10 @@ describe('calendar date labels', () => {
     expect(ticks[0].position).toBeGreaterThan(0)
     expect(ticks[0].position).toBeLessThan(1)
     const option = getChartPlugin(kind).buildOption(table, setup) as { graphic: Array<{ id?: string; type?: string; style?: { text?: string } }> }
-    expect(option.graphic.filter((item) => item.id?.startsWith('calendar-category:') && item.type === 'text').map((item) => item.style?.text)).toEqual(['2017', '2018'])
+    const axes = option as unknown as Record<string, { type: string; axisLabel: { customValues: number[]; formatter(value: number): string } }>
+    const axis = axes.xAxis.type === 'time' ? axes.xAxis : axes.yAxis
+    expect(axis.type).toBe('time')
+    expect(axis.axisLabel.customValues.map((value) => axis.axisLabel.formatter(value))).toEqual(['2017', '2018'])
     expect(table.rows).toHaveLength(3)
   })
 

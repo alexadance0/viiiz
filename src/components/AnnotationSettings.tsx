@@ -126,6 +126,7 @@ export function AnnotationSettings({ config, canvasWidth, canvasHeight, resolved
           <SettingsCheckbox isSelected={annotation.backgroundColor !== 'transparent'} onChange={(enabled) => textStyle({ backgroundColor: enabled ? config.canvasBackground ?? '#ffffff' : 'transparent' })}>Подложка под текстом</SettingsCheckbox>
           <SettingsCheckbox isSelected={(annotation.textStrokeWidth ?? 0) > 0} onChange={(enabled) => textStyle({ textStrokeColor: config.canvasBackground ?? '#ffffff', textStrokeWidth: enabled ? 6 : 0 }, ['-webkit-text-stroke-width', '-webkit-text-stroke-color', 'text-shadow'])}>Контур для читаемости</SettingsCheckbox>
           <p className="annotation-editor-note">Выделите часть текста на холсте, чтобы настроить её отдельно.</p>
+          <p className="annotation-editor-note">Ширина задаёт переносы строк, высота подстраивается под текст автоматически.</p>
         </>}
         {decoration && <>
           {decoration.type !== 'area' && <div className="annotation-attachment-fields">

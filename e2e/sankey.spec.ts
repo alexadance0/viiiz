@@ -1,3 +1,4 @@
+import { selectShape } from './helpers/clickShape'
 import { expect, test } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 
@@ -40,15 +41,15 @@ test('Sankey maps roles, renders multistage flows, edits nodes and exports SVG a
   await page.getByRole('spinbutton', { name: 'Непрозрачность потоков, %' }).fill('25')
   await page.getByRole('spinbutton', { name: 'Непрозрачность потоков, %' }).press('Tab')
   await expect(canvas.locator('svg path[fill-opacity="0.25"]')).toHaveCount(22)
-  const ribbon = await canvas.locator('svg path[fill-opacity="0.25"]').first().boundingBox()
-  if (!ribbon) throw new Error('Flow is missing')
-  await page.mouse.click(ribbon.x + ribbon.width * .25, ribbon.y + ribbon.height * .1)
+  const ribbon = canvas.locator('svg path[fill-opacity="0.25"]').first()
+  await selectShape(page, ribbon, true)
   await page.getByRole('spinbutton', { name: 'Непрозрачность потока, %', exact: true }).fill('10')
   await page.getByRole('spinbutton', { name: 'Непрозрачность потока, %', exact: true }).press('Tab')
   await expect(canvas.locator('svg path[fill-opacity="0.1"]')).toHaveCount(1)
   await page.getByRole('button', { name: 'Снять выделение', exact: true }).click()
   const caption = await canvas.locator('svg text').filter({ hasText: /^Хиллари 4,68%$/ }).boundingBox()
   if (!caption) throw new Error('Caption is missing')
+  await page.mouse.click(caption.x + caption.width / 2, caption.y + caption.height / 2)
   await page.mouse.click(caption.x + caption.width / 2, caption.y + caption.height / 2)
   await page.getByRole('textbox', { name: 'Текст подписи', exact: true }).fill('Хиллари\nСейчас')
   await expect(canvas.locator('svg text').filter({ hasText: /^Сейчас$/ })).toBeVisible()
@@ -99,6 +100,7 @@ test('Sankey works in a composition and keeps multiline captions in exported pan
   for (const panel of await panels.all()) await expect(panel).toHaveAttribute('data-render-status', 'settled')
   const caption = await panels.nth(1).locator('svg text').filter({ hasText: /^Семьи$/ }).boundingBox()
   if (!caption) throw new Error('Panel caption is missing')
+  await page.mouse.click(caption.x + caption.width / 2, caption.y + caption.height / 2)
   await page.mouse.click(caption.x + caption.width / 2, caption.y + caption.height / 2)
   await page.getByRole('textbox', { name: 'Текст подписи', exact: true }).fill('В семьях\n90 человек')
   await expect(panels.nth(1).locator('svg text').filter({ hasText: /^90 человек$/ })).toBeVisible()

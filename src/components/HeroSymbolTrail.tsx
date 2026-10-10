@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import './HeroSymbolTrail.css'
-import { SYMBOL_GRID } from './symbolGrid'
+import { SYMBOL_GRID, symbolGridColorAt as colorAt } from './symbolGrid'
 
 type TrailPoint = {
   x: number
@@ -37,12 +37,6 @@ const SYMBOL_TRAIL_CONFIG = {
   secondaryDelay: 100,
   centerDuration: 320,
   maxImpulses: 4,
-  textColors: {
-    left: [224, 51, 171],
-    center: [22, 119, 166],
-    right: [17, 157, 211],
-    bottom: [228, 165, 44],
-  },
 } as const
 
 const hash = (x: number, y: number) => {
@@ -51,22 +45,6 @@ const hash = (x: number, y: number) => {
 }
 
 const mix = (a: number, b: number, amount: number) => a + (b - a) * amount
-
-function colorAt(x: number, y: number, width: number, height: number) {
-  const horizontal = Math.min(1, Math.max(0, x / width))
-  const vertical = Math.min(1, Math.max(0, y / height))
-  const { left, center, right, bottom } = SYMBOL_TRAIL_CONFIG.textColors
-  const amount = horizontal < 0.5 ? horizontal * 2 : (horizontal - 0.5) * 2
-  const from = horizontal < 0.5 ? left : center
-  const to = horizontal < 0.5 ? center : right
-  const bottomWeight = Math.max(0, vertical - 0.58) * 0.52
-
-  return [
-    mix(mix(from[0], to[0], amount), bottom[0], bottomWeight),
-    mix(mix(from[1], to[1], amount), bottom[1], bottomWeight),
-    mix(mix(from[2], to[2], amount), bottom[2], bottomWeight),
-  ]
-}
 
 function symbolFor(seed: number, intensity: number) {
   if (seed > 0.965 && intensity > 0.44) return ['+', ':', '~', '*'][Math.floor(seed * 100) % 4]
@@ -77,7 +55,7 @@ function symbolFor(seed: number, intensity: number) {
 
 const recodeSymbol = (symbol: string) => ({ '0': '1', '1': '@', '@': '=', '=': '-', '-': '0' })[symbol] ?? '@'
 
-export function HeroSymbolTrail() {
+export function HeroSymbolTrail({ fileDrop = false, initialPoint }: { fileDrop?: boolean; initialPoint?: { x: number; y: number } | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const historyRef = useRef<TrailPoint[]>([])
   const currentRef = useRef({ x: 0, y: 0 })
@@ -91,11 +69,15 @@ export function HeroSymbolTrail() {
     const context = canvas?.getContext('2d')
     if (!canvas || !host || !context || matchMedia('(prefers-reduced-motion: reduce)').matches) return
 
+    const config = fileDrop ? { ...SYMBOL_TRAIL_CONFIG, cellWidth: 16, cellHeight: 16, font: '500 11px ui-monospace, SFMono-Regular, Menlo, monospace' } : SYMBOL_TRAIL_CONFIG
     let width = 0
     let height = 0
     let mounted = true
     let safeZones: SafeZone[] = []
-    const textElements = [...host.querySelectorAll<HTMLElement>('.hero-lead')]
+    const textElements = fileDrop
+      ? [...(host.parentElement?.querySelectorAll<HTMLElement>('strong, p, .source-card-action') ?? [])]
+      : [...host.querySelectorAll<HTMLElement>('.hero-lead')]
+    const trailColorAt = (x: number, y: number) => fileDrop ? [54, 164, 118] : colorAt(x, y, width, height)
 
     const resize = () => {
       const rect = host.getBoundingClientRect()
@@ -120,7 +102,6 @@ export function HeroSymbolTrail() {
     }
 
     const render = (now: number) => {
-      const config = SYMBOL_TRAIL_CONFIG
       const points = historyRef.current
       const impulses = impulsesRef.current
       while (points.length && now - points[0].time > config.fadeDuration) points.shift()
@@ -210,7 +191,7 @@ export function HeroSymbolTrail() {
 
           intensity = Math.max(intensity, impulseIntensity, centerIntensity)
           if (intensity < 0.035) continue
-          const zoneColor = colorAt(x, y, width, height)
+          const zoneColor = trailColorAt(x, y)
           const colorWeight = Math.min(1, impulseIntensity + centerIntensity)
           const red = mix(zoneColor[0], impulseColor?.[0] ?? zoneColor[0], colorWeight)
           const green = mix(zoneColor[1], impulseColor?.[1] ?? zoneColor[1], colorWeight)
@@ -259,8 +240,8 @@ export function HeroSymbolTrail() {
       if (!frameRef.current) frameRef.current = requestAnimationFrame(render)
     }
 
-    const addPoint = (event: PointerEvent) => {
-      if (!event.isPrimary) return
+    const addPoint = (event: { clientX: number; clientY: number; isPrimary?: boolean }) => {
+      if (event.isPrimary === false) return
       const rect = host.getBoundingClientRect()
       const x = event.clientX - rect.left
       const y = event.clientY - rect.top
@@ -298,21 +279,21 @@ export function HeroSymbolTrail() {
       startLoop()
     }
 
-    const addImpulse = (event: PointerEvent) => {
-      if (!event.isPrimary) return
+    const addImpulse = (event: { clientX: number; clientY: number; isPrimary?: boolean }) => {
+      if (event.isPrimary === false) return
       const rect = host.getBoundingClientRect()
       const x = event.clientX - rect.left
       const y = event.clientY - rect.top
       if (x < 0 || y < 0 || x > rect.width || y > rect.height) return
-      const localColor = colorAt(x, y, width, height)
+      const localColor = trailColorAt(x, y)
       const impulses = impulsesRef.current
       impulses.push({
         x,
         y,
         time: performance.now(),
         color: [localColor[0], localColor[1], localColor[2]],
-        column: Math.floor(x / SYMBOL_TRAIL_CONFIG.cellWidth),
-        row: Math.floor(y / SYMBOL_TRAIL_CONFIG.cellHeight),
+        column: Math.floor(x / config.cellWidth),
+        row: Math.floor(y / config.cellHeight),
       })
       if (impulses.length > SYMBOL_TRAIL_CONFIG.maxImpulses) impulses.shift()
       startLoop()
@@ -327,15 +308,28 @@ export function HeroSymbolTrail() {
     })
     host.addEventListener('pointerdown', addImpulse, { passive: true })
     host.addEventListener('pointermove', addPoint, { passive: true })
+    const fileOver = (event: DragEvent) => { if (event.dataTransfer?.types.includes('Files')) addPoint(event) }
+    const fileDropped = (event: DragEvent) => { if (event.dataTransfer?.types.includes('Files')) addImpulse(event) }
+    if (fileDrop) {
+      window.addEventListener('dragover', fileOver)
+      window.addEventListener('drop', fileDropped)
+      if (initialPoint) {
+        const point = { clientX: initialPoint.x, clientY: initialPoint.y }
+        addPoint(point); addImpulse(point)
+      }
+    }
 
     return () => {
       mounted = false
       observer.disconnect()
       host.removeEventListener('pointerdown', addImpulse)
       host.removeEventListener('pointermove', addPoint)
+      window.removeEventListener('dragover', fileOver)
+      window.removeEventListener('drop', fileDropped)
       cancelAnimationFrame(frameRef.current)
+      frameRef.current = 0
     }
-  }, [])
+  }, [fileDrop, initialPoint])
 
   return <canvas ref={canvasRef} className="symbol-trail-canvas" aria-hidden="true" />
 }

@@ -12,7 +12,7 @@ export function decorationGraphics(decorations: ChartDecoration[], plotBounds?: 
     const width = decoration.type === 'area' && decoration.fitToPlotWidth && plotBounds ? plotBounds.right - plotBounds.left : decoration.width
     const interaction = onSelect && !decoration.locked ? { silent: false, cursor: 'pointer', onclick: () => onSelect(decoration.id) } : { silent: true }
     if (decoration.type === 'area') return {
-      id: `decoration-${decoration.id}`, type: 'rect', z: 3, ...interaction,
+      id: `decoration-${decoration.id}`, type: 'rect', z: -1, ...interaction,
       shape: { x, y, width: Math.max(1, width), height: Math.max(1, height) },
       style: { fill: decoration.color, stroke: decoration.color, opacity: decoration.opacity, lineWidth: decoration.lineWidth, lineDash },
     }
@@ -34,9 +34,22 @@ export function decorationGraphics(decorations: ChartDecoration[], plotBounds?: 
     }
     const endAngle = decoration.type === 'curved-line' ? Math.atan2(y2 - controls.second.y, x2 - controls.second.x) : Math.atan2(height, decoration.width)
     const startAngle = decoration.type === 'curved-line' ? Math.atan2(y - controls.first.y, decoration.x - controls.first.x) : endAngle + Math.PI
+    // Stop the shaft at the base of a filled head instead of its pointed tip.
+    const inset = head === 'filled' ? size * Math.cos(Math.PI / 6) : head === 'circle' ? size * .42 : head === 'open' ? decoration.lineWidth : 0
+    const shaftShape = { ...curveShape }
+    if (placement === 'start' || placement === 'both') {
+      shaftShape.x1 -= inset * Math.cos(startAngle)
+      shaftShape.y1 -= inset * Math.sin(startAngle)
+    }
+    if (placement === 'end' || placement === 'both') {
+      shaftShape.x2 -= inset * Math.cos(endAngle)
+      shaftShape.y2 -= inset * Math.sin(endAngle)
+    }
+    children[0].shape = shaftShape
     if (placement === 'start' || placement === 'both') addHead(decoration.x, y, startAngle)
     if (placement === 'end' || placement === 'both') addHead(x2, y2, endAngle)
     if (onSelect) children.push({ type: decoration.type === 'curved-line' ? 'bezierCurve' : 'line', shape: decoration.type === 'curved-line' ? curveShape : { x1: decoration.x, y1: y, x2, y2 }, style: { stroke: 'rgba(0,0,0,0)', fill: 'none', lineWidth: Math.max(14, decoration.lineWidth + 10) } })
-    return { id: `decoration-${decoration.id}`, type: 'group', z: 70, ...interaction, children }
+    // ECharts sorts each drawable separately; a group's z does not lift its children.
+    return { id: `decoration-${decoration.id}`, type: 'group', z: 70, ...interaction, children: children.map((child) => ({ ...child, z: 70 })) }
   })
 }

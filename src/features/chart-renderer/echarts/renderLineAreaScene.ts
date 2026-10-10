@@ -1,4 +1,6 @@
+import { seriesTooltip } from './chartTooltip'
 import { legendLabelText } from '../../chart-layout/legendLayout'
+import { renderTimeAxis } from './renderTimeAxis'
 import { axisAffixApplies, formatXAxisNumber, formatYAxisNumber } from '../../../core/numberFormat'
 import { valueLabelAlignment } from '../../../core/chartLabels'
 import { missingCalendarPeriod } from '../../../core/chartDateAxis'
@@ -29,9 +31,8 @@ export type ResolvedCartesianPointRenderModel = Omit<ResolvedPointScene, 'plot'>
 }
 const textStyle = (style: ChartTextStyle) => ({ color: style.color, fontFamily: style.fontFamily, fontSize: style.size, fontWeight: style.weight, fontStyle: style.italic ? 'italic' : 'normal', lineHeight: Math.round(style.size * style.lineHeight / 100), align: style.align })
 const graphicTextStyle = (style: ChartTextStyle) => { const { color, ...rest } = textStyle(style); return { ...rest, fill: color } }
-const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!)
 const stacking = (plot: ResolvedCartesianPointRenderModel['plot']) => plot.stacking
-const interpolationOption = (value: PointPlot['series'][number]['interpolation']) => ({ smooth: value === 'spline' ? .45 : false, smoothMonotone: value === 'spline' ? 'x' : undefined, step: value === 'step-start' ? 'start' : value === 'step-end' ? 'end' : undefined })
+const interpolationOption = (value: PointPlot['series'][number]['interpolation'], rank = false) => ({ smooth: value === 'spline' ? .45 : false, smoothMonotone: value === 'spline' && rank ? 'x' : undefined, step: value === 'step-start' ? 'start' : value === 'step-end' ? 'end' : undefined })
 const categoryCoordinate = (scene: ResolvedCartesianPointRenderModel, index: number) => scene.plot.dateAxis ? Number(scene.plot.categories[index]?.value) : scene.plot.categories[index]?.coordinate
 const pointValue = (scene: ResolvedCartesianPointRenderModel, index: number, value: number | null) => scene.plot.dateAxis ? [categoryCoordinate(scene, index), value] : value
 
@@ -104,18 +105,7 @@ function categoryAxis(scene: ResolvedCartesianPointRenderModel) {
   const interval = scene.plot.categoryLabelPlan.interval
   const nameGap = (axis.ticks.visible ? axis.ticks.length : 0) + (axis.labels.visible ? axis.labels.gap + axis.labels.size : 0) + (axis.title?.gap ?? 0)
   const slot = scene.geometry.plot.width / Math.max(1, scene.plot.categories.length - 1)
-  if (scene.plot.dateAxis) {
-    const { min, max, ticks } = scene.plot.dateAxis
-    const values = ticks.map((tick) => tick.value), labels = new Map(ticks.map((tick) => [tick.value, tick.label]))
-    return {
-      type: 'time', min, max: min === max ? max + 86400000 : max, boundaryGap: false, position: side, triggerEvent: true,
-      name: axis.title?.visible ? axis.title.text : '', nameLocation: 'middle', nameGap, nameTextStyle: axis.title ? textStyle(axis.title.style) : undefined,
-      axisLine: { show: axis.line.visible, onZero: false, lineStyle },
-      axisTick: { show: axis.ticks.visible, customValues: values, length: axis.ticks.length, lineStyle },
-      axisLabel: { show: axis.labels.visible, customValues: values, formatter: (value: number) => labels.get(value) ?? '', hideOverlap: false, showMinLabel: true, showMaxLabel: true, margin: axis.labels.gap, rotate: scene.plot.categoryLabelPlan.rotation, ...textStyle(axis.labels.style), ...horizontalCategoryLabelPlacement(side as 'top' | 'bottom' | undefined, scene.plot.categoryLabelPlan.rotation) },
-      splitLine: { show: config.showVerticalGrid, lineStyle: { color: config.gridColor, width: config.gridWidth, type: config.gridType } },
-    }
-  }
+  if (axis.timeScale) return renderTimeAxis({ ...axis, labels: { ...axis.labels, rotation: scene.plot.categoryLabelPlan.rotation } }, config, scene.geometry.plot, scene.geometry.axes.category)
   return {
     type: 'category', boundaryGap: false, position: side, data: scene.plot.categories.map((category) => category.coordinate), triggerEvent: true,
     name: axis.title?.visible ? axis.title.text : '', nameLocation: 'middle', nameGap, nameTextStyle: axis.title ? textStyle(axis.title.style) : undefined,
@@ -178,8 +168,8 @@ function axisAffixSeries(scene: ResolvedCartesianPointRenderModel) {
 function segmentSeries(scene: ResolvedCartesianPointRenderModel) {
   if (scene.plot.mode !== 'line') return []
   return scene.plot.series.flatMap((series) => !('segments' in series) ? [] : series.segments.filter((segment) => series.missing !== 'gap' || !missingCalendarPeriod(scene.plot.categories[segment.fromIndex]?.value, scene.plot.categories[segment.toIndex]?.value, scene.plot.dateAxis?.frequency)).map((segment) => ({
-    id: segment.id, name: series.name, segmentOf: series.name, type: 'line', symbol: 'none', silent: true, animation: false, tooltip: { show: false }, z: 40,
-    ...interpolationOption(series.interpolation), lineStyle: segment.stroke,
+    id: segment.id, name: series.name, segmentOf: series.name, segmentKey: series.points[segment.toIndex].legacyKey, type: 'line', symbol: 'none', silent: true, animation: false, tooltip: { show: false }, z: 40,
+    ...interpolationOption(series.interpolation, scene.plot.valueAxisInverse), lineStyle: segment.stroke,
     data: [series.points[segment.fromIndex], series.points[segment.toIndex]].map((point) => [categoryCoordinate(scene, point.categoryIndex), point.value]).concat([null]),
   })))
 }
@@ -203,25 +193,27 @@ export function renderCartesianPointBase(scene: ResolvedCartesianPointRenderMode
     const firstIndex = item.points.findIndex((point) => point.value != null)
     const lastIndex = item.points.findLastIndex((point) => point.value != null)
     const direct = directItems.get(item.id)
-    const showDirect = firstIndex >= 0 && directGuide?.visible && direct?.visible
+    const showDirect = firstIndex >= 0 && directGuide?.visible && directGuide.placement !== 'inside' && direct?.visible
     const directStyle = direct?.style ?? config.directLabelText ?? config.legendText
     const directWidth = Math.max(1, (scene.geometry.reservations['guide:direct-series']?.width ?? 120) - (config.directLabelGap ?? 14))
     const name = wrapMeasuredText(direct?.label ?? item.name, directStyle.size, directWidth, directStyle.fontFamily, directStyle.weight, false).text
     const note = direct?.note ? wrapMeasuredText(direct.note, Math.max(8, directStyle.size - 2), directWidth, directStyle.fontFamily, directStyle.weight, false).text : ''
     const directText = `{name|${name}}${note ? `\n{note|${note}}` : ''}`
     const directLabel = { show: true, distance: config.directLabelGap ?? 14, formatter: config.kind === 'bump' ? `${name}${note ? `\n${note}` : ''}` : directText, verticalAlign: 'middle', ...textStyle(directStyle), rich: config.kind === 'bump' ? undefined : { name: textStyle(directStyle), note: { ...textStyle(directStyle), fontSize: Math.max(8, directStyle.size - 2), opacity: .75 } } }
+    const endLabel = showDirect && !directLeft && firstIndex === 0 ? directLabel : undefined
     const defaultZ = 30 + (scene.plot.series.length - seriesIndex) * 10
     const z = item.presentation?.emphasis === 'accent' ? 1000 + (item.presentation.layerPriority ?? seriesIndex) : defaultZ + (item.presentation?.layerPriority ?? 0)
     return {
       id: item.id, name: item.name, type: 'line', stack: scene.plot.mode === 'area' && scene.plot.stacking !== 'none' ? 'total' : undefined, triggerEvent: true, clip: true, z,
-      ...interpolationOption(item.interpolation), showSymbol: true, symbol: item.marker.shape, symbolSize: item.marker.size, connectNulls: item.missing === 'connect',
+      ...interpolationOption(item.interpolation, scene.plot.valueAxisInverse), showSymbol: true, symbol: item.marker.shape, symbolSize: item.marker.size, connectNulls: item.missing === 'connect',
       lineStyle: { ...item.stroke, opacity: item.presentation?.opacity ?? item.stroke.opacity }, itemStyle: { color: item.marker.fill, borderColor: item.marker.stroke, borderWidth: item.marker.strokeWidth },
-      areaStyle: scene.plot.mode === 'area' && 'fill' in scene.plot.series[seriesIndex] ? scene.plot.series[seriesIndex].fill : undefined, emphasis: { scale: false },
+      areaStyle: scene.plot.mode === 'area' && 'fill' in scene.plot.series[seriesIndex] ? scene.plot.series[seriesIndex].fill : undefined, emphasis: { scale: false, ...(endLabel ? { endLabel } : {}) },
+      select: endLabel ? { endLabel } : undefined,
       label: { show: config.showValues, position: config.valueLabelPosition === 'auto' || config.valueLabelPosition == null ? 'top' : config.valueLabelPosition, formatter: (params: { dataIndex?: number }) => params.dataIndex == null ? '' : item.points[params.dataIndex]?.label.text ?? '', ...textStyle(config.valueText), ...valueLabelAlignment(config.valueLabelPosition === 'auto' || config.valueLabelPosition == null ? 'top' : config.valueLabelPosition) },
       markLine: seriesIndex === 0 && config.showZeroLine && config.yAxisScaleType !== 'log' ? { silent: true, symbol: 'none', data: [{ yAxis: 0 }], lineStyle: { color: config.zeroLineColor, width: config.zeroLineWidth, type: config.zeroLineType }, label: { show: false } } : undefined,
       // ECharts clips the entering end label against point 0. A leading gap has
       // no y coordinate, so anchor this label to the last valid datum instead.
-      endLabel: showDirect && !directLeft && firstIndex === 0 ? directLabel : undefined,
+      endLabel,
       labelLine: showDirect ? { show: direct?.leaderLine ?? false, length: config.directLabelGap ?? 14, length2: 8, lineStyle: { color: direct?.color ?? item.color, width: config.directLabelLineWidth ?? 1, type: config.directLabelLineType ?? 'solid' } } : undefined,
       labelLayout: { hideOverlap: config.valueLabelHideOverlap ?? false, moveOverlap: 'shiftY' },
       data: withCalendarGaps(scene, item, item.points.map((point, index) => {
@@ -238,17 +230,17 @@ export function renderCartesianPointBase(scene: ResolvedCartesianPointRenderMode
             name: `__point-direct-label:${item.name}:${index}`, segmentOf: item.name, type: 'line', showSymbol: true, symbolSize: 0, lineStyle: { opacity: 0 }, z: 50, clip: false, tooltip: { show: false },
             labelLayout: { hideOverlap: false, moveOverlap: 'shiftY' },
             data: [{ value: [categoryCoordinate(scene, index), endpoint], elementId: point.id, elementKey: point.legacyKey, sourceSeriesName: item.name, directLegendLabel: true, selectionTarget: 'guide',
-              label: { ...directLabel, position: directAtEnd ? 'right' : 'left', align: directAtEnd ? 'left' : 'right' } }],
+              label: { ...directLabel, position: directAtEnd ? 'right' : 'left', align: directAtEnd ? 'left' : 'right' }, emphasis: { label: directLabel } }],
         })
         }
         return {
           id: point.id, value: pointValue(scene, index, point.value), name: scene.plot.categories[index]?.coordinate, elementId: point.id, datumId: point.datumId, seriesId: point.seriesId, elementKey: point.legacyKey, sourceSeriesName: item.name, displayValue: point.displayValue, displayCategory: point.displayCategory, displayColor: item.color,
-          symbol: point.marker.shape, symbolSize: point.marker.visible ? point.marker.size : 0, itemStyle: { color: point.marker.fill, borderColor: point.marker.stroke, borderWidth: point.marker.strokeWidth }, label: pointLabel, emphasis: { label: pointLabel },
+          symbol: point.marker.shape, symbolSize: point.marker.visible ? point.marker.size : 0, itemStyle: { color: point.marker.fill, borderColor: point.marker.stroke, borderWidth: point.marker.strokeWidth, opacity: point.marker.opacity ?? 1 }, label: pointLabel, emphasis: { label: pointLabel },
         }
       })),
     }
   })
-  const hits = scene.plot.series.map((item) => ({ name: `__hit__:${item.name}`, interactionLayer: 'hit', type: 'line', triggerEvent: true, ...interpolationOption(item.interpolation), symbol: item.marker.shape, symbolSize: item.marker.size, connectNulls: item.missing === 'connect', lineStyle: { color: 'rgba(0,0,0,0)', width: 14, opacity: 0 }, itemStyle: { opacity: 0 }, tooltip: { show: false }, silent: false, z: 100, data: withCalendarGaps(scene, item, item.points.map((point) => ({ id: point.id, value: pointValue(scene, point.categoryIndex, point.value), name: scene.plot.categories[point.categoryIndex]?.coordinate, elementId: point.id, datumId: point.datumId, seriesId: point.seriesId, elementKey: point.legacyKey, sourceSeriesName: item.name, displayValue: point.displayValue, displayCategory: point.displayCategory }))) }))
+  const hits = scene.plot.series.map((item) => ({ name: `__hit__:${item.name}`, interactionLayer: 'hit', type: 'line', triggerEvent: true, ...interpolationOption(item.interpolation, scene.plot.valueAxisInverse), symbol: 'circle', symbolSize: Math.max(32, item.marker.size), connectNulls: item.missing === 'connect', lineStyle: { color: 'rgba(0,0,0,0)', width: 24, opacity: 0 }, itemStyle: { opacity: 0 }, tooltip: { show: false }, silent: false, z: 100, data: withCalendarGaps(scene, item, item.points.map((point) => ({ id: point.id, value: pointValue(scene, point.categoryIndex, point.value), name: scene.plot.categories[point.categoryIndex]?.coordinate, elementId: point.id, datumId: point.datumId, seriesId: point.seriesId, elementKey: point.legacyKey, sourceSeriesName: item.name, displayValue: point.displayValue, displayCategory: point.displayCategory, displayColor: item.color }))) }))
   const plot = scene.geometry.plot, canvas = scene.geometry.canvas
   const title = scene.frameElements.find((item) => item.role === 'title'), subtitle = scene.frameElements.find((item) => item.role === 'subtitle')
   const footer = scene.frameElements.filter((item) => item.role === 'note' || item.role === 'source').map((item, index, items) => ({ id: `chart-${item.role}`, type: 'text', left: scene.geometry.content.x, bottom: canvas.height - scene.geometry.content.y - scene.geometry.content.height + (items.length - index - 1) * (Math.round(item.style.size * item.style.lineHeight / 100) + scene.document.composition.noteSource), style: { text: item.text, width: scene.geometry.content.width, overflow: 'gap', ...graphicTextStyle(item.style) } }))
@@ -258,7 +250,7 @@ export function renderCartesianPointBase(scene: ResolvedCartesianPointRenderMode
   return {
     animation: true, backgroundColor: scene.document.canvas.background, color: scene.plot.series.map((item) => item.color), textStyle: { fontFamily: scene.document.theme.fontFamily },
     title: { text: title?.text ?? '', subtext: subtitle?.text ?? '', left: scene.geometry.content.x, top: Math.max(0, scene.geometry.content.y - 8), textStyle: title ? textStyle(title.style) : undefined, subtextStyle: subtitle ? textStyle(subtitle.style) : undefined, itemGap: scene.document.composition.titleSubtitle, triggerEvent: true },
-    tooltip: { trigger: 'axis', formatter: (input: unknown) => { const items = (Array.isArray(input) ? input : [input]) as Array<{ dataIndex?: number; seriesName?: string; value?: unknown; data?: { displayValue?: string; displayCategory?: string; streamBand?: boolean } }>; const visible = items.filter((entry) => entry.seriesName && !entry.seriesName.startsWith('__') && !entry.data?.streamBand); const index = visible[0]?.dataIndex ?? 0; return [`<b>${escapeHtml(visible[0]?.data?.displayCategory ?? scene.plot.series[0]?.points[index]?.displayCategory ?? '')}</b>`, ...visible.map((entry) => `${escapeHtml(entry.seriesName)}: <b>${escapeHtml(entry.data?.displayValue ?? formatYAxisNumber(entry.value as number, config))}</b>`)].join('<br/>') } },
+    tooltip: { trigger: 'axis', formatter: (input: unknown) => seriesTooltip(input, config, scene.plot.series, (index) => scene.plot.series[0]?.points[index]?.displayCategory ?? '') },
     legend: { show: Boolean(legendGuide?.visible && legendItems.length), data: legendItems.map((item) => ({ name: item.rendererName, icon: item.marker?.kind === 'point' ? 'circle' : config.legendMarker === 'circle' ? 'circle' : config.legendMarker === 'diamond' ? 'diamond' : config.legendMarker === 'triangle' ? 'triangle' : config.legendMarker === 'square' ? 'rect' : 'path://M0 4H24V7H0Z', itemStyle: { color: item.color, opacity: item.marker?.opacity ?? 1, borderWidth: 0 } })), formatter: (name: string) => legendLabelText(legendLabels.get(name) ?? name, config.legendText, legendRail, config.legendPosition), orient: legendGuide?.kind === 'categorical-legend' && (legendGuide.position === 'left' || legendGuide.position === 'right') ? 'vertical' : 'horizontal', left: legendRail?.x ?? scene.geometry.content.x, top: legendRail?.y, right: legendGuide?.kind === 'categorical-legend' && legendGuide.position === 'right' ? canvas.width - (legendRail?.x ?? 0) - (legendRail?.width ?? 0) : undefined, itemWidth: 24, itemHeight: 10, itemGap: 18, textStyle: textStyle(config.legendText) },
     grid: { left: plot.x, top: plot.y, right: canvas.width - plot.x - plot.width, bottom: canvas.height - plot.y - plot.height, containLabel: false, outerBoundsMode: scene.plot.categories.every((category) => typeof category.value === 'string') ? 'none' : 'auto' },
     nativeSelectionHits: edgeLabels.map(({ rect, info }) => ({ rect, info })),

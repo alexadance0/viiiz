@@ -6,6 +6,7 @@ import { resolveNativeComparisonStemScene } from './layout'
 import { createDefaultChartConfig } from '../../../entities/chart/model/defaultChartConfig'
 import type { NativeComparisonStemChartScene } from '../../../entities/chart/model/ChartScene'
 import { applySeriesVisualState } from '../../../components/ChartCanvas'
+import { softenColor } from '../../../core/color'
 
 const table: DataTable = {
   name: 'comparison', columns: ['category', 'value', 'before', 'after'], rows: [
@@ -180,10 +181,10 @@ describe('native comparison/stem compiler', () => {
     expect(resolved.comparisonGeometry.directLabels[before.id]).toMatchObject({ collision: 'shift-y', leader: { points: expect.any(Array) }, noteY: expect.any(Number) })
     const option = renderScene(resolved) as { series: Array<{ name: string; data: Array<{ itemStyle: Record<string, unknown>; selectionTarget?: string }>; renderItem(params: { dataIndex: number }): { children: Array<{ info?: { selectionTarget?: string }; style?: Record<string, unknown> }> } }>; graphic: Array<{ comparisonConnectorSeriesNames?: string[]; children?: Array<{ style?: { opacity?: number } }> }> }
     applySeriesVisualState(option as unknown as Record<string, unknown>, source, 'before')
-    expect(option.series.find((series) => series.name === 'after')?.data[0].itemStyle.opacity).toBe(.22)
+    expect(option.series.find((series) => series.name === 'after')?.data[0].itemStyle.opacity).toBe(1)
     const afterMark = option.series.find((series) => series.name === 'after')!
-    expect(afterMark.renderItem({ dataIndex: 0 }).children[0].style?.opacity).toBe(.22)
-    expect(option.graphic.find((item) => item.comparisonConnectorSeriesNames?.includes('after'))?.children?.[0].style?.opacity).toBeCloseTo(.72 * .22)
+    expect(afterMark.renderItem({ dataIndex: 0 }).children[0].style).toMatchObject({ opacity: 1, fill: softenColor(after.points[0].marker.fill) })
+    expect(option.graphic.find((item) => item.comparisonConnectorSeriesNames?.includes('after'))?.children?.[0].style?.opacity).toBeCloseTo(.72)
     const beforeGuide = option.series.find((series) => series.name === '__comparison-direct-guide:before')!
     expect(beforeGuide.data[0].selectionTarget).toBe('guide')
     expect(beforeGuide.renderItem({ dataIndex: 0 }).children.some((child) => child.info?.selectionTarget === 'guide')).toBe(true)

@@ -1,4 +1,4 @@
-import { planCategoryDateLabels, planCategoryDateTicks } from '../../../core/chartDateAxis'
+import { planCategoryDateLabels, planCategoryDateTicks, planDateAxisTicks } from '../../../core/chartDateAxis'
 import { prepareVisibleChartData, niceNumericScale, orderedBounds } from '../../../core/chartScale'
 import { formatChartNumber } from '../../../core/numberFormat'
 import { seriesLegendItemId } from '../../../core/legend'
@@ -9,6 +9,7 @@ import { aggregateDatumId, markElementId, rawDatumId, seriesId, syntheticDatumId
 import type { BarMarkScene, BarSeriesScene, NativeBarChartScene } from '../../../entities/chart/model/ChartScene'
 import type { AxisSpec } from '../../chart-layout/axisLayout'
 import type { GuideSpec } from '../../chart-layout/guides/types'
+import { colorRowGroups, colorRowGroupKey, createColorEncoding } from '../../../core/colorEncoding'
 
 export const NATIVE_BAR_KINDS = ['bar', 'stacked-bar', 'normalized-stacked-bar', 'horizontal-bar', 'horizontal-stacked-bar', 'horizontal-normalized-stacked-bar'] as const
 export type NativeBarKind = typeof NATIVE_BAR_KINDS[number]
@@ -37,6 +38,8 @@ export function compileNativeBarScene(table: DataTable, sourceConfig: ChartConfi
   const orientation = horizontal(sourceConfig.kind) || sourceConfig.barOrientation === 'horizontal' ? 'horizontal' : 'vertical'
   const config = orientation === 'horizontal' ? { ...sourceConfig, barOrientation: 'horizontal' as const } : sourceConfig
   const prepared = prepareVisibleChartData(table, config)
+  const encoding = config.colorEncoding ? createColorEncoding(table, config) : null
+  const colorRows = encoding ? colorRowGroups(table, config) : null
   const stack = stacking(config.kind as NativeBarKind)
   const plannedLabels = planCategoryDateLabels(prepared.categories, table, config)
   const overrideAxis = orientation === 'horizontal' ? 'y' : 'x'
@@ -54,13 +57,16 @@ export function compileNativeBarScene(table: DataTable, sourceConfig: ChartConfi
       const override = config.elementStyles[legacyKey]
       const rowIndex = sourceRowIndex(table, config, category, source.name)
       const datumId = config.aggregation === 'none' && rowIndex >= 0 ? rawDatumId(rowIndex, source.name) : aggregateDatumId(category, source.name)
-      const markColor = override?.color ?? color
+      const encoded = encoding?.resolve(colorRows!.get(colorRowGroupKey(category, config.seriesField ? source.name : '')) ?? [], value)
+      const markColor = override?.color ?? encoded?.color ?? color
       return {
         type: 'rect', id: markElementId(id, datumId), datumId, seriesId: id, legacyKey, category, categoryIndex, value,
         displayCategory: formatTimeValue(category, table.timeProfiles?.[config.xField], config.dateLabelFormat),
         displayValue: value == null ? 'пропуск' : formatChartNumber(value, config),
+        colorLabel: encoded?.label,
         style: {
           color: markColor,
+          pattern: override?.color ? undefined : encoded?.pattern,
           opacity: override?.fillOpacity ?? seriesStyle?.fillOpacity ?? config.barFillOpacity ?? 1,
           borderColor: override?.borderColor ?? seriesStyle?.borderColor ?? config.barBorderColor ?? markColor,
           borderWidth: override?.borderWidth ?? seriesStyle?.borderWidth ?? config.barBorderWidth ?? 0,
@@ -96,6 +102,8 @@ export function compileNativeBarScene(table: DataTable, sourceConfig: ChartConfi
   const valueTitleStyle = config.yAxisTitleText ?? config.axisTitleText
   const categoryAxis = axis({ id: 'category', channel: 'category', orientation: orientation === 'vertical' ? 'horizontal' : 'vertical', placement: { kind: 'side', side: categorySide }, line: { visible: config.showXAxisLine }, ticks: { visible: config.showXTicks, length: config.tickLength }, labels: { visible: config.showXAxisLabels ?? true, size: 0, gap: config.xAxisLabelGap ?? 8, rotation: orientation === 'vertical' && typeof config.xAxisLabelRotate === 'number' ? config.xAxisLabelRotate : 0, style: categoryStyle }, title: { visible: config.showXAxisTitle, text: config.xAxisTitle, size: 0, gap: config.xAxisTitleGap, style: categoryTitleStyle } })
   categoryAxis.calendarTicks = planCategoryDateTicks(prepared.categories, table, config)
+  const dateAxis = prepared.categories.length && prepared.categories.every((value) => value instanceof Date) ? planDateAxisTicks(prepared.categories, table, config) : undefined
+  categoryAxis.timeScale = dateAxis
   const valueAxis = axis({ id: 'value', channel: 'value', orientation: orientation === 'vertical' ? 'vertical' : 'horizontal', placement: { kind: 'side', side: valueSide }, line: { visible: config.showYAxisLine }, ticks: { visible: config.showYTicks, length: config.tickLength }, labels: { visible: config.showYAxisLabels ?? true, size: 0, gap: config.yAxisLabelGap ?? 8, style: valueStyle }, title: { visible: config.showYAxisTitle, text: config.yAxisTitle, size: 0, gap: config.yAxisTitleGap, style: valueTitleStyle } })
   const guides: GuideSpec[] = [
     { id: 'legend', kind: 'categorical-legend', visible: config.showLegend && !config.showDirectLabels && series.some((item) => config.seriesStyles[item.name]?.showLegendItem !== false), coordinateSpace: 'content', position: config.legendPosition ?? 'top', items: series.map((item) => ({ id: seriesLegendItemId(item.id), label: config.seriesStyles[item.name]?.legendLabel?.trim() || item.name, visible: config.seriesStyles[item.name]?.showLegendItem ?? true, color: item.color, target: { kind: 'series' as const, seriesId: item.id } })) },
@@ -110,8 +118,12 @@ export function compileNativeBarScene(table: DataTable, sourceConfig: ChartConfi
     ...categories.map((category): ChartElement => ({ id: `category-label:${category.id}`, role: 'category-label', coordinateSpace: 'canvas', selectable: true, axisId: 'category', datumId: category.id, text: category.label })),
     ...series.map((item): ChartElement => ({ id: `legend-item:${item.id}`, role: 'legend-item', coordinateSpace: 'canvas', selectable: true, seriesId: item.id, text: item.name })),
   ]
+  if (encoding) {
+    guides[0] = encoding.legend()
+    if (guides[1].kind === 'direct-series') guides[1].visible = false
+  }
   const frameElements = ([['title', config.title, config.titleText], ['subtitle', config.subtitle, config.subtitleText], ['note', config.note, config.noteText], ['source', config.source, config.sourceText]] as const)
     .filter(([, text], index) => Boolean(text) && (index === 0 ? config.showTitle !== false : index === 1 ? config.showSubtitle !== false : index === 2 ? config.showNote !== false : config.showSource !== false))
     .map(([role, text, style]) => ({ id: `frame:${role}`, role, text, style }))
-  return { document: chartDocumentFromLegacy(table, config), compatibilityConfig: config, elements, guides, frameElements, plot: { kind: 'bar', categoryPlacement: 'band', orientation, stacking: stack, categories, categoryAxis, valueAxis, valueDomain, barWidth: config.barWidth ?? 68, seriesGap: config.barSeriesGap ?? 30, series } }
+  return { document: chartDocumentFromLegacy(table, config), compatibilityConfig: config, elements, guides, frameElements, plot: { kind: 'bar', categoryPlacement: 'band', dateAxis, orientation, stacking: stack, categories, categoryAxis, valueAxis, valueDomain, barWidth: config.barWidth ?? 68, seriesGap: config.barSeriesGap ?? 30, series } }
 }

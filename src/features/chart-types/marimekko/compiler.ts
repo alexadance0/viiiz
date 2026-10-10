@@ -44,6 +44,6 @@ export function compileMarimekkoScene(table: DataTable, config: ChartConfig): Na
   return {
     ...scene, document: chartDocumentFromLegacy(table, config), compatibilityConfig: config,
     elements: scene.elements.filter((element) => element.role !== 'mark' && element.role !== 'category-label' || retained.has(element.id)),
-    plot: { ...scene.plot, categoryAxis: { ...scene.plot.categoryAxis, calendarTicks: undefined }, categories, series, stacking: normalized ? 'normalized' : 'stacked', valueDomain: normalized ? { min: 0, max: 100, step: config.yAxisStep != null && config.yAxisStep > 0 ? Math.min(100, config.yAxisStep) : 20 } : scene.plot.valueDomain, barWidth: 100, seriesGap: 0 },
+    plot: { ...scene.plot, dateAxis: undefined, categoryAxis: { ...scene.plot.categoryAxis, timeScale: undefined, calendarTicks: undefined }, categories, series, stacking: normalized ? 'normalized' : 'stacked', valueDomain: normalized ? { min: 0, max: 100, step: config.yAxisStep != null && config.yAxisStep > 0 ? Math.min(100, config.yAxisStep) : 20 } : scene.plot.valueDomain, barWidth: 100, seriesGap: 0 },
   }
 }

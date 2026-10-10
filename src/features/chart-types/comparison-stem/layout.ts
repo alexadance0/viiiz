@@ -3,6 +3,7 @@ import { measureTextWidth } from '../../../core/textMetrics'
 import type { NativeComparisonStemChartScene, ResolvedComparisonStemGeometry, ResolvedSceneGeometry } from '../../../entities/chart/model/ChartScene'
 import type { ResolvedReservation } from '../../chart-layout/reservations'
 import { resolveNativeCartesianScene } from '../bar/layout'
+import { categoryAxisFraction } from '../../chart-layout/axisLayout'
 
 export type ResolvedComparisonStemScene = NativeComparisonStemChartScene & {
   geometry: ResolvedSceneGeometry
@@ -24,9 +25,10 @@ export function resolveNativeComparisonStemScene(sourceScene: NativeComparisonSt
   const plot = scene.geometry.plot, horizontal = scene.plot.orientation === 'horizontal'
   const count = Math.max(1, scene.plot.categories.length), band = (horizontal ? plot.height : plot.width) / count
   const inverseCategory = horizontal && (scene.compatibilityConfig.categoryAxisInverse ?? true)
-  const categoryCoordinate = (index: number) => horizontal
-    ? plot.y + (inverseCategory ? index + .5 : count - index - .5) * band
-    : plot.x + (index + .5) * band
+  const categoryCoordinate = (index: number) => {
+    const fraction = categoryAxisFraction(scene.plot.categories, scene.plot.categoryAxis, index)
+    return horizontal ? plot.y + (inverseCategory ? fraction : 1 - fraction) * plot.height : plot.x + fraction * plot.width
+  }
   const valueCoordinate = (value: number) => {
     if (scene.compatibilityConfig.yAxisScaleType === 'log' && value <= 0) return undefined
     const ratio = valueRatio(value, scene.plot.valueDomain.min, scene.plot.valueDomain.max, scene.compatibilityConfig.yAxisScaleType === 'log')

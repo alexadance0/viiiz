@@ -1118,7 +1118,7 @@ describe('individual chart element styles', () => {
     const option = getChartPlugin('line').buildOption(table, config) as { series: Array<{ name?: string; triggerEvent?: boolean; symbol?: string; symbolSize?: number; itemStyle?: { opacity?: number }; lineStyle?: { color: string; width: number; opacity?: number }; data: Array<{ elementKey?: string; sourceSeriesName?: string }> }> }
     expect(option.series[0].data[0]).toMatchObject({ symbolSize: 0 })
     const hit = option.series.find((series) => series.name === '__hit__:value')!
-    expect(hit).toMatchObject({ name: '__hit__:value', triggerEvent: true, symbol: 'circle', symbolSize: 8, itemStyle: { opacity: 0 }, lineStyle: { color: 'rgba(0,0,0,0)', width: 14, opacity: 0 } })
+    expect(hit).toMatchObject({ name: '__hit__:value', triggerEvent: true, symbol: 'circle', symbolSize: 32, itemStyle: { opacity: 0 }, lineStyle: { color: 'rgba(0,0,0,0)', width: 24, opacity: 0 } })
     expect(hit.data[1]).toMatchObject({ elementKey: 'value\u001fstring:Фев', sourceSeriesName: 'value' })
   })
 
@@ -1399,17 +1399,17 @@ describe('chart composition alignment', () => {
     expect(option.xAxis.splitLine.interval).toBe(2)
   })
 
-  it('preserves date typography and rotates only when displayed labels cannot fit', () => {
+  it('preserves date typography and horizontal labels while guarding dense manual ticks', () => {
     const dated: DataTable = { name: 'daily', columns: ['date', 'value'], rows: Array.from({ length: 20 }, (_, index) => ({ date: new Date(2025, 0, index + 1), value: index })) }
     const denseConfig = base('bar'); denseConfig.xField = 'date'; denseConfig.dateLabelFormat = 'day-month-year'; denseConfig.xAxisStep = 1; denseConfig.canvasWidth = 500
     const sparseConfig = { ...denseConfig, xAxisStep: 5 }
     const dense = getChartPlugin('bar').buildOption(dated, denseConfig) as { xAxis: { axisLabel: { fontSize: number; interval(index: number): boolean; hideOverlap: boolean; rotate: number } } }
     const sparse = getChartPlugin('bar').buildOption(dated, sparseConfig) as typeof dense
     expect(dense.xAxis.axisLabel.fontSize).toBe(sparse.xAxis.axisLabel.fontSize)
-    expect(dense.xAxis.axisLabel.hideOverlap).toBe(false)
-    expect(dated.rows.every((_, index) => dense.xAxis.axisLabel.interval(index))).toBe(true)
+    expect(dense.xAxis.axisLabel.hideOverlap).toBe(true)
+    expect(calendarValues(dense)).toHaveLength(dated.rows.length)
     expect(sparse.xAxis.axisLabel.rotate).toBe(0)
-    expect(dense.xAxis.axisLabel.rotate).toBeGreaterThan(0)
+    expect(dense.xAxis.axisLabel.rotate).toBe(0)
   })
 
   it('keeps readable typography and chooses a wider step in automatic date mode', () => {
@@ -1417,8 +1417,8 @@ describe('chart composition alignment', () => {
     const config = base('bar'); config.xField = 'date'; config.dateLabelFormat = 'day-month-year'; config.xAxisStep = null; config.canvasWidth = 500; config.xAxisLabelText = style(16)
     const option = getChartPlugin('bar').buildOption(dated, config) as { xAxis: { axisLabel: { fontSize: number; interval(index: number): boolean; hideOverlap: boolean; rotate: number }; axisTick: { interval: number } } }
     expect(option.xAxis.axisLabel.fontSize).toBe(16)
-    expect(dated.rows.filter((_, index) => option.xAxis.axisLabel.interval(index)).length).toBeLessThan(dated.rows.length)
-    expect(option.xAxis.axisLabel).toMatchObject({ hideOverlap: false, rotate: 0 })
+    expect(calendarValues(option).length).toBeLessThan(dated.rows.length)
+    expect(option.xAxis.axisLabel).toMatchObject({ hideOverlap: true, rotate: 0 })
     expect(calendarLabels(option).length).toBeGreaterThan(0)
   })
 
@@ -1440,10 +1440,10 @@ describe('chart composition alignment', () => {
     }
     const config = base('bar'); config.xField = 'date'; config.dateLabelFormat = 'year-first-full'; config.dateAxisStepUnit = 'year'; config.xAxisStep = 2
     const option = getChartPlugin('bar').buildOption(daily, config) as { xAxis: { data: string[]; axisLabel: { interval(index: number): boolean; formatter(value: string, index: number): string }; axisTick: { interval(index: number): boolean }; splitLine: { show: boolean } } }
-    expect(option.xAxis.data).toHaveLength(5)
-    expect(new Set(option.xAxis.data).size).toBe(5)
+    expect(timeObservations(option)).toHaveLength(5)
+    expect(new Set(timeObservations(option)).size).toBe(5)
     expect(calendarLabels(option)).toEqual(['2024'])
-    expect(option.xAxis.data.map((_, index) => option.xAxis.axisLabel.interval(index))).toEqual([false, false, false, true, false])
+    expect(calendarValues(option)).toEqual([+new Date(2024, 0, 1)])
     expect(calendarLabels(option).length).toBeGreaterThan(0)
     expect(option.xAxis.splitLine.show).toBe(false)
   })
@@ -1453,7 +1453,7 @@ describe('chart composition alignment', () => {
     const config = base('bar'); config.xField = 'date'; config.dateLabelFormat = 'year-full'
     const option = getChartPlugin('bar').buildOption(annual, config) as { xAxis: { data: string[]; axisLabel: { formatter(value: string, index: number): string; interval(index: number): boolean } } }
     expect(calendarLabels(option)).toEqual(['2022', '2023', '2024'])
-    expect(option.xAxis.axisLabel.interval(0)).toBe(true)
+    expect(new Date(calendarValues(option)[0]).getMonth()).toBe(0)
   })
 
   it('anchors calendar steps at the first date chosen by the user', () => {
@@ -1461,8 +1461,8 @@ describe('chart composition alignment', () => {
     const config = base('bar'); config.xField = 'date'; config.dateLabelFormat = 'year-full'; config.dateAxisStepUnit = 'year'; config.dateAxisAnchor = '2023-01-01'; config.xAxisStep = 2
     const option = getChartPlugin('bar').buildOption(dated, config) as { xAxis: { data: string[]; axisLabel: { hideOverlap: boolean; interval(index: number): boolean; formatter(value: string, index: number): string } } }
     expect(calendarLabels(option)).toEqual(['2023', '2025'])
-    expect(option.xAxis.data.map((_, index) => option.xAxis.axisLabel.interval(index))).toEqual([false, true, false, true, false])
-    expect(option.xAxis.axisLabel.hideOverlap).toBe(false)
+    expect(calendarValues(option)).toEqual([+new Date(2023, 0, 1), +new Date(2025, 0, 1)])
+    expect(option.xAxis.axisLabel.hideOverlap).toBe(true)
   })
 
   it('keeps year labels on January boundaries after a mid-year anchor', () => {
@@ -1471,7 +1471,7 @@ describe('chart composition alignment', () => {
     const config = base('bar'); config.xField = 'date'; config.dateLabelFormat = 'year-full'; config.dateAxisStepUnit = 'year'; config.dateAxisAnchor = '2024-03-01'
     const option = getChartPlugin('bar').buildOption(dated, config) as { xAxis: { data: string[]; axisLabel: { formatter(value: string, index: number): string; interval(index: number): boolean } } }
     expect(calendarLabels(option)).toEqual(['2025'])
-    expect(option.xAxis.axisLabel.interval(0)).toBe(true)
+    expect(calendarValues(option)).toEqual([+new Date(2025, 0, 1)])
   })
 
   it('reduces daily labels to calendar month and week transitions', () => {
@@ -1498,7 +1498,7 @@ describe('chart composition alignment', () => {
       const config = base('bar'); config.xField = 'date'; config.dateLabelFormat = dateLabelFormat
       const option = getChartPlugin('bar').buildOption(dated, config) as { xAxis: { data: string[]; axisLabel: { formatter(value: string, index: number): string } } }
       expect(calendarLabels(option).length, dateLabelFormat).toBeGreaterThan(0)
-      expect(option.xAxis.data.map((value, index) => option.xAxis.axisLabel.formatter(value, index)).filter(Boolean)).toEqual(expected)
+      expect(dated.rows.map((row) => calendarAxis(option).axisLabel.formatter(Number(row.date))).filter(Boolean)).toEqual(expected)
     }
   })
 
@@ -1542,9 +1542,9 @@ describe('chart composition alignment', () => {
     const config = base('bar'); config.xField = 'date'; config.dateLabelFormat = 'quarter-context-en'
     const option = getChartPlugin('bar').buildOption(quarterly, config) as { xAxis: { data: string[]; axisLabel: { formatter(value: string, index: number): string; hideOverlap: boolean; showMinLabel: boolean; showMaxLabel?: boolean } } }
     expect(calendarLabels(option)).toEqual(['Q1\n2025', 'Q2', 'Q3', 'Q4'])
-    expect(option.xAxis.axisLabel).toMatchObject({ hideOverlap: false })
+    expect(option.xAxis.axisLabel).toMatchObject({ hideOverlap: true })
     expect(option.xAxis.axisLabel.showMaxLabel).toBeUndefined()
-    expect(new Set(option.xAxis.data).size).toBe(4)
+    expect(new Set(timeObservations(option)).size).toBe(4)
   })
 
   it('keeps the first contextual period label when a series starts mid-year', () => {
@@ -1552,7 +1552,7 @@ describe('chart composition alignment', () => {
     const config = base('bar'); config.xField = 'date'; config.dateLabelFormat = 'quarter-context-ru'
     const option = getChartPlugin('bar').buildOption(quarterly, config) as { xAxis: { data: string[]; axisLabel: { formatter(value: string, index: number): string; interval(index: number): boolean } } }
     expect(calendarLabels(option)[0]).toBe('К2\n2025')
-    expect(option.xAxis.axisLabel.interval(0)).toBe(true)
+    expect(calendarValues(option)[0]).toBe(+new Date(2025, 3, 1))
   })
 
   it('puts month context under the first displayed day when the period boundary is absent or hidden', () => {
@@ -1577,8 +1577,7 @@ describe('chart composition alignment', () => {
     for (const dateLabelFormat of ['week-only', 'week-year', 'week-year-en', 'year-week-en', 'week-context-en', 'week-context-ru'] as const) {
       const config = base('bar'); config.xField = 'date'; config.dateLabelFormat = dateLabelFormat; config.canvasWidth = 320
       const option = getChartPlugin('bar').buildOption(weekly, config) as { xAxis: { data: string[]; axisLabel: { formatter(value: string, index: number): string; interval(index: number): boolean } } }
-      const weekOneIndex = weekly.rows.findIndex((row) => row.date instanceof Date && isoWeekParts(row.date).week === 1)
-      expect(option.xAxis.axisLabel.interval(weekOneIndex), dateLabelFormat).toBe(true)
+      expect(calendarValues(option).some((value) => isoWeekParts(new Date(value)).week === 1), dateLabelFormat).toBe(true)
       expect(calendarLabels(option).some((label) => /W01|Нед. 1|нед. 1/.test(label)), dateLabelFormat).toBe(true)
     }
   })
@@ -1587,10 +1586,9 @@ describe('chart composition alignment', () => {
     const daily: DataTable = { name: 'days', columns: ['date', 'value'], rows: Array.from({ length: 10 }, (_, index) => ({ date: new Date(2025, 0, 1 + index), value: index })), timeProfiles: { date: { frequency: 'daily', label: 'Дневные', confidence: 100, source: 'intervals' } } }
     const config = base('bar'); config.xField = 'date'; config.dateLabelFormat = 'week-context-ru'
     const option = getChartPlugin('bar').buildOption(daily, config) as { xAxis: { data: string[]; axisLabel: { formatter(value: string, index: number): string; interval(index: number): boolean } } }
-    expect(option.xAxis.axisLabel.formatter(option.xAxis.data[0], 0)).toBe('')
-    expect(option.xAxis.axisLabel.interval(0)).toBe(false)
+    expect(calendarAxis(option).axisLabel.formatter(Number(daily.rows[0].date))).toBe('')
     expect(calendarLabels(option)).toEqual(['Нед. 2\n2025'])
-    expect(option.xAxis.axisLabel.interval(5)).toBe(true)
+    expect(calendarValues(option)).toEqual([+new Date(2025, 0, 6)])
   })
 
   it('uses one left guide for title, plot, legend and footer texts', () => {
@@ -1853,5 +1851,16 @@ function customGuideStyle(series: unknown) {
 }
 
 function calendarLabels(option: unknown) {
+  const axes = option as { xAxis?: { type?: string; axisLabel: { customValues: number[]; formatter(value: number): string } }; yAxis?: { type?: string; axisLabel: { customValues: number[]; formatter(value: number): string } } }
+  const timeAxis = axes.xAxis?.type === 'time' ? axes.xAxis : axes.yAxis?.type === 'time' ? axes.yAxis : undefined
+  if (timeAxis) return timeAxis.axisLabel.customValues.map((value) => timeAxis.axisLabel.formatter(value))
   return (option as { graphic: Array<{ id?: string; type?: string; style?: { text?: string } }> }).graphic.filter((item) => item.id?.startsWith('calendar-category:') && item.type === 'text').map((item) => item.style?.text ?? '')
 }
+
+function calendarAxis(option: unknown) {
+  const axes = option as Record<string, { type: string; axisLabel: { customValues: number[]; formatter(value: number): string } }>
+  return axes.xAxis.type === 'time' ? axes.xAxis : axes.yAxis
+}
+
+const calendarValues = (option: unknown) => calendarAxis(option).axisLabel.customValues
+const timeObservations = (option: unknown) => (option as { series: Array<{ data: Array<{ value: number[] }> }> }).series[0].data.map((point) => point.value[0])

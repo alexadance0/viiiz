@@ -3,6 +3,7 @@ import type { ElementId } from '../../../entities/chart/model/ChartElement'
 import type { NativeButterflyChartScene, ResolvedNativeChartScene } from '../../../entities/chart/model/ChartScene'
 import type { LayoutReservation } from '../../chart-layout/reservations'
 import { resolveNativeCartesianScene } from '../bar/layout'
+import { categoryAxisFraction } from '../../chart-layout/axisLayout'
 
 export type ResolvedButterflyScene = ResolvedNativeChartScene & { plot: NativeButterflyChartScene['plot']; butterflyGeometry: { marks: Record<ElementId, { x: number; y: number; width: number; height: number }>; labels: Record<ElementId, { x: number; y: number; width: number; height: number; align: 'left' | 'center' | 'right'; verticalAlign: 'middle'; inside: boolean }>; categories: Array<{ x: number; y: number; width: number; height: number }> ; centerGap: number } }
 
@@ -30,7 +31,8 @@ export function resolveNativeButterflyScene(source: NativeButterflyChartScene): 
       const inner = center + (series.side === 'left' ? -centerGap / 2 : centerGap / 2)
       const start = inner + (series.side === 'left' ? -1 : 1) * half * mark.stackStart / extent
       const end = inner + (series.side === 'left' ? -1 : 1) * half * mark.stackEnd / extent
-      const rect = { x: Math.min(start, end), y: plot.y + band * categoryIndex + (band - barHeight) / 2, width: Math.max(1, Math.abs(end - start)), height: barHeight }
+      const centerY = plot.y + plot.height * categoryAxisFraction(source.plot.categories, base.plot.categoryAxis, categoryIndex)
+      const rect = { x: Math.min(start, end), y: centerY - barHeight / 2, width: Math.max(1, Math.abs(end - start)), height: barHeight }
       marks[mark.id] = rect
       if (mark.label.visible) {
         const requested = mark.label.position ?? 'auto'
@@ -51,6 +53,6 @@ export function resolveNativeButterflyScene(source: NativeButterflyChartScene): 
       base.geometry.elements[mark.id] = rect
     })
   })
-  const categories = source.plot.categories.map((_category, index) => ({ x: center - centerGap / 2, y: plot.y + band * index, width: centerGap, height: band }))
+  const categories = source.plot.categories.map((_category, index) => ({ x: center - centerGap / 2, y: plot.y + plot.height * categoryAxisFraction(source.plot.categories, base.plot.categoryAxis, index) - band / 2, width: centerGap, height: band }))
   return { ...source, plot: { ...source.plot, categoryAxis: base.plot.categoryAxis, valueAxis: base.plot.valueAxis }, geometry: base.geometry, resolvedReservations: base.resolvedReservations, butterflyGeometry: { marks, labels, categories, centerGap } }
 }

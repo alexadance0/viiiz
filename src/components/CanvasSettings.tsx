@@ -54,7 +54,7 @@ export function CanvasSettings({ config, onChange, sizeLocked = false }: Props) 
   const scaledObjects = (width: number, height: number): Partial<ChartConfig> => {
     const scaleX = width / Math.max(1, config.canvasWidth ?? 1000), scaleY = height / Math.max(1, config.canvasHeight ?? 563)
     return {
-      annotations: config.annotations.map((annotation) => ({ ...annotation, x: annotation.x * scaleX, y: annotation.y * scaleY, width: Math.max(80, annotation.width * scaleX), height: annotation.height == null ? undefined : Math.max(60, annotation.height * scaleY) })),
+      annotations: config.annotations.map((annotation) => ({ ...annotation, x: annotation.x * scaleX, y: annotation.y * scaleY, width: Math.max(80, annotation.width * scaleX), height: undefined })),
       decorations: config.decorations?.map((decoration) => ({ ...decoration, x: decoration.x * scaleX, y: decoration.y * scaleY, width: decoration.width * scaleX, height: decoration.height * scaleY })),
     }
   }
@@ -133,8 +133,7 @@ export function CanvasSettings({ config, onChange, sizeLocked = false }: Props) 
     {sizeLocked ? <small>Размер ячейки определяется сеткой. Размер всей композиции задаётся в разделе «Вся композиция».</small> : <><div className="canvas-presets">{formats.map((format) => <button type="button" className={config.canvasPreset === format.id ? 'active' : ''} key={format.id} onClick={() => applyFormat(format)}><strong>{format.label}</strong><small>{format.hint}<br/>{format.width} × {format.height}</small></button>)}</div>
     <button type="button" className={`canvas-custom-toggle ${config.canvasPreset === 'custom' ? 'active' : ''}`} onClick={() => patch({ canvasPreset: 'custom' })}>Свой размер</button>
     {config.canvasPreset === 'custom' && <div className="canvas-size-grid"><label>Ширина, px<NumberInput min="320" max="1000" step="10" value={Math.min(1000, config.canvasWidth ?? 1000)} onValueChange={(canvasWidth) => applyCustomSize(canvasWidth, config.canvasHeight ?? 563)}/></label><span>×</span><label>Высота, px<NumberInput min="320" max="1000" step="10" value={Math.min(1000, config.canvasHeight ?? 563)} onValueChange={(canvasHeight) => applyCustomSize(config.canvasWidth ?? 1000, canvasHeight)}/></label></div>}
-    <SettingsCheckbox isSelected={config.autoFitCanvas ?? true} onChange={(autoFitCanvas) => patch({ autoFitCanvas })}>Вписывать холст в рабочую область</SettingsCheckbox>
-    <small>{config.autoFitCanvas ?? true ? 'Масштаб предпросмотра подстраивается под доступное место. Экспортный размер не меняется.' : 'Холст показывается в масштабе 100%; при необходимости используйте прокрутку.'}</small>
+    <small>Масштаб предпросмотра подстраивается под рабочую область. Экспортный размер не меняется.</small>
     </>}<SettingsCheckbox isSelected={theme === 'dark'} onChange={(dark) => onChange(applyCanvasTheme(config, dark ? 'dark' : 'light'))}>Тёмная тема холста</SettingsCheckbox>
     <small>Фон, надписи, оси и сетка меняются вместе. Цвета можно настроить вручную.</small>
     <label>Фон холста<div className="canvas-background-control"><ColorControl value={config.canvasBackground ?? '#ffffff'} onChange={(canvasBackground) => patch({ canvasBackground })}/><button type="button" className="canvas-background-reset" onClick={() => patch({ canvasBackground: canvasThemeColors[theme].background })}>Сбросить</button></div></label>

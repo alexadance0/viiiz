@@ -36,14 +36,14 @@
 
 .chart-gallery-card {
   margin: 0;
+  align-self: start;
   overflow: hidden;
-  border: 1px solid #d4d4d4;
-  border-radius:0;
+  border: 1px solid var(--chart-color);
   background: #fff;
-  transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .chart-gallery-art {
+  display: block;
   position: relative;
   height: 190px;
   padding: 24px 20px 12px;
@@ -51,7 +51,11 @@
 }
 
 .chart-gallery-art svg { display: block; width: 100%; height: 100%; overflow: visible; }
-.chart-gallery-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #fff; }
+.chart-gallery-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #fff; }
+.chart-gallery-card .chart-gallery-art.is-photo { height: auto; padding: 0; }
+.chart-gallery-art.is-photo svg { display: none; }
+.chart-gallery-art.is-photo img { position: static; display: block; height: auto; }
+.chart-gallery-art:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
 .chart-gallery-art .grid { fill: none; stroke: #d9d7df; stroke-width: 1; }
 .chart-gallery-art .fill, .chart-gallery-art .heatmap { fill: var(--chart-color); }
 .chart-gallery-art .stroke, .chart-gallery-art .trend, .chart-gallery-art .lollipop path, .chart-gallery-art .slope path { fill: none; stroke: var(--chart-color); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
@@ -60,11 +64,6 @@
 .chart-gallery-art .bubble { stroke: var(--chart-color); stroke-width: 2; }
 .chart-gallery-art .lollipop, .chart-gallery-art .slope { fill: var(--chart-color); stroke: var(--chart-color); }
 .chart-gallery-art .boxplot { fill: color-mix(in srgb, var(--chart-color) 16%, #fff); stroke: var(--chart-color); stroke-width: 2; }
-
-.chart-gallery-card figcaption { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; }
-.chart-gallery-card strong { font: 700 13px Wix Madefor Display, sans-serif; }
-.chart-gallery-card span { color: #777580; font-size: 10px; text-align: right; }
-.chart-gallery-card:hover { position: relative; z-index: 3; border-color: var(--chart-color); box-shadow: inset 0 0 0 1px var(--chart-color); }
 
 .chart-gallery-copy {
   position: absolute;
@@ -99,8 +98,6 @@
   .chart-gallery-section { height: 820px; margin-top: 80px; }
   .chart-gallery-columns { gap: 10px; padding: 0 12px; }
   .chart-gallery-art { height: 135px; padding: 16px 10px 8px; }
-  .chart-gallery-card figcaption { display: block; padding: 12px; }
-  .chart-gallery-card span { display: block; margin-top: 4px; text-align: left; }
   .chart-gallery-copy h2 { font-size: 43px; }
   .chart-gallery-title-line::before { -webkit-text-stroke-width: 26px; filter: blur(12px); }
   .chart-marquee-group { gap: 10px; padding-bottom: 10px; }
@@ -108,5 +105,4 @@
 
 @media (prefers-reduced-motion: reduce) {
   .chart-marquee-track { animation-play-state: paused; }
-  .chart-gallery-card { transition: none; }
 }

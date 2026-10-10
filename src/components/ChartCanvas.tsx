@@ -1,9 +1,16 @@
+import { contrastText } from '../core/color'
+import { applyCustomHover, nativeHoverStyle, softenedStyle } from '../features/chart-renderer/echarts/chartHover'
+import { activeTooltipHtml, updateActiveTooltip } from '../features/chart-renderer/echarts/chartTooltip'
+import { clickSelection, nearestPoint, sourceSeriesName, type PointHit } from '../features/chart-renderer/echarts/chartInteraction'
+import '../features/chart-renderer/echarts/chartTooltip.css'
 import { resolveDecoration, type DecorationTarget } from './decorationGeometry'
 import { appendAnnotationText } from '../features/chart-export/annotationSvg'
 import { AnnotationPlacementOverlay } from './AnnotationPlacementOverlay'
 import type { AnnotationPlacement, AnnotationTool } from './AnnotationSettings'
 import { forwardRef, lazy, Suspense, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import './ChartCanvas.css'
+import '../features/chart-renderer/echarts/chartText.css'
+import chartTextCss from '../features/chart-renderer/echarts/chartText.css?inline'
 import * as echarts from 'echarts/core'
 import {
   AxisPointerComponent,
@@ -21,6 +28,8 @@ import { getChartPlugin, getSeriesColor } from '../core/chartRegistry'
 import { sanitizeAnnotationHtml } from '../core/annotationHtml'
 import type { ChartAnnotation, ChartConfig, ChartDecoration, ChartElementSelection, ChartKind, ChartSeriesSelection, DataTable } from '../core/types'
 import { DecorationAnchorPicker, DecorationTextAnchorPicker, DecorationOverlay } from './DecorationOverlay'
+import { AnnotationGuides } from './AnnotationGuides'
+import type { AlignmentBox, AlignmentGuide } from './annotationAlignment'
 import { AnnotationDisplay, CanvasTextDisplay } from './ChartCanvasDisplays'
 import { measureTextWidth, wrapMeasuredText } from '../core/textMetrics'
 import { decorationGraphics, type PlotBounds } from './chartDecorations'
@@ -33,6 +42,10 @@ import { legacySelection, type ChartSelection } from '../entities/chart/model/Ch
 import { advanceChartRender, failChartRender, initialChartRenderLifecycle, settleChartRender, type ChartRenderStatus } from './chartRenderLifecycle'
 import { collectFontFamilies, normalizeFontFamilies, waitForChartFonts } from '../core/textFonts'
 import { CanvasTextOverlay } from './CanvasTextOverlay'
+import { samePlotConfig } from '../core/chartPlotConfig'
+import { DirectLabelOverlay } from './DirectLabelOverlay'
+import { applyDirectLabelPositions, restoreDirectLabelPositions, type EditableDirectLabel } from '../features/chart-renderer/echarts/directLabelEditing'
+import type { ResolvedScene } from '../entities/chart/model/ChartScene'
 
 const AnnotationOverlay = lazy(() => import('./AnnotationOverlay').then(({ AnnotationOverlay: Component }) => ({ default: Component })))
 
@@ -116,7 +129,7 @@ export function disableChartAnimations(option: Record<string, unknown>) {
   })
 }
 
-async function withExportSvg(option: Record<string, unknown>, width: number, height: number, exportFile: (svg: SVGSVGElement) => Promise<void>) {
+async function withExportSvg(option: Record<string, unknown>, width: number, height: number, config: ChartConfig, scene: ResolvedScene | null, exportFile: (svg: SVGSVGElement) => Promise<void>) {
   const host = document.createElement('div')
   host.style.cssText = `position:fixed;left:-10000px;top:0;width:${width}px;height:${height}px;visibility:hidden;pointer-events:none`
   document.body.append(host)
@@ -124,8 +137,12 @@ async function withExportSvg(option: Record<string, unknown>, width: number, hei
   try {
     instance.setOption(option, true)
     instance.getZr().flush()
+    if (scene) applyDirectLabelPositions(instance, scene, config)
     const svg = host.querySelector('svg')
     if (!svg) throw new Error('Не удалось подготовить график к экспорту')
+    const textStyle = document.createElementNS('http://www.w3.org/2000/svg', 'style')
+    textStyle.textContent = chartTextCss
+    svg.prepend(textStyle)
     await exportFile(svg)
   } finally {
     instance.dispose()
@@ -192,6 +209,8 @@ interface Props {
   onTextStyleChange?(field: 'title' | 'subtitle' | 'note' | 'source', style: Partial<ChartConfig['titleText']>): void
   disableViewGestures?: boolean
   viewZoom?: number
+  onDirectLabelPositionsChange?(positions: NonNullable<ChartConfig['directLabelPositions']>): void
+  directLabelControlsHost?: HTMLElement | null
 }
 
 interface AnnotationRun { text: string; color: string; bold: boolean; italic: boolean; underline?: boolean; backgroundColor?: string; textStrokeColor?: string; textStrokeWidth?: string; fontFamily?: string; fontSize?: number; fontWeight?: number }
@@ -257,80 +276,50 @@ function cloneChartOption<T>(value: T): T {
   return value
 }
 // oxlint-disable-next-line react/only-export-components -- exported for a renderer regression test
-function applyStyleOpacity(style: Record<string, unknown> | undefined, opacity: number) {
-  if (!style) return undefined
-  const current = typeof style?.opacity === 'number' ? style.opacity : 1
-  return { ...style, opacity: Math.max(0, Math.min(1, current * opacity)) }
-}
-function applyPointOpacity(style: Record<string, unknown> | undefined, opacity: number, fallbackColor?: string) {
-  return applyStyleOpacity(style, opacity) ?? (fallbackColor ? { color: fallbackColor, opacity } : undefined)
-}
 // oxlint-disable-next-line react/only-export-components -- exported for selection rendering regression tests
-export function applySeriesVisualState(option: Record<string, unknown>, config: ChartConfig, selectedSeriesName?: string | null, selectedElementKey?: string | null, hoveredSeriesName?: string | null) {
-  const selectedElementSeriesName = selectedElementKey?.split('\u001f')[0]
-  const activeSeriesName = hoveredSeriesName ?? selectedSeriesName ?? selectedElementSeriesName ?? null
-  const series = option.series as Array<{ id?: string; name?: string; segmentOf?: string; customBarOf?: string; interactionLayer?: 'hit'; type?: string; silent?: boolean; z?: number; itemStyle?: Record<string, unknown>; lineStyle?: Record<string, unknown>; areaStyle?: Record<string, unknown>; emphasis?: Record<string, unknown>; blur?: Record<string, unknown>; data?: Array<Record<string, unknown> | null> }> | undefined
+export function applySeriesVisualState(option: Record<string, unknown>, config: ChartConfig, selectedSeriesName?: string | null, selectedElementKey?: string | null, hoveredSeriesName?: string | null, hoveredElementKey?: string | null) {
+  if (selectedElementKey?.startsWith('category-label:')) selectedElementKey = null
+  type VisualSeries = { sourceSeriesName?: string; hoverScope?: 'series' | 'element'; renderItem?: unknown; labelLayer?: boolean; id?: string; name?: string; segmentOf?: string; segmentKey?: string; customBarOf?: string; interactionLayer?: 'hit'; type?: string; silent?: boolean; z?: number; itemStyle?: Record<string, unknown>; lineStyle?: Record<string, unknown>; areaStyle?: Record<string, unknown>; emphasis?: Record<string, unknown>; blur?: Record<string, unknown>; data?: Array<Record<string, unknown> | null> }
+  const series = option.series as VisualSeries[] | undefined
+  const selectedPoint = series?.flatMap((item) => item.data ?? []).find((point) => point?.elementKey === selectedElementKey)
+  const selectedOwner = typeof selectedPoint?.sourceSeriesName === 'string' ? selectedPoint.sourceSeriesName : selectedElementKey?.startsWith('treemap-group:') ? selectedElementKey.slice('treemap-group:'.length) : selectedElementKey?.split('\u001f')[0]
+  const activeSeriesName = selectedElementKey ? selectedOwner ?? selectedSeriesName ?? null : hoveredSeriesName ?? selectedSeriesName ?? null
+  const background = config.canvasBackground ?? '#ffffff'
   const seriesOrder = [...new Set(series?.flatMap((item) => {
-    const name = item.segmentOf ?? item.customBarOf ?? item.name
+    const name = item.sourceSeriesName ?? item.segmentOf ?? item.customBarOf ?? item.name
     return name && !name.startsWith('__') ? [name] : []
   }) ?? [])]
+  const strengthFor = (owner: string | undefined, key?: unknown) => !activeSeriesName ? 0 : owner !== activeSeriesName ? 1 : selectedElementKey && key !== selectedElementKey ? .45 : 0
+  const paint = (style: Record<string, unknown> | undefined, strength: number) => strength ? softenedStyle(style, background, strength) : style
   series?.forEach((item) => {
-    if (item.type === 'pie') {
-      const selectedSlice = item.data?.find((point) => point?.elementKey === selectedElementKey)
-      const activeName = hoveredSeriesName ?? selectedSeriesName ?? (typeof selectedSlice?.sourceSeriesName === 'string' ? selectedSlice.sourceSeriesName : undefined)
-      item.data?.forEach((point) => {
-        if (!point) return
-        point.itemStyle = applyStyleOpacity(point.itemStyle as Record<string, unknown> | undefined, activeName && point.sourceSeriesName !== activeName ? .22 : 1)
-      })
-      return
-    }
+    if (item.interactionLayer === 'hit') { item.emphasis = { disabled: true }; return }
+    const name = item.sourceSeriesName ?? item.segmentOf ?? item.customBarOf ?? item.name
+    if (!name || name.startsWith('__') || item.silent && !item.segmentOf && !item.customBarOf && !item.labelLayer) return
     if (item.emphasis) delete item.emphasis.focus
     delete item.blur
-    const rawName = item.name ?? ''
-    if (item.interactionLayer === 'hit' || rawName.startsWith('__') && !item.customBarOf && !item.segmentOf) return
-    const name = item.segmentOf ?? item.customBarOf ?? item.name
-    if (!name || (item.silent && !item.segmentOf && !item.customBarOf)) return
-    const selectedElementSeries = selectedElementKey?.startsWith(`${name}\u001f`)
-    const active = activeSeriesName === name
-    const dimSeries = Boolean(activeSeriesName && !active)
-    const seriesIndex = Math.max(0, seriesOrder.indexOf(name))
-    const seriesColor = getSeriesColor(config, name, seriesIndex)
-    const dimOpacity = dimSeries ? .22 : 1
-    const peerOpacity = selectedElementSeries && selectedElementKey ? .62 : 1
-    item.itemStyle = applyStyleOpacity(item.itemStyle, dimOpacity)
-    item.lineStyle = applyStyleOpacity(item.lineStyle, dimOpacity)
-    item.areaStyle = applyStyleOpacity(item.areaStyle, dimSeries ? .22 : 1)
-    // ECharts merges matched series: omitted z would retain the hover layer.
-    item.z = Number(item.z ?? 2)
-    if (active) {
-      item.z += 1000
-      if (item.type === 'line') item.lineStyle = { ...item.lineStyle, width: Number(item.lineStyle?.width ?? 2) + .8, opacity: 1 }
-      if (item.type === 'scatter' || item.type === 'custom') item.itemStyle = { ...item.itemStyle, opacity: 1, shadowColor: 'rgba(32,32,39,.18)', shadowBlur: 4 }
+    const color = typeof item.lineStyle?.color === 'string' ? item.lineStyle.color : typeof item.itemStyle?.color === 'string' ? item.itemStyle.color : getSeriesColor(config, name, Math.max(0, seriesOrder.indexOf(name)))
+    const strength = strengthFor(name, item.segmentKey)
+    const custom = item.type === 'custom'
+    if (custom) applyCustomHover(item, name, activeSeriesName, selectedElementKey ? null : hoveredElementKey ?? null, selectedElementKey ?? null, Boolean(hoveredSeriesName), background)
+    else {
+      item.itemStyle = paint(item.itemStyle ?? { color }, strength)
+      item.lineStyle = paint(item.lineStyle, strength)
+      item.areaStyle = paint(item.areaStyle, strength)
     }
+    item.emphasis = { ...item.emphasis, scale: false, disabled: true, itemStyle: nativeHoverStyle(item.itemStyle, item.itemStyle?.color ?? color), lineStyle: item.lineStyle, areaStyle: item.areaStyle }
+    item.z = Number(item.z ?? 2) + (name === activeSeriesName ? 1000 : 0) + (item.labelLayer ? 2000 : 0)
+    if (custom) return
     item.data?.forEach((point) => {
-      if (!point || typeof point !== 'object') return
-      const pointSelected = point.elementKey === selectedElementKey
-      const pointDim = dimSeries || Boolean(selectedElementSeries && selectedElementKey && !pointSelected)
-      const fallbackPointColor = item.type === 'bar' || item.type === 'scatter' ? seriesColor : undefined
-      if (pointDim || pointSelected) point.itemStyle = applyPointOpacity(point.itemStyle as Record<string, unknown> | undefined, pointSelected ? 1 : dimSeries ? .22 : peerOpacity, fallbackPointColor)
-      if (pointSelected) {
-        const pointStyle = point.itemStyle as Record<string, unknown> | undefined
-        const barLike = item.type === 'bar' || item.id === 'native-waterfall'
-        const selectedBorderWidth = barLike ? Number(pointStyle?.borderWidth ?? 0) : Math.max(Number(pointStyle?.borderWidth ?? 0), item.type === 'line' ? 2.5 : 1.5)
-        point.itemStyle = {
-          ...pointStyle,
-          opacity: 1,
-          color: item.type === 'line' ? seriesColor : pointStyle?.color ?? seriesColor,
-          borderColor: pointStyle?.borderColor ?? seriesColor,
-          ...(selectedBorderWidth ? { borderWidth: selectedBorderWidth } : {}),
-          shadowColor: seriesColor,
-          shadowBlur: barLike ? 0 : 6,
-        }
-        if (item.type === 'line') {
-          point.symbol = point.symbol ?? 'circle'
-          if (!point.symbolSize || Number(point.symbolSize) < 11) point.symbolSize = 11
-        }
-        if (item.type === 'scatter') point.symbolSize = Math.max(Number(point.symbolSize ?? point.bubbleSize ?? config.scatterPointSize ?? 10), Number(point.bubbleSize ?? config.scatterPointSize ?? 10) + 3)
+      if (!point || typeof point !== 'object' || Array.isArray(point)) return
+      const owner = typeof point.sourceSeriesName === 'string' ? point.sourceSeriesName : name
+      const pointStrength = strengthFor(owner, point.elementKey)
+      const original = point.itemStyle as Record<string, unknown> | undefined
+      // Data paint must override muted series defaults for the selected mark.
+      point.itemStyle = paint(original ?? { color }, pointStrength)
+      point.emphasis = { ...(point.emphasis as object), itemStyle: nativeHoverStyle(point.itemStyle as Record<string, unknown>, original?.color ?? color) }
+      if (point.elementKey === selectedElementKey && item.type === 'line' && Number(point.symbolSize ?? 0) === 0) {
+        point.symbol = point.symbol === 'none' ? 'circle' : point.symbol ?? 'circle'
+        point.symbolSize = 10
       }
     })
   })
@@ -339,13 +328,97 @@ export function applySeriesVisualState(option: Record<string, unknown>, config: 
     if (graphic.sourceSeriesName === activeSeriesName) graphic.z = 1000 + Number(graphic.z ?? 0)
     const names = graphic.comparisonConnectorSeriesNames
     if (!names?.length) return
-    const opacity = activeSeriesName && !names.includes(activeSeriesName) ? .22 : 1
-    graphic.children?.forEach((child) => { child.style = applyStyleOpacity(child.style, opacity) })
+    graphic.children?.forEach((child) => { child.style = paint(child.style, activeSeriesName && !names.includes(activeSeriesName) ? 1 : selectedElementKey ? .45 : 0) })
   })
 }
+function applyEditorVisualState(option: Record<string, unknown>, config: ChartConfig, selectedSeriesName?: string | null, selectedElementKey?: string | null, hoveredSeriesName?: string | null, selectedSettingsSection?: ChartSettingsSection | null, selectedElementTarget?: ChartElementSelection['target'], hoveredElementKey?: string | null) {
+  const selectionStyle = { backgroundColor: 'rgba(0,0,0,0)', borderColor: contrastText(config.canvasBackground ?? '#ffffff', 4.5), borderWidth: 1, borderRadius: 5, padding: [2, 4] }
+  const labelSelectionStyle = { ...selectionStyle, padding: 0 }
+  applySeriesVisualState(option, config, selectedSeriesName, selectedElementKey, hoveredSeriesName, hoveredElementKey)
+  for (const axisKey of ['xAxis', 'yAxis'] as const) {
+    const axis = option[axisKey] as { nameTextStyle?: object; axisLabel?: object } | undefined
+    if (!axis) continue
+    if (selectedSettingsSection === `${axisKey[0]}-axis-title`) axis.nameTextStyle = { ...axis.nameTextStyle, ...selectionStyle }
+  }
+  if (selectedSettingsSection === 'legend') {
+    const legend = option.legend as { textStyle?: object } | undefined
+    if (legend) legend.textStyle = { ...legend.textStyle, ...selectionStyle }
+    if (config.showDirectLabels) {
+      const series = option.series as Array<{ endLabel?: Record<string, unknown>; data?: Array<Record<string, unknown> | null> }> | undefined
+      series?.forEach((item) => {
+        if (item.endLabel?.show) item.endLabel = { ...item.endLabel, ...selectionStyle }
+        item.data?.forEach((point) => { if (point?.directLegendLabel && point.label) point.label = { ...(point.label as object), ...labelSelectionStyle } })
+      })
+    }
+  }
+  if (selectedSettingsSection === 'values') {
+    const series = option.series as Array<{ label?: Record<string, unknown>; data?: Array<Record<string, unknown> | null> }> | undefined
+    series?.forEach((item) => {
+      if (item.label?.show) item.label = { ...item.label, ...labelSelectionStyle }
+      item.data?.forEach((point) => { if (point?.label && (point.label as { show?: boolean }).show) point.label = { ...(point.label as object), ...labelSelectionStyle } })
+    })
+  }
+  if (selectedElementKey) {
+    const series = option.series as Array<{ name?: string; interactionLayer?: 'hit'; type?: string; data?: unknown[] }> | undefined
+    const visitSelected = (item: { name?: string; interactionLayer?: 'hit'; type?: string }, points: unknown[]) => points.forEach((point) => {
+      if (!point || typeof point !== 'object') return
+      const dataPoint = point as Record<string, unknown>
+      if (dataPoint.elementKey === selectedElementKey && item.interactionLayer !== 'hit') {
+        if (selectedElementTarget === 'value-label') dataPoint.label = { ...((dataPoint.label ?? {}) as object), show: true }
+        else if (item.type === 'line' && (!dataPoint.symbolSize || Number(dataPoint.symbolSize) < 8)) dataPoint.symbolSize = 8
+      }
+      visitSelected(item, (dataPoint.children as unknown[] | undefined) ?? [])
+    })
+    series?.forEach((item) => visitSelected(item, item.data ?? []))
+  }
+}
+
+function resetCachedVisualStyles(option: Record<string, unknown>) {
+  const reset = (item: Record<string, unknown>, opacity = 1) => {
+    if (item.interactionLayer === 'hit') return
+    // ECharts merges styles; explicitly clear properties added by selection.
+    item.itemStyle = { opacity, shadowBlur: 0, shadowColor: 'transparent', ...(item.itemStyle as object) }
+    for (const key of ['label', 'endLabel']) if (item[key]) item[key] = { backgroundColor: 'transparent', borderWidth: 0, borderRadius: 0, padding: 0, ...(item[key] as object) }
+    for (const point of (item.data ?? item.children ?? []) as unknown[]) if (point && !Array.isArray(point) && typeof point === 'object') reset(point as Record<string, unknown>, (item.itemStyle as { opacity: number }).opacity)
+  }
+  const series = option.series as Array<Record<string, unknown>> | undefined
+  series?.forEach((item) => reset(item))
+}
+
+function interactionGraphics(display: unknown[], clean: unknown[], config: ChartConfig, section?: ChartSettingsSection | null) {
+  const originals = new Map((clean as CustomElementOption[]).map((item) => [item.id, item]))
+  const selection = { backgroundColor: 'rgba(0,0,0,0)', borderColor: contrastText(config.canvasBackground ?? '#ffffff', 4.5), borderWidth: 1, borderRadius: 5, padding: [2, 4] }
+  return (display as CustomElementOption[]).filter((item) => !String(item.id).startsWith('decoration-') && !String(item.id).startsWith('annotation-')).map((item) => {
+    const base = item.id == null ? undefined : originals.get(item.id)
+    const result = { ...item, ...(base ? { style: cloneChartOption(base.style), children: cloneChartOption(base.children), z: base.z } : {}) }
+    const fields: Record<string, 'title' | 'subtitle' | 'note' | 'source'> = { 'chart-title-hit': 'title', 'chart-subtitle-hit': 'subtitle', 'chart-note': 'note', 'chart-source': 'source' }
+    const field = fields[String(item.id)]
+    const axisSection = item.id === 'chart-x-axis-title' ? isHorizontalBar(config) ? 'y-axis-title' : 'x-axis-title' : item.id === 'chart-y-axis-title' ? isHorizontalBar(config) ? 'x-axis-title' : 'y-axis-title' : undefined
+    if (field || axisSection) {
+      result.style = { backgroundColor: 'transparent', borderWidth: 0, borderRadius: 0, padding: 0, ...result.style, ...(section === (field ?? axisSection) ? selection : {}) }
+      if (field) result.style.opacity = config[`${field}Html`] || section === field ? 0 : 1
+    }
+    if (String(item.id).startsWith('native-selection-hit-')) result.style = { fill: 'rgba(0,0,0,0)' }
+
+    return result
+  })
+}
+
 export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
-  ({ pickingDecorationText, onDecorationTextPick, onDecorationAnchorRequest, pickingDecorationPoint, onDecorationPointPick, onDecorationPointCancel, annotationTool, onAnnotationPlace, onAnnotationCancel, table, config: inputConfig, onSelect, onTreemapMove, onSeriesSelect, onSettingsFocus, onClearSettingsFocus, selectedSettingsSection, selectedSeriesName, selectedElementKey, selectedElementTarget, selectedCategoryLabel: requestedCategoryLabel, onAnnotationSelect, onAnnotationChange, onAnnotationDuplicate, onAnnotationDelete, selectedAnnotationId, selectedDecorationId, onDecorationLayout, onDecorationSelect, onDecorationChange, onRichTextChange, onCategoryLabelChange, onTextStyleChange, viewZoom = 1, disableViewGestures = false }, ref) => {
-    const config = useMemo(() => normalizeFontFamilies(inputConfig), [inputConfig])
+  ({ pickingDecorationText, onDecorationTextPick, onDecorationAnchorRequest, pickingDecorationPoint, onDecorationPointPick, onDecorationPointCancel, annotationTool, onAnnotationPlace, onAnnotationCancel, table, config: inputConfig, onSelect: onSelectProp, onTreemapMove, onSeriesSelect: onSeriesSelectProp, onSettingsFocus: onSettingsFocusProp, onClearSettingsFocus: onClearSettingsFocusProp, selectedSettingsSection, selectedSeriesName, selectedElementKey, selectedElementTarget, selectedCategoryLabel: requestedCategoryLabel, onAnnotationSelect: onAnnotationSelectProp, onAnnotationChange, onAnnotationDuplicate, onAnnotationDelete, selectedAnnotationId, selectedDecorationId, onDecorationLayout, onDecorationSelect: onDecorationSelectProp, onDecorationChange: onDecorationChangeProp, onRichTextChange, onCategoryLabelChange, onTextStyleChange, onDirectLabelPositionsChange, directLabelControlsHost, viewZoom = 1, disableViewGestures = false }, ref) => {
+    const callbackRef = useRef({ onSelect: onSelectProp, onSeriesSelect: onSeriesSelectProp, onSettingsFocus: onSettingsFocusProp, onClearSettingsFocus: onClearSettingsFocusProp, onAnnotationSelect: onAnnotationSelectProp, onDecorationChange: onDecorationChangeProp, onDecorationSelect: onDecorationSelectProp })
+    callbackRef.current = { onSelect: onSelectProp, onSeriesSelect: onSeriesSelectProp, onSettingsFocus: onSettingsFocusProp, onClearSettingsFocus: onClearSettingsFocusProp, onAnnotationSelect: onAnnotationSelectProp, onDecorationChange: onDecorationChangeProp, onDecorationSelect: onDecorationSelectProp }
+    const { onSelect, onSeriesSelect, onSettingsFocus, onClearSettingsFocus, onAnnotationSelect, onDecorationChange, onDecorationSelect } = useMemo(() => ({
+      onSelect: (...args: Parameters<NonNullable<Props['onSelect']>>) => callbackRef.current.onSelect?.(...args),
+      onSeriesSelect: (...args: Parameters<NonNullable<Props['onSeriesSelect']>>) => callbackRef.current.onSeriesSelect?.(...args),
+      onSettingsFocus: (...args: Parameters<NonNullable<Props['onSettingsFocus']>>) => callbackRef.current.onSettingsFocus?.(...args),
+      onClearSettingsFocus: (...args: Parameters<NonNullable<Props['onClearSettingsFocus']>>) => callbackRef.current.onClearSettingsFocus?.(...args),
+      onAnnotationSelect: (...args: Parameters<NonNullable<Props['onAnnotationSelect']>>) => callbackRef.current.onAnnotationSelect?.(...args),
+      onDecorationChange: (...args: Parameters<NonNullable<Props['onDecorationChange']>>) => callbackRef.current.onDecorationChange?.(...args),
+      onDecorationSelect: (...args: Parameters<NonNullable<Props['onDecorationSelect']>>) => callbackRef.current.onDecorationSelect?.(...args),
+    }), [])
+    const config = useMemo(() => normalizeFontFamilies({ ...inputConfig, axisTitleMode: 'standard' as const, autoFitCanvas: disableViewGestures ? inputConfig.autoFitCanvas ?? true : true }), [inputConfig, disableViewGestures])
+    const canvasUiInk = contrastText(config.canvasBackground ?? '#ffffff', 4.5)
     const container = useRef<HTMLDivElement>(null)
     const viewport = useRef<HTMLDivElement>(null)
     const [canvasScale, setCanvasScale] = useState(1)
@@ -364,6 +437,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     fontRequest.current = { families: requestedFontFamilies, customFonts: config.customFonts }
     const [readyFontSignature, setReadyFontSignature] = useState('')
     const [plotBounds, setPlotBounds] = useState<PlotBounds | null>(null)
+    const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([])
     const [textAnchorHeights, setTextAnchorHeights] = useState<Record<string, number>>({})
     const [decorationTargets, setDecorationTargets] = useState<DecorationTarget[]>([])
     const [resolvedDecorations, setResolvedDecorations] = useState<ChartDecoration[]>([])
@@ -378,17 +452,46 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     viewPanRef.current = viewPan
     const renderRevision = useRef(0)
     const displayOption = useRef<Record<string, unknown> | null>(null)
+    const exportScene = useRef<ResolvedScene | null>(null)
+    const [directLabels, setDirectLabels] = useState<EditableDirectLabel[]>([])
+    const directLabelsRef = useRef(directLabels)
+    directLabelsRef.current = directLabels
+    const currentConfig = useRef(config)
+    currentConfig.current = config
+    const reapplyDirectLabels = useMemo(() => (instance: echarts.ECharts) => {
+      if (!exportScene.current || !currentConfig.current.showDirectLabels || instance.isDisposed()) return
+      restoreDirectLabelPositions(instance)
+      setDirectLabels(applyDirectLabelPositions(instance, exportScene.current, currentConfig.current))
+    }, [])
     const exportOption = useRef<Record<string, unknown> | null>(null)
+    const renderCache = useRef<{ table: DataTable; config: ChartConfig; instance: echarts.ECharts; fontSignature: string; category: typeof requestedCategoryLabel; baseSeries: unknown; section?: ChartSettingsSection | null; series?: string | null; element?: string | null; target?: ChartElementSelection['target']; hover?: string | null; hoverKey?: string | null } | null>(null)
+    const selectionRef = useRef({ selectedElementKey, selectedTreemapSeriesName: '', selectedSettingsSection })
     const renderedKind = useRef<ChartKind | null>(null)
     const nativeTreemapHits = useRef<Array<{ rect: { x: number; y: number; width: number; height: number }; info: { elementKey: string; sourceSeriesName: string; displayCategory: string; displayValue: string; displayLabel?: string; displayColor?: string } }>>([])
     const editableAxisLabels = useRef(new Map<string, { sourceKey: string; displayText: string }>())
     const clickedSeries = useRef<string | null>(null)
+    const pointHits = useRef<PointHit[]>([])
+    const selectElement = useMemo(() => (element: ChartElementSelection) => {
+      const result = clickSelection(element, clickedSeries.current)
+      if (!result) return
+      if (result.kind === 'series') {
+        clickedSeries.current = result.selection.name
+        onSeriesSelect?.(result.selection)
+        onSettingsFocus?.('series')
+      } else {
+        onSelect?.(result.selection)
+        onSettingsFocus?.('element')
+      }
+    }, [onSelect, onSeriesSelect, onSettingsFocus])
     const treemapDrag = useRef<{ source: ChartElementSelection; click: ChartElementSelection; start: [number, number]; moved: boolean; target?: ChartElementSelection; placement?: 'before' | 'after'; signature?: string } | null>(null)
     const suppressTreemapClick = useRef(false)
     const treemapDragPreview = useRef<HTMLDivElement | null>(null)
     const treemapDropIndicator = useRef<HTMLDivElement | null>(null)
     const [hoveredSeriesName, setHoveredSeriesName] = useState<string | null>(null)
-    const selectedTreemapSeriesName = selectedElementKey?.startsWith('treemap-group:') ? selectedElementKey.slice('treemap-group:'.length) : selectedElementKey?.split('\u001f')[0]
+    const hoveredSeriesRef = useRef<string | null>(null)
+    const [hoveredElementKey, setHoveredElementKey] = useState<string | null>(null)
+    const selectedTreemapSeriesName = selectedSeriesName ?? (selectedElementKey?.startsWith('treemap-group:') ? selectedElementKey.slice('treemap-group:'.length) : selectedElementKey?.split('\u001f')[0])
+    selectionRef.current = { selectedElementKey, selectedTreemapSeriesName: selectedTreemapSeriesName ?? '', selectedSettingsSection }
     const activeCategoryLabel = useMemo(() => requestedCategoryLabel ?? (() => {
       const match = selectedElementTarget === 'category-label' && selectedElementKey?.match(/^category-label:([xy]):(.*)$/)
       return match ? { axis: match[1] as 'x' | 'y', category: match[2] } : null
@@ -441,13 +544,13 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       let resizeFrame = 0
       const resize = () => {
         cancelAnimationFrame(resizeFrame)
-        resizeFrame = requestAnimationFrame(() => { if (!instance.isDisposed()) { if (chartIsBusy(instance)) resize(); else instance.resize({ animation: { duration: 0 } }) } })
+        resizeFrame = requestAnimationFrame(() => { if (!instance.isDisposed()) { if (chartIsBusy(instance)) resize(); else { instance.resize({ animation: { duration: 0 } }); reapplyDirectLabels(instance) } } })
       }
       const observer = new ResizeObserver(resize)
       observer.observe(container.current)
       window.addEventListener('resize', resize)
       return () => { observer.disconnect(); window.removeEventListener('resize', resize); cancelAnimationFrame(resizeFrame); if (!instance.isDisposed()) instance.dispose(); if (chart.current === instance) chart.current = null }
-    }, [readyKind, config.kind])
+    }, [readyKind, config.kind, reapplyDirectLabels])
 
     useEffect(() => {
       const target = viewport.current
@@ -458,13 +561,13 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         const height = Math.max(1, Math.min(1000, config.canvasHeight ?? 563))
         setCanvasScale(config.autoFitCanvas === false ? 1 : Math.min(1, target.clientWidth / width, target.clientHeight / height))
         cancelAnimationFrame(resizeFrame)
-        resizeFrame = requestAnimationFrame(() => { const instance = chart.current; if (instance && !instance.isDisposed()) { if (chartIsBusy(instance)) updateScale(); else instance.resize({ width, height, animation: { duration: 0 } }) } })
+        resizeFrame = requestAnimationFrame(() => { const instance = chart.current; if (instance && !instance.isDisposed()) { if (chartIsBusy(instance)) updateScale(); else { instance.resize({ width, height, animation: { duration: 0 } }); reapplyDirectLabels(instance) } } })
       }
       const observer = new ResizeObserver(updateScale)
       observer.observe(target)
       updateScale()
       return () => { observer.disconnect(); cancelAnimationFrame(resizeFrame) }
-    }, [config.autoFitCanvas, config.canvasHeight, config.canvasWidth])
+    }, [config.autoFitCanvas, config.canvasHeight, config.canvasWidth, reapplyDirectLabels])
 
     useEffect(() => { gestureZoomRef.current = viewZoom; setGestureZoom(viewZoom) }, [viewZoom])
 
@@ -501,28 +604,74 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const instance = chart.current
       if (!instance || instance.isDisposed() || readyKind !== config.kind || readyFontSignature !== fontSignature) return
       if (chartIsBusy(instance)) { const retry = window.setTimeout(() => setRenderRetry((value) => value + 1), 0); return () => window.clearTimeout(retry) }
+      const cached = renderCache.current
+      try {
+        if (cached && cached.instance === instance && cached.table === table && cached.fontSignature === fontSignature && samePlotConfig(cached.config, inputConfig) && cached.category?.axis === activeCategoryLabel?.axis && cached.category?.category === activeCategoryLabel?.category && displayOption.current && exportOption.current) {
+          const visualChanged = cached.section !== selectedSettingsSection || cached.series !== selectedSeriesName || cached.element !== selectedElementKey || cached.target !== selectedElementTarget || cached.hover !== hoveredSeriesName || cached.hoverKey !== hoveredElementKey
+          const annotationsChanged = cached.config.annotations !== inputConfig.annotations || cached.config.decorations !== inputConfig.decorations
+          if (!visualChanged && !annotationsChanged) return
+          const revision = beginRenderCycle('post-processing')
+          const option = displayOption.current, clean = exportOption.current
+          let graphics = visualChanged ? interactionGraphics(option.graphic as unknown[], clean.graphic as unknown[], config, selectedSettingsSection) : (option.graphic as CustomElementOption[]).filter((item) => !String(item.id).startsWith('decoration-') && !String(item.id).startsWith('annotation-'))
+          if (annotationsChanged) {
+            const heights: Record<string, number> = {}
+            container.current?.parentElement?.querySelectorAll<HTMLElement>('[data-annotation-id]').forEach((element) => { heights[element.dataset.annotationId!] = element.offsetHeight })
+            setTextAnchorHeights(heights)
+            const decorations = (config.decorations ?? []).map((decoration) => resolveDecoration(decoration, config.annotations, decorationTargetsRef.current, heights))
+            setResolvedDecorations(decorations)
+            const select = (id: string) => { if (callbackRef.current.onDecorationSelect) onDecorationSelect(id); else { const decoration = config.decorations?.find((item) => item.id === id); if (decoration) onDecorationChange(decoration) } }
+            graphics = [...graphics, ...decorationGraphics(decorations, plotBounds ?? undefined, select)] as CustomElementOption[]
+            clean.graphic = [...(clean.graphic as CustomElementOption[]).filter((item) => !String(item.id).startsWith('decoration-')), ...decorationGraphics(decorations, plotBounds ?? undefined)]
+          } else graphics = [...graphics, ...(option.graphic as CustomElementOption[]).filter((item) => String(item.id).startsWith('decoration-'))]
+          const patch: Record<string, unknown> = { graphic: graphics }
+          if (visualChanged) {
+            patch.series = cloneChartOption(cached.baseSeries)
+            for (const key of ['xAxis', 'yAxis', 'legend'] as const) patch[key] = cloneChartOption(clean[key])
+            for (const key of ['xAxis', 'yAxis'] as const) {
+              const axis = patch[key] as { nameTextStyle?: Record<string, unknown> } | undefined
+              if (axis) axis.nameTextStyle = { backgroundColor: 'transparent', borderWidth: 0, padding: 0, ...axis.nameTextStyle }
+            }
+            const legend = patch.legend as { textStyle?: Record<string, unknown> } | undefined
+            if (legend) legend.textStyle = { backgroundColor: 'transparent', borderWidth: 0, padding: 0, ...legend.textStyle }
+            resetCachedVisualStyles(patch)
+            applyEditorVisualState(patch, config, selectedSeriesName, selectedElementKey, hoveredSeriesName, selectedSettingsSection, selectedElementTarget, hoveredElementKey)
+            Object.assign(option, patch)
+          }
+          option.graphic = graphics
+          restoreDirectLabelPositions(instance)
+          instance.setOption(patch, { replaceMerge: visualChanged ? ['series', 'graphic'] : ['graphic'] })
+          renderCache.current = { ...cached, config: inputConfig, section: selectedSettingsSection, series: selectedSeriesName, element: selectedElementKey, target: selectedElementTarget, hover: hoveredSeriesName, hoverKey: hoveredElementKey }
+          instance.getZr().flush()
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            if (revision === renderRevision.current && !instance.isDisposed()) { instance.getZr().flush(); if (exportScene.current) setDirectLabels(applyDirectLabelPositions(instance, exportScene.current, config)); setRenderLifecycle((current) => settleChartRender(current, revision)) }
+          }))
+          return
+        }
+      } catch {
+        // Retry through the full render path, which reports validation/render errors.
+        renderCache.current = null
+      }
       const revision = beginRenderCycle('compiling')
       try {
-      const selectDecoration = onDecorationSelect ?? ((id: string) => { const decoration = config.decorations?.find((item) => item.id === id); if (decoration) onDecorationChange?.(decoration) })
+      const selectDecoration = callbackRef.current.onDecorationSelect ? onDecorationSelect : ((id: string) => { const decoration = config.decorations?.find((item) => item.id === id); if (decoration) onDecorationChange?.(decoration) })
       const visibleTitle = config.showTitle === false ? '' : config.title
       const visibleSubtitle = config.showSubtitle === false ? '' : config.subtitle
       const visibleNote = config.showNote === false ? '' : config.note
       const visibleSource = config.showSource === false ? '' : config.source
       const marginTop = config.canvasMarginTop ?? RHYTHM.edge, marginRight = config.canvasMarginRight ?? RHYTHM.edge, marginBottom = config.canvasMarginBottom ?? RHYTHM.edge, marginLeft = config.canvasMarginLeft ?? 32
-      const editorialAxes = config.axisTitleMode === 'editorial'
       const renderConfig = {
         ...config,
         title: visibleTitle,
         subtitle: visibleSubtitle,
         note: visibleNote,
         source: visibleSource,
-        ...(editorialAxes ? { showXAxisTitle: false, showYAxisTitle: false } : {}),
       }
       const plugin = getChartPlugin(config.kind)
       const validation = plugin.validate(table, renderConfig)
       if (!validation.ok) throw new Error(validation.errors.map((error) => error.message).join(' '))
       const compiledScene = plugin.compile(table, renderConfig)
       const resolvedScene = resolveNativeScene(compiledScene)
+      exportScene.current = resolvedScene
       const plotKind = resolvedScene.plot.kind
       const editable = new Map<string, { sourceKey: string; displayText: string }>()
       if (resolvedScene.plot.kind === 'distribution' && resolvedScene.plot.variant !== 'histogram' && resolvedScene.plot.variant !== 'kde') {
@@ -541,6 +690,13 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       type NativeSelectionHit = { points?: Array<[number, number]>; rect: { x: number; y: number; width: number; height: number }; info: { elementKey: string; sourceSeriesName: string; displayCategory: string; displayValue: string; displayLabel?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target']; axis?: 'x' | 'y'; selectionMode?: 'series-first' | 'axis-label' } }
       type NativeCategoryLayout = CategoryLabelLayout
       const option = renderScene(resolvedScene) as Record<string, unknown> & { graphic?: unknown[]; nativeSelectionHits?: NativeSelectionHit[]; nativeCategoryLayouts?: NativeCategoryLayout[]; nativeTreemapHits?: typeof nativeTreemapHits.current; nativePlotBounds?: PlotBounds }
+      option.axisPointer = { ...(option.axisPointer as object), lineStyle: { color: canvasUiInk, opacity: .5, width: 1, type: 'dashed' } }
+      const tooltip = option.tooltip as { formatter?: (...args: unknown[]) => unknown } | undefined
+      const tooltipFormatter = tooltip?.formatter
+      if (tooltip && tooltipFormatter) tooltip.formatter = (...args) => {
+        const content = tooltipFormatter(...args)
+        return typeof content === 'string' ? activeTooltipHtml(content, hoveredSeriesRef.current) : content
+      }
       const nativeSelectionHits = option.nativeSelectionHits ?? []
       const nativeCategoryLayouts = option.nativeCategoryLayouts ?? []
       nativeTreemapHits.current = option.nativeTreemapHits ?? []
@@ -557,8 +713,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       option.animationDurationUpdate = reducedMotion ? 0 : 240
       option.animationEasing ??= 'quarticOut'
       option.animationEasingUpdate ??= 'quarticOut'
-      const selectionStyle = { backgroundColor: 'rgba(0,0,0,0)', borderColor: '#1923e3', borderWidth: 1, borderRadius: 5, padding: [2, 4] }
-      const labelSelectionStyle = { ...selectionStyle, padding: 0 }
+      const selectionStyle = { backgroundColor: 'rgba(0,0,0,0)', borderColor: contrastText(config.canvasBackground ?? '#ffffff', 4.5), borderWidth: 1, borderRadius: 5, padding: [2, 4] }
       const availableWidth = Math.max(120, (config.canvasWidth ?? container.current?.clientWidth ?? 1000) - marginLeft - marginRight)
       let headerScale = 1, wrappedTitle = { text: '', lines: 0 }, wrappedSubtitle = { text: '', lines: 0 }, titleHeight = 0, subtitleHeight = 0
       const canvasHeight = container.current?.clientHeight ?? 563
@@ -608,72 +763,15 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const physicalXAxisOption = (Array.isArray(option.xAxis) ? option.xAxis[0] : option.xAxis) as { name?: string; nameGap?: number } | undefined
       const physicalXAxisLabelOffset = Math.max(0, Number(physicalXAxisOption?.nameGap ?? physicalXAxisTitleGap) - physicalXAxisTitleGap)
       const physicalXAxisOuterReserve = (Array.isArray(option.grid) ? option.grid[0]?.containLabel : grid?.containLabel) === false ? physicalXAxisLabelOffset : 0
-      const xAxisTitleReserve = !editorialAxes && showPhysicalXAxisTitle && physicalXAxisTitle ? Math.round(xAxisTitleStyle.size * xAxisTitleStyle.lineHeight / 100) * Math.max(1, physicalXAxisTitle.split('\n').length) + physicalXAxisTitleGap : 0
+      const xAxisTitleReserve = showPhysicalXAxisTitle && physicalXAxisTitle ? Math.round(xAxisTitleStyle.size * xAxisTitleStyle.lineHeight / 100) * Math.max(1, physicalXAxisTitle.split('\n').length) + physicalXAxisTitleGap : 0
       // With `containLabel`, ECharts reserves the label rail inside the grid.
       // Swapped horizontal axes opt out, so their rail belongs in the outer reserve.
-      const editorialXStyle = isHorizontalBar(config) ? config.yAxisTitleText ?? config.axisTitleText : config.xAxisTitleText ?? config.axisTitleText
-      const editorialYStyle = isHorizontalBar(config) ? config.xAxisTitleText ?? config.axisTitleText : config.yAxisTitleText ?? config.axisTitleText
-      const editorialXText = isHorizontalBar(config) ? config.yAxisTitle : config.xAxisTitle
-      const editorialYText = isHorizontalBar(config) ? config.xAxisTitle : config.yAxisTitle
-      const showEditorialX = editorialAxes && (isHorizontalBar(config) ? config.showYAxisTitle : config.showXAxisTitle) && Boolean(editorialXText)
-      const showEditorialY = editorialAxes && (isHorizontalBar(config) ? config.showXAxisTitle : config.showYAxisTitle) && Boolean(editorialYText)
       const cleanOption = cloneChartOption(option)
       disableChartAnimations(cleanOption)
       enableCustomSeriesTransitions(option, !reducedMotion)
-      applySeriesVisualState(option, config, selectedSeriesName, selectedElementKey, hoveredSeriesName)
-      for (const axisKey of ['xAxis', 'yAxis'] as const) {
-        const axis = option[axisKey] as { nameTextStyle?: object; axisLabel?: object } | undefined
-        if (!axis) continue
-        if (selectedSettingsSection === `${axisKey[0]}-axis-title`) axis.nameTextStyle = { ...axis.nameTextStyle, ...selectionStyle }
-      }
-      if (selectedSettingsSection === 'legend') {
-        const legend = option.legend as { textStyle?: object } | undefined
-        if (legend) legend.textStyle = { ...legend.textStyle, ...selectionStyle }
-        if (config.showDirectLabels) {
-          const series = option.series as Array<{ endLabel?: Record<string, unknown>; data?: Array<Record<string, unknown> | null> }> | undefined
-          series?.forEach((item) => {
-            if (item.endLabel?.show) item.endLabel = { ...item.endLabel, ...selectionStyle }
-            item.data?.forEach((point) => { if (point?.directLegendLabel && point.label) point.label = { ...(point.label as object), ...labelSelectionStyle } })
-          })
-        }
-      }
-      if (selectedSettingsSection === 'values') {
-        const series = option.series as Array<{ label?: Record<string, unknown>; data?: Array<Record<string, unknown> | null> }> | undefined
-        series?.forEach((item) => {
-          if (item.label?.show) item.label = { ...item.label, ...labelSelectionStyle }
-          item.data?.forEach((point) => { if (point?.label && (point.label as { show?: boolean }).show) point.label = { ...(point.label as object), ...labelSelectionStyle } })
-        })
-      }
-      if (selectedSeriesName) {
-        const series = option.series as Array<{ name?: string; segmentOf?: string; interactionLayer?: 'hit'; type?: string; silent?: boolean; symbol?: string; symbolSize?: number; z?: number; itemStyle?: Record<string, unknown>; lineStyle?: Record<string, unknown>; emphasis?: Record<string, unknown> }> | undefined
-        series?.forEach((item) => {
-          if (item.interactionLayer === 'hit') {
-            item.emphasis = { disabled: true }
-            return
-          }
-          if (item.segmentOf === selectedSeriesName) {
-            item.z = 1000
-            item.lineStyle = { ...item.lineStyle, width: Number(item.lineStyle?.width ?? 2) + 1 }
-            return
-          }
-          if (item.name !== selectedSeriesName || item.silent) return
-          if (item.type === 'line') { item.z = 1000; item.lineStyle = { ...item.lineStyle, width: Number(item.lineStyle?.width ?? 2) + 1 } }
-        })
-      }
-      if (selectedElementKey) {
-        const series = option.series as Array<{ name?: string; interactionLayer?: 'hit'; type?: string; data?: unknown[] }> | undefined
-        const visitSelected = (item: { name?: string; interactionLayer?: 'hit'; type?: string }, points: unknown[]) => points.forEach((point) => {
-          if (!point || typeof point !== 'object') return
-          const dataPoint = point as Record<string, unknown>
-          if (dataPoint.elementKey === selectedElementKey && item.interactionLayer !== 'hit') {
-            if (selectedElementTarget === 'value-label') dataPoint.label = { ...((dataPoint.label ?? {}) as object), show: true, ...labelSelectionStyle }
-            else if (item.type === 'line' && (!dataPoint.symbolSize || Number(dataPoint.symbolSize) < 8)) dataPoint.symbolSize = 8
-          }
-          visitSelected(item, (dataPoint.children as unknown[] | undefined) ?? [])
-        })
-        series?.forEach((item) => visitSelected(item, item.data ?? []))
-      }
-            const standardXAxisTitle = !editorialAxes && showPhysicalXAxisTitle && Boolean(physicalXAxisTitle)
+      const baseSeries = cloneChartOption(option.series)
+      applyEditorVisualState(option, config, selectedSeriesName, selectedElementKey, hoveredSeriesName, selectedSettingsSection, selectedElementTarget, hoveredElementKey)
+      const standardXAxisTitle = showPhysicalXAxisTitle && Boolean(physicalXAxisTitle)
       if (standardXAxisTitle) {
         for (const axes of [option.xAxis, cleanOption.xAxis]) {
           for (const axis of (Array.isArray(axes) ? axes : axes ? [axes] : []) as Array<{ name?: string }>) axis.name = ''
@@ -716,11 +814,11 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         cursor: 'pointer',
         style: {
           text: runs.map((fragment, index) => `{fragment${index}|${fragment.text.replaceAll('{', '\\{').replaceAll('}', '\\}')}}`).join(''),
-          width: Math.max(20, annotation.width - 24),
+          width: Math.max(1, annotation.width - 6),
           overflow: 'break',
           backgroundColor: annotation.backgroundColor || 'transparent',
           borderWidth: 0,
-          padding: [9, 11],
+          padding: [2, 2],
           opacity: 0,
           fontFamily: annotation.fontFamily,
           fontSize: annotation.fontSize,
@@ -772,10 +870,13 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           // a different array order. Include the render position so reordering a
           // series also updates grouped-bar placement and stacking order.
           item.id = `${chartTransitionFamily(config.kind)}:${index}:${String(identity)}`
+          const base = (baseSeries as Array<Record<string, unknown>> | undefined)?.[index]
+          if (base) base.id = item.id
           if (transitionMode === 'morph' && item.silent !== true) item.universalTransition = { enabled: true, divideShape: 'clone' }
         })
       }
       if (transitionMode === 'fade' && plotBounds && container.current) fadePreviousPlot(container.current, plotBounds, 200)
+      restoreDirectLabelPositions(instance)
       instance.setOption(option, { notMerge: false, replaceMerge: ['series', 'legend', 'xAxis', 'yAxis', 'graphic'] })
       renderedKind.current = config.kind
       setRenderedChartKind(config.kind)
@@ -825,17 +926,21 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         const negative = /^[-−]/.test(info.displayValue)
         points.set(info.elementKey, { key: info.elementKey, label: `${info.sourceSeriesName} · ${info.displayCategory}`, x: horizontal && plotKind !== 'distribution' ? rect.x + (negative ? 0 : rect.width) : rect.x + rect.width / 2, y: horizontal || plotKind === 'distribution' ? rect.y + rect.height / 2 : rect.y + (negative ? rect.height : 0) })
       })
-      const series = (option.series ?? []) as Array<{ type?: string; data?: Array<{ elementKey?: string; value?: number | number[] | null; sourceSeriesName?: string; displayCategory?: string }>; interactionLayer?: string }>
+      pointHits.current = []
+      const series = (option.series ?? []) as Array<{ type?: string; segmentOf?: string; data?: Array<{ elementKey?: string; value?: number | number[] | null; sourceSeriesName?: string; displayCategory?: string; displayValue?: string; displayLabel?: string; displayColor?: string; selectionTarget?: string }>; interactionLayer?: string }>
       series.forEach((item, seriesIndex) => {
         if (item.type !== 'line' && item.type !== 'scatter' && item.type !== 'bar') return
         const data = (instance as unknown as { getModel(): { getSeriesByIndex(index: number): { getData(): { getLayout(key: string): ArrayLike<number> | undefined; getItemLayout(index: number): number[] | { x: number; y: number; width: number; height: number } | undefined } } } }).getModel().getSeriesByIndex(seriesIndex).getData()
         item.data?.forEach((datum, index) => {
-          if (!datum?.elementKey || datum.value == null || points.has(datum.elementKey)) return
+          if (!datum?.elementKey || datum.value == null || item.interactionLayer === 'hit' || item.segmentOf || datum.selectionTarget === 'guide') return
           const value = Array.isArray(datum.value) ? datum.value : [index, datum.value]
           const linePoints = item.type === 'line' ? data.getLayout('points') : undefined
           const layout = linePoints ? [linePoints[index * 2], linePoints[index * 2 + 1]] : data.getItemLayout(index)
           const pixel = Array.isArray(layout) ? layout : layout ? usesHorizontalAxes(config) ? [layout.x + layout.width, layout.y + layout.height / 2] : [layout.x + layout.width / 2, layout.y + layout.height] : instance.convertToPixel({ seriesIndex }, value) as number[]
-          if (Array.isArray(pixel) && pixel.every(Number.isFinite)) points.set(datum.elementKey, { key: datum.elementKey, x: pixel[0], y: pixel[1], label: `${datum.sourceSeriesName ?? ''} · ${datum.displayCategory ?? index}` })
+          if (Array.isArray(pixel) && pixel.every(Number.isFinite)) {
+            if (!points.has(datum.elementKey)) points.set(datum.elementKey, { key: datum.elementKey, x: pixel[0], y: pixel[1], label: `${datum.sourceSeriesName ?? ''} · ${datum.displayCategory ?? index}` })
+            if (item.type === 'line' || item.type === 'scatter') pointHits.current.push({ x: pixel[0], y: pixel[1], selection: { key: datum.elementKey, seriesName: datum.sourceSeriesName ?? '', category: datum.displayCategory ?? String(index), value: datum.displayValue ?? '', label: datum.displayLabel, color: datum.displayColor } })
+          }
         })
       })
       const targets = [...points.values()]
@@ -872,75 +977,36 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       }
       option.graphic = [...withoutGeneratedGraphics(Array.isArray(option.graphic) ? option.graphic : []), ...barGrid, ...exactDisplayDecorations]
       cleanOption.graphic = [...withoutGeneratedGraphics(Array.isArray(cleanOption.graphic) ? cleanOption.graphic : []), ...barGrid, ...exactCleanDecorations]
-      if (editorialAxes && exactBounds) {
-        const arrowColor = config.axisLineColor ?? '#777580'
-        const titleWidth = Math.max(100, exactBounds.right - exactBounds.left)
-        const arrow = (direction: 'right' | 'up') => direction === 'right'
-          ? [
-              { type: 'line', shape: { x1: 1, y1: 8, x2: 15, y2: 8 }, style: { stroke: arrowColor, lineWidth: 2, lineCap: 'round' } },
-              { type: 'polyline', shape: { points: [[9, 2], [15, 8], [9, 14]] }, style: { stroke: arrowColor, fill: null, lineWidth: 2, lineCap: 'round', lineJoin: 'round' } },
-            ]
-          : [
-              { type: 'line', shape: { x1: 8, y1: 15, x2: 8, y2: 1 }, style: { stroke: arrowColor, lineWidth: 2, lineCap: 'round' } },
-              { type: 'polyline', shape: { points: [[2, 7], [8, 1], [14, 7]] }, style: { stroke: arrowColor, fill: null, lineWidth: 2, lineCap: 'round', lineJoin: 'round' } },
-            ]
-        const makeTitle = (axis: 'x' | 'y', clean = false) => {
-          const isX = axis === 'x'
-          const content = isX ? editorialXText : editorialYText
-          const textStyle = isX ? editorialXStyle : editorialYStyle
-          const visible = isX ? showEditorialX : showEditorialY
-          if (!visible) return null
-          const lineHeight = Math.round(textStyle.size * textStyle.lineHeight / 100)
-          const lines = Math.max(1, content.split('\n').length)
-          const height = Math.max(18, lineHeight * lines)
-          const x = isX ? exactBounds.right : exactBounds.left
-          const y = isX
-            ? exactBounds.bottom + Math.max(18, (config.xAxisLabelText ?? config.axisLabelText).size * 1.5)
-            : exactBounds.top - height - 8
-          const selected = selectedSettingsSection === `${axis}-axis-title`
-          return {
-            id: `chart-${axis}-editorial-title`,
-            type: 'group',
-            x,
-            y,
-            z: 90,
-            cursor: clean ? undefined : 'pointer',
-            silent: clean,
-            onclick: clean ? undefined : () => onSettingsFocus?.(`${axis}-axis-title`),
-            children: [
-              { type: 'rect', shape: { x: isX ? -titleWidth : 0, y: -4, width: titleWidth, height: height + 8, r: 4 }, style: clean || !selected ? { fill: 'transparent' } : selectionStyle },
-              { type: 'group', x: isX ? -18 : 0, y: Math.max(0, (lineHeight - 16) / 2), children: arrow(isX ? 'right' : 'up') },
-              { type: 'text', x: isX ? -24 : 22, y: 0, style: { text: content, fontFamily: textStyle.fontFamily, fontSize: textStyle.size, fontWeight: textStyle.weight, fontStyle: textStyle.italic ? 'italic' : 'normal', lineHeight, fill: textStyle.color, width: Math.max(70, titleWidth - 24), overflow: 'break', align: isX ? 'right' : 'left', verticalAlign: 'top' } },
-            ],
-          }
-        }
-        const displayEditorial = [makeTitle('y'), makeTitle('x')].filter(Boolean)
-        const cleanEditorial = [makeTitle('y', true), makeTitle('x', true)].filter(Boolean)
-        option.graphic = [...withoutGeneratedGraphics(option.graphic), ...displayEditorial]
-        cleanOption.graphic = [...withoutGeneratedGraphics(cleanOption.graphic), ...cleanEditorial]
-      }
+
       let refreshGraphics = Boolean(exactBounds || barGrid.length || exactDisplayDecorations.length)
       if (nativeSelectionHits.length) {
-        const hits = nativeSelectionHits.map((hit, index) => ({ id: `native-selection-hit-${index}`, type: hit.points ? 'polygon' : 'rect', z: 140, cursor: 'pointer', shape: hit.points ? { points: hit.points } : hit.rect, style: hit.info.elementKey === selectedElementKey && hit.info.selectionTarget === selectedElementTarget ? { fill: 'rgba(0,0,0,0)', stroke: '#1923e3', lineWidth: 1 } : { fill: 'rgba(0,0,0,0)' }, onmousedown: (event: { offsetX?: number; offsetY?: number }) => {
+        // Hit targets stay above focused marks so hover cannot change the target mid-click.
+        const hits = nativeSelectionHits.map((hit, index) => ({ id: `native-selection-hit-${index}`, selectionKey: hit.info.elementKey, selectionTarget: hit.info.selectionTarget, type: hit.points ? 'polygon' : 'rect', z: hit.info.selectionTarget === 'value-label' ? 3201 : 3200, cursor: 'pointer', shape: hit.points ? { points: hit.points } : hit.rect, onmouseover: () => {
+          if (!hit.info.sourceSeriesName || hit.info.selectionTarget === 'category-label' || hit.info.selectionTarget === 'guide') return
+          hoveredSeriesRef.current = hit.info.sourceSeriesName; updateActiveTooltip(hit.info.sourceSeriesName); setHoveredSeriesName(hit.info.sourceSeriesName); setHoveredElementKey(hit.info.elementKey)
+          const series = (option.series ?? []) as Array<{ interactionLayer?: string; tooltip?: { show?: boolean }; data?: Array<{ elementKey?: string } | null> }>
+          const seriesIndex = series.findIndex((item) => item.interactionLayer !== 'hit' && item.tooltip?.show !== false && item.data?.some((point) => point?.elementKey === hit.info.elementKey))
+          if (seriesIndex >= 0) instance.dispatchAction({ type: 'showTip', seriesIndex, dataIndex: series[seriesIndex].data!.findIndex((point) => point?.elementKey === hit.info.elementKey) })
+        }, onmouseout: () => { hoveredSeriesRef.current = null; updateActiveTooltip(null); setHoveredSeriesName(null); setHoveredElementKey(null) }, style: { fill: 'rgba(0,0,0,0)' }, onmousedown: (event: { offsetX?: number; offsetY?: number }) => {
           const point = hit.info, seriesName = point.sourceSeriesName
           if (plotKind !== 'treemap') return
-          const group = { key: `treemap-group:${seriesName}`, seriesName, category: seriesName, value: '', label: seriesName } satisfies ChartElementSelection
+          const group = { key: `treemap-group:${seriesName}`, seriesName, category: seriesName, value: '', label: seriesName, target: 'value-label' } satisfies ChartElementSelection
           const leaf = { key: point.elementKey, seriesName, category: point.displayCategory, value: point.displayValue, label: point.displayLabel } satisfies ChartElementSelection
-          const source = selectedElementKey === point.elementKey ? leaf : group
-          treemapDrag.current = { source, click: selectedTreemapSeriesName === seriesName ? leaf : group, start: [Number(event.offsetX ?? 0), Number(event.offsetY ?? 0)], moved: false }
+          const source = selectionRef.current.selectedElementKey === point.elementKey ? leaf : group
+          treemapDrag.current = { source, click: selectionRef.current.selectedTreemapSeriesName === seriesName ? leaf : group, start: [Number(event.offsetX ?? 0), Number(event.offsetY ?? 0)], moved: false }
         }, onclick: () => {
           const point = hit.info, seriesName = point.sourceSeriesName
           if (plotKind === 'treemap') return
           if (point.selectionTarget === 'category-label') {
             const section = `${point.axis ?? 'y'}-axis-labels` as ChartSettingsSection
-            if (point.selectionMode === 'axis-label' && selectedSettingsSection !== section) { onSettingsFocus?.(section); return }
+            if (point.selectionMode === 'axis-label' && selectionRef.current.selectedSettingsSection !== section) { onSettingsFocus?.(section); return }
             onClearSettingsFocus?.()
             onSelect?.({ key: point.elementKey, seriesName: '', category: point.displayCategory, value: point.displayValue, target: 'category-label', axis: point.axis })
             if (point.selectionMode !== 'axis-label') onSettingsFocus?.(section)
             return
           }
-          onSelect?.({ key: point.elementKey, seriesName, category: point.displayCategory, value: point.displayValue, label: point.displayLabel, color: point.displayColor, target: point.selectionTarget })
-          onSettingsFocus?.('element')
+          if (point.selectionTarget === 'guide') { onSettingsFocus?.('legend'); return }
+          selectElement({ key: point.elementKey, seriesName, category: point.displayCategory, value: point.displayValue, label: point.displayLabel, color: point.displayColor, target: point.selectionTarget })
         } }))
         option.graphic = [...(Array.isArray(option.graphic) ? option.graphic : []), ...hits]
         refreshGraphics = true
@@ -951,6 +1017,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       }
       displayOption.current = option
       exportOption.current = cleanOption
+      renderCache.current = { table, config: inputConfig, instance, fontSignature, category: activeCategoryLabel, baseSeries, section: selectedSettingsSection, series: selectedSeriesName, element: selectedElementKey, target: selectedElementTarget, hover: hoveredSeriesName, hoverKey: hoveredElementKey }
       setRenderLifecycle((current) => advanceChartRender(current, revision, 'post-processing'))
       instance.dispatchAction({ type: 'downplay' })
       instance.getZr().flush()
@@ -963,10 +1030,20 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
         if (revision !== renderRevision.current || instance.isDisposed() || chart.current !== instance) return
+        if (!instance.getZr().animation.isFinished()) await new Promise<void>((resolve) => {
+          const waitForAnimation = () => {
+            if (revision !== renderRevision.current || instance.isDisposed() || instance.getZr().animation.isFinished()) resolve()
+            else requestAnimationFrame(waitForAnimation)
+          }
+          requestAnimationFrame(waitForAnimation)
+        })
+        if (revision !== renderRevision.current || instance.isDisposed()) return
         instance.getZr().flush()
+        setDirectLabels(applyDirectLabelPositions(instance, resolvedScene, config))
         setRenderLifecycle((current) => settleChartRender(current, revision))
       })()
       } catch (cause) {
+        renderCache.current = null
         displayOption.current = null
         exportOption.current = null
         renderedKind.current = null
@@ -975,12 +1052,14 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         setRenderLifecycle((current) => failChartRender(current, revision))
         setRenderError(cause instanceof Error ? cause.message : 'Не удалось отрисовать график')
       }
-    }, [activeCategoryLabel, table, config, fontSignature, hoveredSeriesName, onAnnotationSelect, onDecorationChange, onDecorationSelect, onSelect, onSeriesSelect, onSettingsFocus, readyFontSignature, readyKind, renderRetry, selectedAnnotationId, selectedElementKey, selectedElementTarget, selectedSeriesName, selectedSettingsSection])
+    }, [activeCategoryLabel, table, config, inputConfig, fontSignature, hoveredSeriesName, hoveredElementKey, onAnnotationSelect, onDecorationChange, onDecorationSelect, onSelect, onSeriesSelect, onSettingsFocus, onClearSettingsFocus, plotBounds, readyFontSignature, readyKind, renderRetry, selectedAnnotationId, selectedElementKey, selectedElementTarget, selectedSeriesName, selectedSettingsSection, selectElement, canvasUiInk])
 
     useEffect(() => {
       const instance = chart.current
       if (!instance || instance.isDisposed() || readyKind !== config.kind) return
-      const resetHover = () => { setHoveredSeriesName(null); instance.dispatchAction({ type: 'downplay' }) }
+      const resetHover = () => { hoveredSeriesRef.current = null; updateActiveTooltip(null); setHoveredSeriesName(null); setHoveredElementKey(null); instance.dispatchAction({ type: 'downplay' }) }
+      const hideTooltip = () => { instance.dispatchAction({ type: 'hideTip' }); instance.dispatchAction({ type: 'updateAxisPointer', currTrigger: 'leave' }) }
+      const leaveChart = () => { resetHover(); hideTooltip() }
       type NativeRendererElement = { type?: string; info?: { elementId?: string; datumId?: string; seriesId?: string; elementKey?: string; sourceSeriesName?: string; displayCategory?: string; displayValue?: string; displayLabel?: string; displayColor?: string; selectionTarget?: ChartElementSelection['target'] }; parent?: NativeRendererElement; __hostTarget?: NativeRendererElement }
       const nativeRendererInfo = (target?: NativeRendererElement) => {
         let element = target
@@ -992,7 +1071,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       const handler = (params: unknown) => {
         if (suppressTreemapClick.current) { suppressTreemapClick.current = false; return }
         type RendererPoint = { elementId?: string; datumId?: string; seriesId?: string; elementKey?: string; sourceSeriesName?: string; displayValue?: string; displayCategory?: string; displayLabel?: string; displayColor?: string; directLegendLabel?: boolean; selectionTarget?: ChartElementSelection['target']; itemStyle?: { color?: unknown } }
-        const event = params as { componentType?: string; targetType?: string; seriesName?: string; name?: string; value?: unknown; color?: unknown; data?: RendererPoint; info?: RendererPoint; event?: { target?: NativeRendererElement; topTarget?: NativeRendererElement } }
+        const event = params as { componentType?: string; targetType?: string; seriesName?: string; name?: string; value?: unknown; color?: unknown; data?: RendererPoint; info?: RendererPoint; event?: { offsetX?: number; offsetY?: number; target?: NativeRendererElement; topTarget?: NativeRendererElement } }
         if (event.componentType === 'title') { onSettingsFocus?.(event.targetType === 'subtitle' || event.targetType === 'subtext' ? 'subtitle' : 'title'); return }
         if (event.componentType === 'xAxis' || event.componentType === 'yAxis') {
           const axis = event.componentType === 'xAxis' ? 'x' : 'y'
@@ -1012,8 +1091,9 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         if (!event.seriesName) return
         const rendererPoint = nativeRendererInfo(event.event?.target) ?? nativeRendererInfo(event.event?.topTarget)
         const pointData = event.info?.elementKey ? event.info : rendererPoint?.elementKey ? rendererPoint : event.data
-        const seriesName = pointData?.sourceSeriesName ?? event.seriesName
-        const pointColor = pointData?.displayColor ?? (typeof event.data?.itemStyle?.color === 'string' ? event.data.itemStyle.color : undefined) ?? (typeof event.color === 'string' ? event.color : undefined)
+        const seriesName = sourceSeriesName(event.seriesName, pointData?.sourceSeriesName)
+        if (!seriesName) return
+        const pointColor = pointData?.displayColor ?? (typeof event.data?.itemStyle?.color === 'string' ? event.data.itemStyle.color : undefined) ?? (!event.seriesName.startsWith('__hit__:') && typeof event.color === 'string' ? event.color : undefined)
         const renderTarget = event.event?.target ?? event.event?.topTarget
         const clickedValueLabel = event.targetType === 'label' || renderTarget?.type === 'text' || renderTarget?.type === 'tspan' || renderTarget?.parent?.type === 'text'
         if (pointData?.selectionTarget === 'guide' && pointData.elementKey) {
@@ -1026,19 +1106,14 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           return legacySelection(selection) as ChartElementSelection
         }
         if (clickedValueLabel && event.data?.directLegendLabel) { onSettingsFocus?.('legend'); return }
-        if (renderedPlotKind === 'treemap' && selectedTreemapSeriesName !== seriesName) {
-          onSelect?.({ key: `treemap-group:${seriesName}`, seriesName, category: seriesName, value: '', label: seriesName })
-          onSettingsFocus?.('element')
-          return
-        }
+        const nearby = !clickedValueLabel && event.event ? nearestPoint(pointHits.current, Number(event.event.offsetX), Number(event.event.offsetY), event.seriesName.startsWith('__hit__:') ? null : seriesName, pointData?.elementKey ? 18 : Infinity) : undefined
+        if (nearby) { selectElement(nearby); return }
         if (clickedValueLabel && pointData?.elementKey) {
-          onSelect?.(nativeSelection('value-label') ?? { key: pointData.elementKey, seriesName, category: pointData.displayCategory ?? event.name ?? '', value: pointData.displayValue ?? String(event.value ?? ''), label: pointData.displayLabel, color: pointColor, target: 'value-label' })
-          onSettingsFocus?.('element')
+          selectElement(nativeSelection('value-label') ?? { key: pointData.elementKey, seriesName, category: pointData.displayCategory ?? event.name ?? '', value: pointData.displayValue ?? String(event.value ?? ''), label: pointData.displayLabel, color: pointColor, target: 'value-label' })
           return
         }
         if (pointData?.elementKey) {
-          onSelect?.(nativeSelection() ?? { key: pointData.elementKey, seriesName, category: pointData.displayCategory ?? event.name ?? '', value: pointData.displayValue ?? String(event.value ?? ''), label: pointData.displayLabel, color: pointColor })
-          onSettingsFocus?.('element')
+          selectElement(nativeSelection() ?? { key: pointData.elementKey, seriesName, category: pointData.displayCategory ?? event.name ?? '', value: pointData.displayValue ?? String(event.value ?? ''), label: pointData.displayLabel, color: pointColor })
           return
         }
         if (clickedSeries.current !== seriesName) {
@@ -1049,13 +1124,19 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         }
       }
       const hoverHandler = (params: unknown) => {
-        const event = params as { seriesName?: string; data?: { sourceSeriesName?: string; selectionTarget?: ChartElementSelection['target'] } }
-        if (event.data?.selectionTarget === 'guide') { setHoveredSeriesName(null); return }
-        const name = event.data?.sourceSeriesName ?? event.seriesName
-        if (name && !name.startsWith('__')) setHoveredSeriesName((current) => current === name ? current : name)
+        const event = params as { componentType?: string; targetType?: string; seriesName?: string; event?: { offsetX?: number; offsetY?: number }; data?: { elementKey?: string; sourceSeriesName?: string; directLegendLabel?: boolean; selectionTarget?: ChartElementSelection['target'] } }
+        if (event.componentType === 'legend' || event.targetType === 'endLabel' || event.data?.directLegendLabel || event.data?.selectionTarget === 'guide') { leaveChart(); return }
+        const nearby = event.seriesName?.startsWith('__hit__:') && event.event ? nearestPoint(pointHits.current, Number(event.event.offsetX), Number(event.event.offsetY)) : undefined
+        const name = nearby?.seriesName ?? sourceSeriesName(event.seriesName, event.data?.sourceSeriesName)
+        if (name) { hoveredSeriesRef.current = name; updateActiveTooltip(name); setHoveredElementKey(nearby?.key ?? event.data?.elementKey ?? null); setHoveredSeriesName((current) => current === name ? current : name) }
       }
       const legendHandler = () => onSettingsFocus?.('legend')
-      const backgroundHandler = (event: { target?: unknown }) => { if (!event.target) { onClearSettingsFocus?.(); onAnnotationSelect?.('') } }
+      const backgroundHandler = (event: { target?: unknown; offsetX?: number; offsetY?: number }) => {
+        if (event.target) return
+        const nearby = nearestPoint(pointHits.current, Number(event.offsetX), Number(event.offsetY))
+        if (nearby) { selectElement(nearby); return }
+        onClearSettingsFocus?.(); onAnnotationSelect?.('')
+      }
       const nativeGuideHandler = (event: { target?: NativeRendererElement }) => {
         const point = nativeRendererInfo(event.target)
         if (point?.selectionTarget === 'guide') onSettingsFocus?.('legend')
@@ -1065,6 +1146,13 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       // before this effect gets a chance to remove its listeners, at which
       // point instance.getZr() returns null.
       const renderer = instance.getZr()
+      const tooltipMove = (event: { offsetX?: number; offsetY?: number; target?: NativeRendererElement }) => {
+        const x = Number(event.offsetX), y = Number(event.offsetY)
+        const directLabel = directLabelsRef.current.some(({ bounds }) => x >= bounds.x && x <= bounds.x + bounds.width && y >= bounds.y && y <= bounds.y + bounds.height)
+        const guide = nativeRendererInfo(event.target)?.selectionTarget === 'guide'
+        const axisTooltip = (displayOption.current?.tooltip as { trigger?: string } | undefined)?.trigger === 'axis'
+        if (directLabel || guide || axisTooltip && !instance.containPixel({ gridIndex: 0 }, [x, y])) hideTooltip()
+      }
       const sendTreemapMove = (source: ChartElementSelection, target: ChartElementSelection, placement: 'before' | 'after') => onTreemapMove?.(source, target, placement)
       const dragLayer = () => container.current?.parentElement
       const showTreemapPreview = (x: number, y: number, label: string) => {
@@ -1132,43 +1220,44 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         clearTreemapDragVisuals()
         if (!drag.moved) {
           suppressTreemapClick.current = true
-          onSelect?.(drag.click)
-          onSettingsFocus?.('element')
+          selectElement(drag.click)
           return
         }
         suppressTreemapClick.current = true
       }
       instance.on('click', handler)
       instance.on('mouseover', hoverHandler)
-      instance.on('globalout', resetHover)
+      instance.on('globalout', leaveChart)
       instance.on('mouseout', resetHover)
       instance.on('legendselectchanged', legendHandler)
       renderer.on('click', nativeGuideHandler)
       renderer.on('click', backgroundHandler)
       renderer.on('mousemove', treemapMove)
+      renderer.on('mousemove', tooltipMove)
       renderer.on('mouseup', finishTreemapDrag)
       return () => {
         if (!instance.isDisposed()) {
           instance.off('click', handler)
           instance.off('mouseover', hoverHandler)
-          instance.off('globalout', resetHover)
+          instance.off('globalout', leaveChart)
           instance.off('mouseout', resetHover)
           instance.off('legendselectchanged', legendHandler)
         }
         renderer.off('click', nativeGuideHandler)
         renderer.off('click', backgroundHandler)
         renderer.off('mousemove', treemapMove)
+        renderer.off('mousemove', tooltipMove)
         renderer.off('mouseup', finishTreemapDrag)
         if (!treemapDrag.current) clearTreemapDragVisuals()
       }
-    }, [activeCategoryLabel?.axis, activeCategoryLabel?.category, config, onAnnotationSelect, onClearSettingsFocus, onSelect, onSeriesSelect, onSettingsFocus, onTreemapMove, readyKind, renderedPlotKind, selectedElementKey, selectedSeriesName, selectedSettingsSection, selectedTreemapSeriesName, table])
+    }, [activeCategoryLabel?.axis, activeCategoryLabel?.category, config, onAnnotationSelect, onClearSettingsFocus, onSelect, onSeriesSelect, onSettingsFocus, onTreemapMove, readyKind, renderedPlotKind, selectedElementKey, selectedSeriesName, selectedSettingsSection, selectedTreemapSeriesName, table, selectElement])
 
     useImperativeHandle(ref, () => ({
       async getSvg() {
         if (!exportOption.current || renderLifecycle.status !== 'settled') throw new Error('График ещё не готов к экспорту. Дождитесь завершения отрисовки.')
         await waitForChartFonts(requestedFontFamilies, config.customFonts)
         let result: SVGSVGElement | undefined
-        await withExportSvg(exportOption.current, canvasWidth, canvasHeight, async (svg) => {
+        await withExportSvg(exportOption.current, canvasWidth, canvasHeight, config, exportScene.current, async (svg) => {
           result = svg.cloneNode(true) as SVGSVGElement
           appendAnnotationText(result, config.annotations)
           const { appendStyledText } = await import('../features/chart-export/chartExport')
@@ -1188,7 +1277,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           const visible = field === 'title' ? config.showTitle !== false : field === 'subtitle' ? config.showSubtitle !== false : field === 'note' ? config.showNote !== false : config.showSource !== false
           return html && layout && visible ? [exportRichBlock(html, config[field], style, layout)] : []
         })
-        await withExportSvg(exportOption.current, canvasWidth, canvasHeight, async (svg) => {
+        await withExportSvg(exportOption.current, canvasWidth, canvasHeight, config, exportScene.current, async (svg) => {
           appendAnnotationText(svg, config.annotations)
           const { exportChartAsSvg } = await import('../features/chart-export/chartExport')
           await exportChartAsSvg(svg, { canvasWidth: config.canvasWidth, canvasHeight: config.canvasHeight, customFonts: config.customFonts }, options, textBlocks)
@@ -1202,7 +1291,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           const visible = field === 'title' ? config.showTitle !== false : field === 'subtitle' ? config.showSubtitle !== false : field === 'note' ? config.showNote !== false : config.showSource !== false
           return html && layout && visible ? [exportRichBlock(html, config[field], style, layout)] : []
         })
-        await withExportSvg(exportOption.current, canvasWidth, canvasHeight, async (svg) => {
+        await withExportSvg(exportOption.current, canvasWidth, canvasHeight, config, exportScene.current, async (svg) => {
           appendAnnotationText(svg, config.annotations)
           const { exportChartAsPng } = await import('../features/chart-export/chartExport')
           await exportChartAsPng(svg, { canvasWidth: config.canvasWidth, canvasHeight: config.canvasHeight, customFonts: config.customFonts }, options, textBlocks)
@@ -1228,6 +1317,17 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     const safeZoom = Math.min(5, Math.max(.1, gestureZoom))
     const previewZoom = config.autoFitCanvas === false ? safeZoom : safeZoom * .9
     const canvasTransform = config.autoFitCanvas === false ? `translate(${viewPan.x}px, ${viewPan.y}px) scale(${previewZoom})` : `translate(calc(-50% + ${viewPan.x}px), calc(-50% + ${viewPan.y}px)) scale(${canvasScale * previewZoom})`
+    const alignmentBoxes: AlignmentBox[] = [
+      { id: 'canvas', x: 0, y: 0, width: canvasWidth, height: canvasHeight, reference: true },
+      ...(plotBounds ? [{ id: 'plot', x: plotBounds.left, y: plotBounds.top, width: plotBounds.right - plotBounds.left, height: plotBounds.bottom - plotBounds.top, reference: true }] : []),
+      ...resolvedDecorations.filter((item) => !item.hidden).map((item) => {
+        const x = item.type === 'area' && item.fitToPlotWidth && plotBounds ? plotBounds.left : item.x
+        const y = item.type === 'area' && item.fitToPlot && plotBounds ? plotBounds.top : item.y
+        const width = item.type === 'area' && item.fitToPlotWidth && plotBounds ? plotBounds.right - plotBounds.left : item.width
+        const height = item.type === 'area' && item.fitToPlot && plotBounds ? plotBounds.bottom - plotBounds.top : item.height
+        return { id: `decoration:${item.id}`, x: x + Math.min(0, width), y: y + Math.min(0, height), width: Math.abs(width), height: Math.abs(height) }
+      }),
+    ]
     return (
       <div className={`chart-canvas-viewport ${config.autoFitCanvas === false ? 'native-size' : ''}`} ref={viewport}>
         <div
@@ -1242,20 +1342,22 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           data-chart-kind={renderedChartKind ?? ''}
           data-plot-kind={renderedPlotKind}
           aria-busy={renderLifecycle.status !== 'settled'}
-          style={{ width: canvasWidth, height: canvasHeight, transform: canvasTransform }}
+          style={{ width: canvasWidth, height: canvasHeight, transform: canvasTransform, '--canvas-ui-ink': canvasUiInk, '--canvas-ui-paper': config.canvasBackground ?? '#ffffff' } as React.CSSProperties}
         >
           <div className="chart-canvas" ref={container}/>
+          {onDirectLabelPositionsChange && <DirectLabelOverlay labels={directLabels} config={config} width={canvasWidth} height={canvasHeight} onChange={onDirectLabelPositionsChange} toolbarHost={directLabelControlsHost} onRefresh={() => { chart.current?.getZr().flush(); setDirectLabels((labels) => [...labels]) }}/>}
+          <AnnotationGuides guides={alignmentGuides} width={canvasWidth} height={canvasHeight} scale={config.autoFitCanvas === false ? previewZoom : canvasScale * previewZoom}/>
           {annotationTool && onAnnotationPlace && <AnnotationPlacementOverlay key={annotationTool} tool={annotationTool} width={canvasWidth} height={canvasHeight} onPlace={onAnnotationPlace} onCancel={() => onAnnotationCancel?.()}/>}
           {pickingDecorationText && onDecorationTextPick && <DecorationTextAnchorPicker annotations={config.annotations} heights={textAnchorHeights} width={canvasWidth} height={canvasHeight} onSelect={onDecorationTextPick} onCancel={() => onDecorationPointCancel?.()}/>}
           {pickingDecorationPoint && onDecorationPointPick && <DecorationAnchorPicker points={decorationTargets} width={canvasWidth} height={canvasHeight} onSelect={onDecorationPointPick} onCancel={() => onDecorationPointCancel?.()}/>}
           {renderError && <div className="chart-render-error" role="alert"><strong>Не удалось отрисовать график</strong><span>{renderError}</span></div>}
           {richDisplays.map(({ field, html, layout, style }) => <CanvasTextDisplay key={field} block={exportRichBlock(html, config[field], style, layout)} onSelect={() => { onAnnotationSelect?.(''); onSettingsFocus?.(field) }}/>)}
-          {selectedDecoration && onDecorationChange && <DecorationOverlay annotations={config.annotations} targets={decorationTargets} annotationHeights={textAnchorHeights} onPickAnchor={onDecorationAnchorRequest} decoration={selectedDecoration} canvasWidth={canvasWidth} canvasHeight={canvasHeight} plotTop={plotBounds?.top} plotBottom={plotBounds?.bottom} plotLeft={plotBounds?.left} plotRight={plotBounds?.right} onChange={onDecorationChange}/>}
-          {config.annotations.filter((annotation) => !annotation.hidden && annotation.id !== selected?.id).map((annotation) => <AnnotationDisplay key={annotation.id} annotation={annotation} canvasBackground={config.canvasBackground} onSelect={() => { if (!annotation.locked) onAnnotationSelect?.(annotation.id) }}/>)}
+          {selectedDecoration && onDecorationChangeProp && <DecorationOverlay alignmentBoxes={alignmentBoxes} onGuidesChange={setAlignmentGuides} annotations={config.annotations} targets={decorationTargets} annotationHeights={textAnchorHeights} onPickAnchor={onDecorationAnchorRequest} decoration={selectedDecoration} canvasWidth={canvasWidth} canvasHeight={canvasHeight} plotTop={plotBounds?.top} plotBottom={plotBounds?.bottom} plotLeft={plotBounds?.left} plotRight={plotBounds?.right} onChange={onDecorationChange}/>}
+          {config.annotations.filter((annotation) => !annotation.hidden && annotation.id !== selected?.id).map((annotation) => <AnnotationDisplay key={annotation.id} annotation={annotation} customFonts={config.customFonts} canvasBackground={config.canvasBackground} onSelect={() => { if (!annotation.locked) onAnnotationSelect?.(annotation.id) }}/>)}
           <Suspense fallback={null}>
             {categoryLabelLayout && selectedCategoryLabel && <CanvasTextOverlay id={`category-${categoryLabelLayout.axis}-${categoryLabelLayout.category}`} text={config.categoryLabelOverrides?.[categoryLabelLayout.axis]?.[categoryLabelLayout.category] ?? categoryLabelLayout.category} style={categoryLabelLayout.style} left={categoryLabelLayout.left} top={categoryLabelLayout.top} width={categoryLabelLayout.width} rotation={categoryLabelLayout.rotation} policy={{ richText: false, multiline: true, explicitNewlines: true, styleToolbar: false }} customFonts={config.customFonts} canvasBackground={config.canvasBackground} onChange={(_html, text) => onCategoryLabelChange?.(categoryLabelLayout.axis, categoryLabelLayout.category, text)}/>}
             {richField && richLayout && richStyle && <CanvasTextOverlay id={richField} text={richText} html={richHtml} style={{ ...richStyle, size: richLayout.baseSize }} left={richLayout.left} top={richLayout.top} width={richLayout.width} customFonts={config.customFonts} canvasBackground={config.canvasBackground} onChange={(html, text) => onRichTextChange?.(richField, html, text)} onStyleChange={(style) => onTextStyleChange?.(richField, style)}/>}
-            {selected && <AnnotationOverlay annotation={selected} customFonts={config.customFonts} canvasBackground={config.canvasBackground} onChange={(annotation) => onAnnotationChange?.(annotation)} onDuplicate={() => onAnnotationDuplicate?.(selected)} onDelete={() => onAnnotationDelete?.(selected.id)} onClose={() => onAnnotationSelect?.('')}/>}
+            {selected && <AnnotationOverlay alignmentBoxes={alignmentBoxes} onGuidesChange={setAlignmentGuides} annotation={selected} customFonts={config.customFonts} canvasBackground={config.canvasBackground} onChange={(annotation) => onAnnotationChange?.(annotation)} onDuplicate={() => onAnnotationDuplicate?.(selected)} onDelete={() => onAnnotationDelete?.(selected.id)} onClose={() => onAnnotationSelect?.('')}/>}
           </Suspense>
         </div>
       </div>

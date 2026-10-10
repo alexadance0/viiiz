@@ -30,7 +30,7 @@ export const usesHorizontalAxes = (config: Pick<ChartConfig, 'kind' | 'barOrient
   : isHorizontalChart(config.kind) || isBarChart(config.kind) && config.barOrientation === 'horizontal'
 export const isBarChart = (kind: ChartKind) => kind === 'marimekko' || kind === 'bar' || kind === 'stacked-bar' || kind === 'normalized-stacked-bar' || kind === 'waterfall' || kind === 'lollipop' || isHorizontalBarChart(kind)
 export const isAreaChart = (kind: ChartKind) => kind === 'area' || kind === 'stacked-area' || kind === 'normalized-stacked-area' || kind === 'stream-graph'
-export const isLineLikeChart = (kind: ChartKind) => kind === 'bump' || kind === 'line' || kind === 'spline' || kind === 'step-line' || kind === 'moving-average-line' || kind === 'moving-average-scatter' || kind === 'slope' || kind === 'range-line' || kind === 'step-range-line' || kind === 'confidence-line' || isAreaChart(kind)
+export const isLineLikeChart = (kind: ChartKind) => kind === 'bump' || kind === 'indexed-line' || kind === 'seasonal-line' || kind === 'line' || kind === 'spline' || kind === 'step-line' || kind === 'moving-average-line' || kind === 'moving-average-scatter' || kind === 'slope' || kind === 'range-line' || kind === 'step-range-line' || kind === 'confidence-line' || isAreaChart(kind)
 export const isStackedBarChart = (kind: ChartKind) => kind === 'marimekko' || kind === 'stacked-bar' || kind === 'normalized-stacked-bar' || kind === 'butterfly' || kind === 'horizontal-stacked-bar' || kind === 'horizontal-normalized-stacked-bar'
 export const isStackedAreaChart = (kind: ChartKind) => kind === 'stacked-area' || kind === 'normalized-stacked-area' || kind === 'stream-graph'
 export const isStackedChart = (kind: ChartKind) => isStackedBarChart(kind) || isStackedAreaChart(kind)

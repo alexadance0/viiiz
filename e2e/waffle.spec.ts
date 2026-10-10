@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
+import { DEFAULT_CHART_PALETTE } from '../src/entities/chart/model/defaults'
+
+const firstColor = DEFAULT_CHART_PALETTE[0]
 
 test('waffle renders proportions, adjusts the grid and exports SVG and PNG', async ({ page }) => {
   const errors: string[] = []
@@ -21,13 +24,15 @@ test('waffle renders proportions, adjusts the grid and exports SVG and PNG', asy
   await expect(canvas).toHaveAttribute('data-render-status', 'settled')
   await expect.poll(async () => Number(await canvas.getAttribute('data-render-revision'))).toBeGreaterThan(previousRevision)
   await expect(canvas).toHaveAttribute('data-render-status', 'settled')
-  await expect(canvas.locator('svg path[fill="#0072b2"]')).toHaveCount(37) // Only grid cells; side captions have no markers or separate legend.
-  const paths = canvas.locator('svg path[fill="#0072b2"]')
+  await expect(canvas.locator(`svg path[fill="${firstColor}"]`)).toHaveCount(37) // Only grid cells; side captions have no markers or separate legend.
+  const paths = canvas.locator(`svg path[fill="${firstColor}"]`)
   const cellIndex = await paths.evaluateAll((elements) => elements.findIndex((element) => { const box = element.getBoundingClientRect(); return box.width > 15 && Math.abs(box.width - box.height) < 1 }))
   const cell = await paths.nth(cellIndex).boundingBox()
   if (!cell) throw new Error('Square is missing')
   await page.mouse.click(cell.x + cell.width / 2, cell.y + cell.height / 2)
-  await expect(page.locator('.element-editor')).toContainText('Поддерживают')
+  await expect(page.locator('.series-editor')).toContainText('Поддерживают')
+  await page.mouse.click(cell.x + cell.width / 2, cell.y + cell.height / 2)
+  await expect(page.locator('.element-editor:not(.series-editor)')).toContainText('Поддерживают')
   await page.getByRole('button', { name: 'Снять выделение', exact: true }).click()
   await page.screenshot({ path: '/tmp/viiiz-waffle-editor.png', fullPage: true })
   await page.locator('.export-menu > summary').click()
@@ -58,39 +63,39 @@ test('waffle supports multiline category captions inside regions, colored side e
   await page.getByRole('textbox', { name: 'Текст подписи', exact: true }).fill('Питьевая вода\n12,4 тыс. чел.')
   await page.getByRole('textbox', { name: 'Пояснение', exact: true }).fill('Железо, мышьяк, никель,\nнитриты, свинец и хлор.')
   await expect(canvas.locator('svg text').filter({ hasText: '12,4 тыс. чел.' })).toBeVisible()
-  await expect(canvas.locator('svg text').filter({ hasText: 'Железо, мышьяк' })).toHaveAttribute('fill', '#0072b2')
+  await expect(canvas.locator('svg text').filter({ hasText: 'Железо, мышьяк' })).toHaveAttribute('fill', firstColor)
   await page.screenshot({ path: '/tmp/viiiz-waffle-side-captions.png', fullPage: true })
   await page.getByRole('textbox', { name: 'Пояснение', exact: true }).fill('')
   await page.getByRole('combobox', { name: 'Расположение подписей' }).selectOption('inside')
   await page.getByRole('combobox', { name: 'Цвет подписей' }).selectOption('auto')
   await expect(canvas.locator('svg text').filter({ hasText: '12,4 тыс. чел.' })).toHaveAttribute('fill', '#ffffff')
-  await expect(canvas.locator('svg text').filter({ hasText: '12,4 тыс. чел.' })).toHaveAttribute('stroke', '#0072b2')
+  await expect(canvas.locator('svg text').filter({ hasText: '12,4 тыс. чел.' })).toHaveAttribute('stroke', firstColor)
   // SVG paint order must keep the letters above both the grid and their colored backing.
-  await expect.poll(() => canvas.locator('svg text').filter({ hasText: '12,4 тыс. чел.' }).evaluate((text) => {
+  await expect.poll(() => canvas.locator('svg text').filter({ hasText: '12,4 тыс. чел.' }).evaluate((text, firstColor) => {
     const box = text.getBoundingClientRect()
-    const backgrounds = [...text.closest('svg')!.querySelectorAll('path[fill="#0072b2"]')].filter((path) => {
+    const backgrounds = [...text.closest('svg')!.querySelectorAll(`path[fill="${firstColor}"]`)].filter((path) => {
       const rect = path.getBoundingClientRect()
       return rect.left < box.right && rect.right > box.left && rect.top < box.bottom && rect.bottom > box.top
     })
     return backgrounds.length > 0 && backgrounds.every((path) => Boolean(path.compareDocumentPosition(text) & Node.DOCUMENT_POSITION_FOLLOWING))
-  })).toBe(true)
+  }, firstColor)).toBe(true)
   await page.screenshot({ path: '/tmp/viiiz-waffle-inside-captions.png', fullPage: true })
   await page.locator('.export-menu > summary').click()
   const download = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Скачать SVG' }).click()
   const svg = await readFile((await (await download).path())!, 'utf8')
   expect(svg).toContain('12,4 тыс. чел.')
-  expect(svg).toContain('stroke="#0072b2"')
+  expect(svg).toContain(`stroke="${firstColor}"`)
   await page.locator('.export-menu > summary').click()
   await page.getByRole('combobox', { name: 'Расположение подписей' }).selectOption('legend')
   await page.getByRole('checkbox', { name: 'Цвет подписей как у категорий' }).press('Space')
   await expect(canvas.locator('svg text').filter({ hasText: '12,4 тыс. чел.' })).toHaveCount(0)
-  await expect(canvas.locator('svg text').filter({ hasText: /^Питьевая вода$/ })).toHaveAttribute('fill', '#0072b2')
+  await expect(canvas.locator('svg text').filter({ hasText: /^Питьевая вода$/ })).toHaveAttribute('fill', firstColor)
   await page.screenshot({ path: '/tmp/viiiz-waffle-colored-legend.png', fullPage: true })
   await page.getByRole('checkbox', { name: 'Цвет подписей как у категорий' }).press('Space')
   await expect(canvas.locator('svg text').filter({ hasText: /^Питьевая вода$/ })).toHaveAttribute('fill', '#2b2b2b')
   await page.getByRole('combobox', { name: 'Расположение подписей' }).selectOption('right')
-  await expect(canvas.locator('svg path[fill="#0072b2"]')).toHaveCount(57)
+  await expect(canvas.locator(`svg path[fill="${firstColor}"]`)).toHaveCount(57)
   await expect(canvas.locator('svg text').filter({ hasText: '12,4 тыс. чел.' })).toBeVisible()
 })
 
@@ -108,7 +113,7 @@ test('waffle fills from the top by default, grows from a corner and exports the 
   if (!(await settings.evaluate((element) => element.hasAttribute('open')))) await settings.locator(':scope > summary').click()
   const direction = page.getByRole('combobox', { name: 'Направление заполнения' })
   await expect(direction).toHaveValue('top')
-  const cells = canvas.locator('svg path[fill="#0072b2"]')
+  const cells = canvas.locator(`svg path[fill="${firstColor}"]`)
   await expect(cells).toHaveCount(4)
   const topRows = await cells.evaluateAll((elements) => elements.map((element) => Math.round(element.getBoundingClientRect().y)))
   expect(new Set(topRows).size).toBe(1)

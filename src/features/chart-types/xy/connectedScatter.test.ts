@@ -71,10 +71,13 @@ describe('connected scatter', () => {
     expect(scene.plot.series.map((series) => series.connection!.points.length)).toEqual([4, 2])
     expect(scene.plot.series[0].connection!.stroke).toMatchObject({ width: 3, type: 'dotted', opacity: .5 })
     expect(scene.plot.series[1].connection!.stroke).toMatchObject({ width: 4, type: 'dashed' })
-    const option = renderScene(scene) as { series: Array<{ type: string; segmentOf?: string; lineStyle?: { opacity: number } }> }
+    const option = renderScene(scene) as { series: Array<{ type: string; segmentOf?: string; lineStyle?: { opacity: number; color: string } }> }
     expect(option.series.filter((series) => series.type === 'scatter')).toHaveLength(2)
+    const activeColor = option.series.find((series) => series.segmentOf === 'A')!.lineStyle!.color
+    const peerColor = option.series.find((series) => series.segmentOf === 'B')!.lineStyle!.color
     applySeriesVisualState(option, settings, null, null, 'A')
-    expect(option.series.find((series) => series.segmentOf === 'A')!.lineStyle!.opacity).toBe(1)
-    expect(option.series.find((series) => series.segmentOf === 'B')!.lineStyle!.opacity).toBeCloseTo(.11)
+    expect(option.series.find((series) => series.segmentOf === 'A')!.lineStyle).toMatchObject({ opacity: .5, color: activeColor })
+    expect(option.series.find((series) => series.segmentOf === 'B')!.lineStyle!.opacity).toBe(.5)
+    expect(option.series.find((series) => series.segmentOf === 'B')!.lineStyle!.color).not.toBe(peerColor)
   })
 })

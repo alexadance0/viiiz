@@ -36,6 +36,11 @@ for (const scope of ['composition', 'panel', 'annotation', 'single'] as const) {
     await page.getByRole('button', { name: 'Цвет #db5a5a', exact: true }).click()
     const slider = page.getByRole('slider', { name: 'Фон текста: прозрачность', exact: true })
     await slider.press('Home')
+    if (scope === 'annotation') {
+      await slider.press('Tab')
+      await expect(page.locator('.canvas-annotation [data-text-layer="highlight"] rect')).toHaveCount(0)
+      await expect(page.locator('.canvas-annotation [data-text-layer="outline"] text').first()).toBeVisible()
+    }
     await slider.press('PageUp')
     await slider.press('PageUp')
     await slider.press('PageUp')
@@ -43,16 +48,16 @@ for (const scope of ['composition', 'panel', 'annotation', 'single'] as const) {
     await slider.press('PageUp')
     await slider.press('Tab')
     await page.keyboard.press('Escape')
-    await expect.poll(() => editor.evaluate((element) => {
+    await expect.poll(() => editor.evaluate((element, scope) => {
       const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
       const text = walker.nextNode()
       const backgrounds: string[] = []
       for (let parent = text?.parentElement; parent && parent !== element; parent = parent.parentElement) {
-        const color = getComputedStyle(parent).backgroundColor
-        if (color !== 'rgba(0, 0, 0, 0)') backgrounds.push(color)
+        const color = scope === 'annotation' ? parent.style.backgroundColor : getComputedStyle(parent).backgroundColor
+        if (color && color !== 'rgba(0, 0, 0, 0)') backgrounds.push(color)
       }
       return backgrounds
-    })).toEqual(['rgba(219, 90, 90, 0.5)'])
+    }, scope)).toEqual(['rgba(219, 90, 90, 0.5)'])
     if (scope === 'composition') {
       await editor.evaluate((element) => {
         const text = document.createTreeWalker(element, NodeFilter.SHOW_TEXT).nextNode()!
@@ -87,7 +92,10 @@ for (const scope of ['composition', 'panel', 'annotation', 'single'] as const) {
     }
     await page.getByRole('button', { name: 'Снять выделение', exact: true }).click()
     const display = scope === 'annotation' ? page.locator('.annotation-display .annotation-content') : page.locator('.canvas-rich-text-display')
-    if (scope === 'single' || scope === 'panel') await expect(display.filter({ hasText: 'Полупрозрачный фон' }).locator('rect[fill]').first()).toHaveAttribute('fill', 'rgba(219, 90, 90, 0.5)')
+    if (scope === 'annotation') {
+      await expect(page.locator('.annotation-display [data-text-layer="highlight"] rect').first()).toHaveAttribute('fill', 'rgba(219, 90, 90, 0.5)')
+      await expect(page.locator('.annotation-display [data-text-layer="outline"] text')).toHaveCount(0)
+    } else if (scope === 'single' || scope === 'panel') await expect(display.filter({ hasText: 'Полупрозрачный фон' }).locator('rect[fill]').first()).toHaveAttribute('fill', 'rgba(219, 90, 90, 0.5)')
     else await expect(display.filter({ hasText: 'Полупрозрачный фон' }).locator('span[style]').first()).toHaveCSS('background-color', scope === 'composition' ? 'rgba(54, 164, 118, 0.5)' : 'rgba(219, 90, 90, 0.5)')
     await page.locator('.export-menu > summary').click()
     const download = page.waitForEvent('download')

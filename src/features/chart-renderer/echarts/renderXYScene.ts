@@ -6,6 +6,7 @@ import type { ChartTextStyle } from '../../../core/types'
 import type { XYQuadrantLayerScene, XYReferenceLineScene, XYTrendLayerScene } from '../../../entities/chart/model/ChartScene'
 import type { ResolvedXYScene } from '../../chart-types/xy/layout'
 import { verticalAxisLabelPlacement } from '../../chart-layout/axisLabelPlacement'
+import { renderTimeAxis } from './renderTimeAxis'
 
 const textStyle = (style: ChartTextStyle) => ({ color: style.color, fontFamily: style.fontFamily, fontSize: style.size, fontWeight: style.weight, fontStyle: style.italic ? 'italic' : 'normal', lineHeight: Math.round(style.size * style.lineHeight / 100), align: style.align })
 const graphicTextStyle = (style: ChartTextStyle) => { const { color, ...rest } = textStyle(style); return { ...rest, fill: color } }
@@ -18,13 +19,14 @@ const usesYAxisEdgeOverlay = (scene: ResolvedXYScene) => (scene.compatibilityCon
 
 function xAxis(scene: ResolvedXYScene) {
   const config = scene.compatibilityConfig, axis = scene.plot.xAxis, scale = scene.plot.xScale
+  if (axis.timeScale) return renderTimeAxis(axis, config, scene.geometry.plot, scene.geometry.axes.x)
   const minimum = scale.minimum ?? scale.automaticDomain.minimum, maximum = scale.maximum ?? scale.automaticDomain.maximum
   const nameGap = (axis.ticks.visible ? axis.ticks.length : 0) + (axis.labels.visible ? axis.labels.gap + axis.labels.size : 0) + (axis.title?.gap ?? 0)
   const calendarValues = scale.calendarTicks?.map((tick) => tick.value)
   const calendarLabels = new Map(scale.calendarTicks?.map((tick) => [tick.value, tick.label]))
   return {
     type: scale.type === 'time' ? 'time' : 'value', position: axisSide(axis), min: scale.minimum, max: scale.maximum, interval: scale.type === 'time' ? undefined : scale.step,
-    name: axis.title?.visible && config.axisTitleMode !== 'editorial' ? axis.title.text : '', nameLocation: 'middle', nameGap, nameTextStyle: axis.title ? textStyle(axis.title.style) : undefined, triggerEvent: true,
+    name: axis.title?.visible ? axis.title.text : '', nameLocation: 'middle', nameGap, nameTextStyle: axis.title ? textStyle(axis.title.style) : undefined, triggerEvent: true,
     axisLine: { show: axis.line.visible, onZero: false, lineStyle: axisLineStyle(scene) }, axisTick: { show: axis.ticks.visible, customValues: calendarValues, inside: false, alignWithLabel: true, length: axis.ticks.length, lineStyle: axisLineStyle(scene) },
     axisLabel: { show: axis.labels.visible, customValues: calendarValues, margin: axis.labels.gap, inside: false, hideOverlap: true, rotate: axis.labels.rotation ?? 0, ...textStyle(axis.labels.style), align: 'center', formatter: scale.type === 'time'
       ? (value: number, index: number) => scale.calendarTicks ? calendarLabels.get(value) ?? '' : continuousDateLabel(new Date(value), scale.timeProfile, scale.dateLabelFormat, index === 0)

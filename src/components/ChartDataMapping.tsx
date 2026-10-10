@@ -4,6 +4,7 @@ import { repeatedChartCategories } from '../core/chartData'
 import { isMapChart, mapPresetForKind, matchMapRows } from '../features/chart-types/map/catalog'
 import { isScatterChart, isPairedComparisonChart, isPointComparisonChart, isDistributionChart, isCompositionChart } from '../core/chartKinds'
 import { SettingsCheckbox } from './SettingsCheckbox'
+import { colorCategories, defaultColorThresholds } from '../core/colorEncoding'
 
 interface Props {
   table: DataTable
@@ -47,6 +48,18 @@ export function ChartDataMapping({ table, numericColumns, config, onChange, onTo
     return <section className="chart-data-section">
       <div><strong>Данные карты</strong><small>Одна строка — одна территория. Поддерживаются русские и английские названия и коды.</small></div>
       <label>{preset === 'russia' ? 'Регион' : preset === 'usa' ? 'Штат' : 'Страна'}<select value={config.xField} onChange={(event) => patch({ xField: event.target.value })}>{table.columns.map((column) => <option key={column}>{column}</option>)}</select></label>
+      <label>Окраска карты<select value={config.colorEncoding?.mode ?? ''} onChange={(event) => {
+        const mode = event.target.value as NonNullable<ChartConfig['colorEncoding']>['mode'] | ''
+        if (!mode) { patch({ colorEncoding: undefined }); return }
+        const field = mode === 'categories' ? table.columns.find((column) => column !== config.xField && !numericColumns.includes(column)) ?? table.columns.find((column) => column !== config.xField) : undefined
+        const next: ChartConfig = { ...config, showLegend: mode !== 'single', colorEncoding: { mode, field, missingPattern: 'diagonal', ...(mode === 'bins' ? { thresholds: defaultColorThresholds(table, config.yField) } : {}) } }
+        if (mode === 'categories') next.colorEncoding!.categories = colorCategories(table, next)
+        onChange(next)
+      }}><option value="">Числовой градиент</option><option value="single">Один цвет</option><option value="categories">По категориям</option><option value="bins">Числовые интервалы</option></select></label>
+      {config.colorEncoding?.mode === 'categories' && <label>Категория цвета<select value={config.colorEncoding.field ?? ''} onChange={(event) => {
+        const next: ChartConfig = { ...config, colorEncoding: { ...config.colorEncoding!, field: event.target.value, categories: undefined } }
+        next.colorEncoding!.categories = colorCategories(table, next); onChange(next)
+      }}><option value="">Выберите столбец</option>{table.columns.map((column) => <option key={column}>{column}</option>)}</select></label>}
       {select('Показатель для окраски', config.yField, (yField) => patch({ yField, yFields: [yField], seriesField: '' }))}
       <label>Повторяющиеся территории<select value={config.aggregation} onChange={(event) => patch({ aggregation: event.target.value as ChartConfig['aggregation'] })}><option value="none">Без агрегации</option><option value="sum">Сумма</option><option value="average">Среднее</option><option value="min">Минимум</option><option value="max">Максимум</option><option value="count">Количество строк</option></select></label>
       <small>{preset === 'russia' ? 'Например: г. Москва, Свердловская обл., ХМАО — Югра, RU-MOW или код ОКАТО 45000000000.' : preset === 'usa' ? 'Census и BEA: California, CA, US-CA, FIPS 06, GEO_ID 0400000US06 или GeoFIPS 06000.' : 'Our World in Data и World Bank: Germany, DE, DEU, Iran, Islamic Rep. или OWID_KOS для Косово.'}</small>

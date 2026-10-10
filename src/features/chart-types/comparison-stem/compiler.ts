@@ -13,11 +13,12 @@ export const isNativeComparisonStemKind = (kind: ChartKind): kind is NativeCompa
 
 const pointFromBar = (mark: ReturnType<typeof compileNativeBarScene>['plot']['series'][number]['marks'][number], config: ChartConfig, seriesName: string, color: string, visible: boolean, position: CartesianPointScene['label']['position']): CartesianPointScene => {
   const seriesStyle = config.seriesStyles[seriesName]
+  const override = config.elementStyles[mark.legacyKey]
   return {
     type: 'point', id: mark.id, datumId: mark.datumId, seriesId: mark.seriesId, legacyKey: mark.legacyKey,
     category: mark.category, categoryIndex: mark.categoryIndex, value: mark.value, displayCategory: mark.displayCategory, displayValue: mark.displayValue,
-    marker: { visible: true, shape: seriesStyle?.markerShape ?? 'circle', size: seriesStyle?.markerSize ?? 12, fill: seriesStyle?.markerFill ?? mark.style.color ?? color, stroke: seriesStyle?.markerBorder ?? color, strokeWidth: seriesStyle?.markerBorderWidth ?? 1 },
-    label: { visible: mark.value != null && (config.elementStyles[mark.legacyKey]?.showLabel ?? visible), text: config.elementStyles[mark.legacyKey]?.label || mark.label.text, style: config.elementStyles[mark.legacyKey]?.valueText ?? config.valueText, position },
+    marker: { visible: true, shape: override?.markerShape ?? seriesStyle?.markerShape ?? 'circle', size: override?.markerSize ?? seriesStyle?.markerSize ?? 12, fill: override?.markerFill ?? seriesStyle?.markerFill ?? mark.style.color ?? color, stroke: override?.markerBorder ?? override?.color ?? seriesStyle?.markerBorder ?? color, strokeWidth: override?.markerBorderWidth ?? seriesStyle?.markerBorderWidth ?? 1, opacity: override?.fillOpacity ?? seriesStyle?.fillOpacity ?? 1 },
+    label: { visible: mark.value != null && (override?.showLabel ?? visible), text: override?.label || mark.label.text, style: override?.valueText ?? config.valueText, position: override?.labelPosition ?? position },
   }
 }
 

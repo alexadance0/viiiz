@@ -7,6 +7,22 @@ import { NATIVE_BAR_KINDS } from '../../chart-types/bar/compiler'
 import { renderScene } from './renderScene'
 
 describe('native ECharts bar adapter', () => {
+  it.each(['bar', 'horizontal-bar', 'stacked-bar'] as const)('%s places dates by elapsed time in native bars and custom label layers', (kind) => {
+    const source = barFixtures[0]
+    const dates = [new Date(1950, 0, 1), new Date(2010, 0, 1), new Date(2025, 0, 1)]
+    const table = { name: 'Uneven dates', columns: ['Date', 'Value'], rows: dates.map((Date, index) => ({ Date, Value: index + 1 })) }
+    const option = getChartPlugin(kind).buildOption(table, { ...source.config, kind, xField: 'Date', yField: 'Value', yFields: ['Value'], seriesField: '', showValues: true, barValueLabelAbsorption: true, barBorderWidth: 1, dateLabelFormat: 'year-full', xAxisStep: 10 }) as {
+      xAxis: { type: string; min: number; max: number }
+      yAxis: { type: string; min: number; max: number }
+      series: Array<{ name: string; data: Array<{ value: number[] }> }>
+    }
+    expect(kind === 'horizontal-bar' ? option.yAxis : option.xAxis).toMatchObject({ type: 'time', min: +dates[0], max: +dates[2] })
+    expect(option.series[0].data.map((point) => point.value[0])).toEqual(dates.map(Number))
+    for (const series of option.series.filter((item) => item.name.startsWith('__native-bar:') || item.name.startsWith('__bar-value-labels:'))) {
+      expect(series.data.every((point) => dates.some((date) => +date === point.value[0]))).toBe(true)
+    }
+  })
+
   it('uses resolved Viiiz geometry as an authoritative containLabel-free grid', () => {
     const source = barFixtures.find((fixture) => fixture.name === 'both non-default sides')!
     const scene = getChartPlugin('bar').compile(source.table, source.config)

@@ -8,7 +8,7 @@ export const axisValue = (value?: string) => {
 }
 
 export const dateValue = (value?: string) => {
-  const parsed = value ? new Date(`${value}T00:00:00`).getTime() : Number.NaN
+  const parsed = value ? new Date(value.includes('T') ? value : `${value}T00:00:00`).getTime() : Number.NaN
   return Number.isFinite(parsed) ? parsed : undefined
 }
 

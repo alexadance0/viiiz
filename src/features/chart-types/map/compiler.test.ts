@@ -7,12 +7,28 @@ import { renderScene } from '../../chart-renderer/echarts/renderScene'
 import { compileNativeMapScene, validateMapMapping } from './compiler'
 import { findMapRegion, inferMapRegionField, mapPresets, mapRegions } from './catalog'
 import { resolveNativeMapScene } from './layout'
-import { interiorAnchor, rectangleInsidePolygon } from './labelPlacement'
+import { interiorAnchor, polygonDistance, rectangleInsidePolygon } from './labelPlacement'
 
 const config = (kind: ChartConfig['kind']): ChartConfig => ({ ...createDefaultChartConfig(), ...getChartPlugin(kind).defaultConfig, kind, xField: 'Территория', yField: 'Значение', yFields: ['Значение'] })
 const table = (rows: DataTable['rows']): DataTable => ({ name: 'map', columns: ['Территория', 'Значение'], rows })
 
 describe('native choropleth maps', () => {
+  it.each(['map-europe', 'map-world'] as const)('%s includes the claimed regional extent without overlapping fills or dashed overlays', (kind) => {
+    const scene = compileNativeMapScene(mapDemoTables[kind === 'map-europe' ? 'europe' : 'world'], config(kind))
+    const russia = scene.plot.regions.find((region) => region.regionId === 'RU')!, ukraine = scene.plot.regions.find((region) => region.regionId === 'UA')!
+    expect(russia.claimedPolygons?.length).toBeGreaterThan(0)
+    expect(ukraine.claimedPolygons).toBeUndefined()
+    for (const polygon of russia.claimedPolygons!) {
+      const point = interiorAnchor([polygon]).center
+      expect(russia.polygons.some((shape) => polygonDistance(point, shape) >= 0)).toBe(true)
+      expect(ukraine.polygons.some((shape) => polygonDistance(point, shape) >= 0)).toBe(false)
+    }
+    const resolved = resolveNativeMapScene(scene)
+    const option = renderScene(resolved) as { series: Array<{ renderItem(params: { dataIndex: number }, api: { style(): object }): { children: Array<{ style?: { fill?: string; lineDash?: number[] } }> } }> }
+    const children = option.series[0].renderItem({ dataIndex: scene.plot.regions.indexOf(russia) }, { style: () => ({}) }).children
+    expect(children.some((child) => child.style?.lineDash)).toBe(false)
+    expect(children.filter((child) => child.style?.fill === 'none')).toHaveLength(0)
+  })
   it('keeps Chukotka with mainland Russia on the right of the world map', () => {
     const scene = compileNativeMapScene(mapDemoTables.world, config('map-world'))
     const region = scene.plot.regions.find((region) => region.regionId === 'RU')!
@@ -137,6 +153,7 @@ describe('native choropleth maps', () => {
       expect(geometry.rect.y + geometry.rect.height).toBeLessThanOrEqual(resolved.geometry.plot.y + resolved.geometry.plot.height + .1)
     }
     const option = renderScene(resolved) as { xAxis?: unknown; series: Array<{ type: string; data: unknown[] }>; tooltip: { formatter(params: { dataIndex: number }): string } }
+    expect(option).toMatchObject({ nativeSelectionHits: [], nativeCategoryLayouts: [] })
     expect(option.xAxis).toBeUndefined()
     expect(option.series[0].type).toBe('custom')
     expect(option.series[0].data).toHaveLength(mapRegions(id).length)

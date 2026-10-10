@@ -1,11 +1,15 @@
-"""Build compact, projected map assets from Natural Earth GeoJSON (stdlib only).
-Usage: python3 scripts/build-map-data.py /tmp/viiiz-admin1.geojson /tmp/viiiz-countries.geojson
+"""Build compact, projected map assets from Natural Earth GeoJSON.
+Install scripts/map-build-requirements.txt for offline geometry processing.
+Usage: python3 scripts/build-map-data.py admin1.geojson countries.geojson geography.geojson rivers.geojson
 """
 import hashlib
 import json
 import math
 from pathlib import Path
 import sys
+from shapely.geometry import LineString, Point, Polygon, box, mapping, shape
+from shapely.ops import linemerge, unary_union
+from shapely.validation import make_valid
 
 ROOT = Path(__file__).resolve().parents[1] / 'src/features/chart-types/map/data'
 
@@ -26,6 +30,41 @@ def equirectangular(point):
 def polygons(feature):
     g = feature['geometry']
     return [g['coordinates']] if g['type'] == 'Polygon' else g['coordinates']
+
+def polygon_geometry(geometry):
+    if geometry.geom_type == 'Polygon': return geometry
+    return unary_union([part for part in geometry.geoms if part.geom_type in {'Polygon', 'MultiPolygon'}])
+
+def european_russia_mask(geography, rivers):
+    mountains = shape(next(f for f in geography if f['properties'].get('NAME') == 'URAL MOUNTAINS')['geometry'])
+    river = linemerge(unary_union([shape(f['geometry']) for f in rivers if f['properties'].get('name') == 'Ural']))
+    # The source contains short lake branches. Keep the connected main channel
+    # from the northern headwaters to the Caspian, rather than an invented meridian.
+    parts = list(river.geoms) if river.geom_type == 'MultiLineString' else [river]
+    start = max((point for part in parts for point in (part.coords[0], part.coords[-1])), key=lambda p: p[1])
+    route = [start]
+    remaining = list(parts)
+    while remaining:
+        candidates = [(i, reverse) for i, part in enumerate(remaining) for reverse in [False, True] if Point(route[-1]).distance(Point(part.coords[-1] if reverse else part.coords[0])) < 1e-6]
+        if not candidates: break
+        # At the lake junction, the longest remaining branch leads downstream.
+        i, reverse = max(candidates, key=lambda candidate: remaining[candidate[0]].length)
+        points = list(remaining.pop(i).coords)
+        route.extend((list(reversed(points)) if reverse else points)[1:])
+    assert route[-1][1] < 48, 'Ural river route must reach the Caspian Sea'
+    ridge = []
+    latitude = mountains.bounds[3] - .01
+    while latitude > start[1] + .15:
+        cross = mountains.intersection(LineString([[-180, latitude], [180, latitude]]))
+        if not cross.is_empty: ridge.append([(cross.bounds[0] + cross.bounds[2]) / 2, latitude])
+        latitude -= .15
+    # Generalized mountain-range axis, with a sea-only Arctic continuation
+    # west of Yamal; this is a thematic continental limit, not a surveyed ridge.
+    boundary = [[60, 90], [60, 72], [64.5, 69], *ridge, *route, [51.724213, 34]]
+    mask = make_valid(Polygon([[-25, 90], *boundary, [-25, 34], [-25, 90]]))
+    assert mask.covers(Point(37.62, 55.75)) and mask.covers(Point(56.25, 58.01))
+    assert not mask.covers(Point(60.60, 56.84)) and not mask.covers(Point(68.27, 58.22))
+    return mask
 
 def clip(ring, axis, bound, greater):
     result = []
@@ -107,10 +146,31 @@ def fit(items, rect):
     scale = min(width / (xmax - xmin), height / (ymax - ymin))
     offset_x, offset_y = x + (width - (xmax - xmin) * scale) / 2, y + (height - (ymax - ymin) * scale) / 2
     for item in items:
-        item['polygons'] = [[[[round(offset_x + (p[0] - xmin) * scale, 2), round(offset_y + (p[1] - ymin) * scale, 2)] for p in ring] for ring in poly] for poly in item['polygons']]
+        for field in ['polygons', 'claimedPolygons']:
+            if field in item:
+                item[field] = [[[[round(offset_x + (p[0] - xmin) * scale, 2), round(offset_y + (p[1] - ymin) * scale, 2)] for p in ring] for ring in poly] for poly in item[field]]
+
+def shared_country_boundary(items):
+    by_id = {item['id']: item for item in items}
+    def geometry(polygons):
+        return polygon_geometry(make_valid(unary_union([make_valid(Polygon(polygon[0], polygon[1:])) for polygon in polygons])))
+    def coordinates(geometry):
+        value = mapping(polygon_geometry(make_valid(geometry)))
+        return [value['coordinates']] if value['type'] == 'Polygon' else value['coordinates']
+    russia, ukraine = by_id['RU'], by_id['UA']
+    russian = geometry(russia['polygons']).simplify(.38, preserve_topology=True)
+    # Simplifying both countries independently can put small coastal pieces in
+    # both fills. Subtract after simplification so their final boundary is shared.
+    ukrainian = geometry(ukraine['polygons']).simplify(.38, preserve_topology=True).difference(russian)
+    claims = geometry(russia['claimedPolygons']).simplify(.38, preserve_topology=True).intersection(russian)
+    assert russian.intersection(ukrainian).area < 1e-8
+    russia['polygons'], ukraine['polygons'] = coordinates(russian), coordinates(ukrainian)
+    russia['claimedPolygons'] = coordinates(claims)
+    russia['presimplified'] = ukraine['presimplified'] = True
 
 def finish(items):
     for item in items:
+        presimplified = item.pop('presimplified', False)
         # Simplify closed rings in two arcs; retain the largest polygon even for city regions.
         shapes = sorted(item['polygons'], key=lambda p: abs(ring_area(p[0])), reverse=True)
         result = []
@@ -120,10 +180,12 @@ def finish(items):
             for j, ring in enumerate(polygon):
                 if j and abs(ring_area(ring)) < .5: continue
                 mid = max(range(len(ring)), key=lambda k: (ring[k][0] - ring[0][0]) ** 2 + (ring[k][1] - ring[0][1]) ** 2)
-                arc = simplify(ring[:mid + 1])[:-1] + simplify(ring[mid:] + [ring[0]])[:-1]
+                arc = ring if presimplified else simplify(ring[:mid + 1])[:-1] + simplify(ring[mid:] + [ring[0]])[:-1]
                 rings.append(arc if len(arc) >= 3 else ring)
             result.append(rings)
         item['polygons'] = result
+        if item.get('claimedPolygons'):
+            item['claimedPolygons'] = finish([{'polygons': item['claimedPolygons'], 'presimplified': presimplified}])[0]['polygons']
         # A vertex-based anchor kept inside the largest exterior ring, not an ocean centroid.
         ring = result[0][0]
         xs, ys = [p[0] for p in ring], [p[1] for p in ring]
@@ -141,8 +203,22 @@ def finish(items):
 
 admin = json.loads(Path(sys.argv[1]).read_text())['features']
 countries = json.loads(Path(sys.argv[2]).read_text())['features']
+geography = json.loads(Path(sys.argv[3]).read_text())['features']
+rivers = json.loads(Path(sys.argv[4]).read_text())['features']
 ru_projection, us_projection, eu_projection = conic(100, 50, 70), conic(-96, 33, 45), conic(15, 35, 65)
 extras = {'UA-43': ('Республика Крым', ['Крым', 'Crimea', 'RU-CR']), 'UA-40': ('Севастополь', ['Sevastopol', 'RU-SEV']), 'UA-14': ('Донецкая область', ['ДНР', 'Донецкая Народная Республика', 'Donetsk']), 'UA-09': ('Луганская область', ['ЛНР', 'Луганская Народная Республика', 'Luhansk', 'Lugansk']), 'UA-23': ('Запорожская область', ['Zaporizhzhia', 'Zaporozhye']), 'UA-65': ('Херсонская область', ['Kherson'])}
+claims = polygon_geometry(make_valid(unary_union([make_valid(shape(f['geometry'])) for f in admin if f['properties'].get('iso_3166_2') in extras])))
+country_by_id = {f['properties']['ADM0_A3']: f for f in countries}
+original_russia = shape(country_by_id['RUS']['geometry'])
+russian_extent = polygon_geometry(make_valid(original_russia.union(claims)))
+ukrainian_extent = polygon_geometry(make_valid(shape(country_by_id['UKR']['geometry']).difference(russian_extent)))
+country_by_id['RUS']['geometry'] = mapping(russian_extent)
+country_by_id['UKR']['geometry'] = mapping(ukrainian_extent)
+european_mask = european_russia_mask(geography, rivers)
+for point in [(37.80, 48.02), (39.30, 48.57), (35.14, 47.84), (33.37, 46.65), (34.10, 44.95), (33.53, 44.61)]:
+    assert russian_extent.covers(Point(point)), f'Claimed administrative extent missing: {point}'
+    assert not ukrainian_extent.covers(Point(point)), f'Duplicate territorial geometry: {point}'
+assert russian_extent.intersection(ukrainian_extent).area < 1e-8
 renamed = {'RU-ALT': 'Алтайский край', 'RU-AL': 'Республика Алтай', 'RU-SA': 'Республика Саха (Якутия)', 'RU-KEM': 'Кемеровская область — Кузбасс'}
 ru, us = [], []
 for feature in admin:
@@ -172,12 +248,15 @@ for feature in countries:
     if (p.get('CONTINENT') != 'Europe' and a3 not in {'TUR','CYP','ARM','GEO','AZE'}) or a3 in excluded: continue
     a2 = {'NOR':'NO','FRA':'FR','KOS':'XK'}.get(a3, p['ISO_A2'])
     name = {'BLR':'Беларусь','MDA':'Молдова','KOS':'Косово'}.get(a3, p['NAME_RU'])
-    shapes = projected(feature, eu_projection, [(0,-25,True),(0,60,False),(1,34,True),(1,72,False)])
+    bounds = [(0,-25,True),(0,68,False),(1,34,True),(1,72,False)]
+    european_feature = {**feature, 'geometry': mapping(polygon_geometry(make_valid(shape(feature['geometry']).intersection(european_mask))))} if a3 == 'RUS' else feature
+    shapes = projected(european_feature, eu_projection, bounds)
     if not shapes: continue
     aliases = list(dict.fromkeys(x for x in [p['NAME'],p.get('NAME_LONG'),p.get('NAME_EN'),p.get('NAME_RU'),a3] if x and x != name))
     if a3 == 'GBR': aliases += ['UK','Великобритания','United Kingdom','Great Britain','Британия']
     if a3 == 'CZE': aliases += ['Czech Republic']
     eu.append({'id':a2,'name':name,'aliases':aliases,'disputed':a3=='KOS','polygons':shapes})
+    if a3 == 'RUS': eu[-1]['claimedPolygons'] = projected({'properties': p, 'geometry': mapping(claims)}, eu_projection, bounds)
 world = []
 regular_iso3 = {f['properties'].get('ISO_A3_EH') for f in countries if f['properties']['ISO_A2'] != '-99'}
 used_codes = {feature['properties']['ISO_A2'] for feature in countries if feature['properties']['ISO_A2'] != '-99'}
@@ -194,12 +273,15 @@ for feature in countries:
     aliases = list(dict.fromkeys(x for x in [p['NAME'],p.get('NAME_LONG'),p.get('NAME_EN'),p.get('NAME_RU'),a3,iso3] if x and x != name and x != '-99'))
     aliases += {'USA':['США','Соединённые Штаты','Соединенные Штаты Америки','United States','US'], 'GBR':['UK','Великобритания','United Kingdom','Great Britain','Британия'], 'KOR':['Южная Корея','South Korea'], 'PRK':['Северная Корея','North Korea'], 'CZE':['Czech Republic'], 'COD':['ДР Конго','Демократическая Республика Конго']}.get(a3, [])
     world.append({'id':code,'name':name,'aliases':aliases,'disputed':a3 in {'KOS','CYN','SOL','KAS'},'polygons':projected(feature,equirectangular)})
+    if a3 == 'RUS': world[-1]['claimedPolygons'] = projected({'properties': p, 'geometry': mapping(claims)}, equirectangular)
 fit(ru, (0,0,1000,590))
 fit([x for x in us if x['id'] not in {'US-AK','US-HI'}], (0,0,1000,475))
 fit([x for x in us if x['id']=='US-AK'], (20,480,265,150))
 fit([x for x in us if x['id']=='US-HI'], (320,510,170,110))
 fit(eu, (0,0,800,800))
 fit(world, (0,0,1000,500))
+shared_country_boundary(eu)
+shared_country_boundary(world)
 
 # Small, source-derived silhouettes for the existing SVG chart icon system.
 icons = {}
@@ -230,8 +312,8 @@ for key, shapes in icons.items():
 metadata = {}
 for key, items, width, height in [('russia',ru,1000,590),('usa',us,1000,640),('europe',eu,800,800),('world',world,1000,500)]:
     items = finish(items)
-    metadata[key] = [{k:v for k,v in item.items() if k not in {'polygons','center','area'}} for item in items]
-    data = {'width':width,'height':height,'regions':{item['id']:{k:item[k] for k in ['polygons','center','area']} for item in items}}
+    metadata[key] = [{k:v for k,v in item.items() if k not in {'polygons','center','area','claimedPolygons'}} for item in items]
+    data = {'width':width,'height':height,'regions':{item['id']:{k:item[k] for k in ['polygons','center','area','claimedPolygons'] if k in item} for item in items}}
     target = ROOT / f'{key}.json'; target.write_text(json.dumps(data, ensure_ascii=False, separators=(',',':'))+'\n')
     print(key,len(items),target.stat().st_size,'bytes')
 (ROOT/'catalog.json').write_text(json.dumps(metadata, ensure_ascii=False, separators=(',',':'))+'\n')

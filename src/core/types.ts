@@ -150,6 +150,17 @@ export interface ChartDecoration {
 }
 
 export interface ChartConfig {
+  colorEncoding?: {
+    mode: 'single' | 'categories' | 'bins'
+    field?: string
+    categories?: Array<{ value: string; label?: string; color: string }>
+    thresholds?: number[]
+    binColors?: string[]
+    binLabels?: string[]
+    missingColor?: string
+    missingLabel?: string
+    missingPattern?: 'none' | 'diagonal'
+  }
   multiples?: {
     columns: number
     rows: number
@@ -319,6 +330,9 @@ export interface ChartConfig {
   streamBaseline?: 'wiggle' | 'centered'
   streamOrder?: 'inside-out' | 'data'
   streamSmooth?: boolean
+  directLabelWrap?: boolean
+  directLabelMaxWidth?: number
+  directLabelPositions?: Record<string, { x: number; y: number }>
   stepPosition?: 'start' | 'end'
   intervalFillOpacity?: number
   /** Use the colour of the boundary that is above, or one chosen colour for the whole interval. */

@@ -1,6 +1,14 @@
 import { test, expect, type Page } from '@playwright/test'
 import { mkdir, readFile } from 'node:fs/promises'
 
+async function loadMarkets(page: Page) {
+  await page.locator('.upload-card input').setInputFiles({ name: 'markets.csv', mimeType: 'text/csv', buffer: Buffer.from('Рынок,Альфа,Бета,Гамма,Другие\nСмартфоны,180,120,60,40\nНоутбуки,60,80,30,30\nПланшеты,40,20,25,15\nЧасы,15,10,15,10') })
+  await page.getByRole('button', { name: /Выбрать график/ }).click()
+  await page.getByRole('button', { name: 'Marimekko', exact: true }).click()
+  const group = page.getByRole('group', { name: 'Сегменты / числовые показатели', exact: true })
+  while (await group.getByRole('checkbox', { checked: false }).count()) await group.getByRole('checkbox', { checked: false }).first().press('Space')
+}
+
 const output = 'output/chart-layout-system-2026-10-04'
 async function mount(page: Page) {
   await page.setViewportSize({ width: 1250, height: 950 })
@@ -115,8 +123,7 @@ test('automatic rotation uses the final plot width and never breaks country name
 test('real editor chart switches reset legends, values and wrapping', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/editor')
-  await page.getByRole('button', { name: /^Marimekko$/ }).click()
-  await page.getByRole('button', { name: /Выбрать график/ }).click()
+  await loadMarkets(page)
   await page.getByRole('button', { name: /^Столбцы$/ }).click()
   await expect(page.locator('.chart-canvas-shell')).toHaveAttribute('data-render-status', 'settled')
   // Marimekko enables values and its legend by default. Neither leaks into Bar.
@@ -136,8 +143,7 @@ test('real editor chart switches reset legends, values and wrapping', async ({ p
 test('edge category labels remain editable in the real editor', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/editor')
-  await page.getByRole('button', { name: /^Marimekko$/ }).click()
-  await page.getByRole('button', { name: /Выбрать график/ }).click()
+  await loadMarkets(page)
   await page.getByRole('button', { name: /^Линия$/ }).click()
   await expect(page.locator('.chart-canvas-shell')).toHaveAttribute('data-render-status', 'settled')
   const label = page.locator('.canvas-paper svg text').filter({ hasText: /^Смартфоны$/ })

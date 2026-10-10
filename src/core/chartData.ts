@@ -56,7 +56,23 @@ export function indexSeriesToBase(prepared: PreparedChartData, baseKey: string):
   }
 }
 
+const preparedDataCache = new WeakMap<DataTable['rows'], Map<string, PreparedChartData>>()
+
 export function prepareChartData(table: DataTable, config: ChartConfig): PreparedChartData {
+  const key = JSON.stringify([config.kind === 'seasonal-line' || config.kind === 'indexed-line' ? config.kind : 'regular', config.xField, config.yField, config.yFields, config.seriesField, config.aggregation, config.valueMode, config.missingMode, config.indexBaseXValue])
+  let cache = preparedDataCache.get(table.rows)
+  if (!cache) { cache = new Map(); preparedDataCache.set(table.rows, cache) }
+  let prepared = cache.get(key)
+  if (!prepared) {
+    prepared = computeChartData(table, config)
+    if (cache.size >= 4) cache.delete(cache.keys().next().value!)
+    cache.set(key, prepared)
+  }
+  // Downstream normalization edits values in place; keep the cached data untouched.
+  return { categories: [...prepared.categories], series: prepared.series.map((series) => ({ ...series, data: [...series.data] })) }
+}
+
+function computeChartData(table: DataTable, config: ChartConfig): PreparedChartData {
   if (config.kind === 'seasonal-line') return prepareSeasonalChartData(table, config)
   const categoryMap = new Map<string, DataValue>()
   table.rows.forEach((row) => categoryMap.set(chartDataValueKey(row[config.xField]), row[config.xField]))

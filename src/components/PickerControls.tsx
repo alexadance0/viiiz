@@ -52,7 +52,10 @@ export function ColorControl({ value, code, icon, title = 'Выбрать цве
     setColor(next)
   }, [value])
   const draft = colorText(color)
-  const palette = useMemo(() => [...new Map([...recentColors, ...swatches, ...baseSwatches].filter(Boolean).map((item) => [normalizeRecentColor(item), item])).values()].slice(0, 18), [recentColors, swatches])
+  const palette = useMemo(() => {
+    const colors = [...new Map([...recentColors, ...swatches, ...baseSwatches].filter(Boolean).map((item) => [normalizeRecentColor(item), item])).values()].slice(0, 18)
+    return colors.some((color) => normalizeRecentColor(color) === '#ffffff') ? colors : [...colors.slice(0, 17), '#ffffff']
+  }, [recentColors, swatches])
   const rememberColor = (next: string) => {
     setRecentColors((current) => {
       const colors = mergeRecentColor(current, next)

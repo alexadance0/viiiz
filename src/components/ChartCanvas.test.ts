@@ -5,6 +5,7 @@ import { customFontCss } from '../features/chart-export/chartExport'
 import { decorationGraphics } from './chartDecorations'
 import { getChartPlugin } from '../core/chartRegistry'
 import type { ChartConfig, ChartTextStyle, DataTable } from '../core/types'
+import { softenColor } from '../core/color'
 
 const text = (size: number): ChartTextStyle => ({ fontFamily: 'Arial', size, color: '#222222', weight: 400, italic: false, lineHeight: 120, align: 'left' })
 const config: ChartConfig = {
@@ -69,19 +70,29 @@ describe('native canvas adapters', () => {
     expect(option.series[0]).toMatchObject({ z: 2 })
   })
 
+  it('does not reveal hidden stream geometry while emphasizing visible lines', () => {
+    const option = { series: [
+      { name: 'a', type: 'line', lineStyle: { width: 3, opacity: 0 } },
+      { name: 'a', type: 'line', lineStyle: { width: 3, opacity: 1 } },
+    ] }
+    applySeriesVisualState(option, config, null, null, 'a')
+    expect(option.series[0].lineStyle).toEqual({ width: 3, opacity: 0 })
+    expect(option.series[1].lineStyle).toEqual({ width: 3, opacity: 1 })
+  })
+
   it('does not turn a regular line chart into an area chart while highlighting', () => {
     const option = getChartPlugin('line').buildOption(table, config) as Record<string, unknown> & { series: Array<{ name?: string; areaStyle?: object }> }
     applySeriesVisualState(option, config, 'a')
     expect(option.series.find((series) => series.name === 'a')?.areaStyle).toBeUndefined()
   })
 
-  it('highlights a selected line point with the series color', () => {
+  it('reveals a selected line point without replacing its authored marker colors', () => {
     const lineConfig: ChartConfig = { ...config, palette: ['#168a72'] }
     const option = getChartPlugin('line').buildOption(table, lineConfig) as Record<string, unknown> & { series: Array<{ name?: string; data?: Array<{ elementKey?: string; symbolSize?: number; itemStyle?: { color?: string; borderColor?: string } }> }> }
     applySeriesVisualState(option, lineConfig, null, 'a\u001fnumber:2023')
     const point = option.series.find((series) => series.name === 'a')?.data?.[1]
-    expect(point?.symbolSize).toBeGreaterThanOrEqual(11)
-    expect(point?.itemStyle).toMatchObject({ color: '#168a72', borderColor: '#168a72' })
+    expect(point?.symbolSize).toBe(10)
+    expect(point?.itemStyle).toMatchObject({ color: '#ffffff', borderColor: '#168a72' })
   })
 
   it('highlights a semantic distribution observation and dims its peers', () => {
@@ -91,9 +102,9 @@ describe('native canvas adapters', () => {
     const pointSeries = option.series.find((series) => !series.silent)!
     const selectedKey = (pointSeries.data?.[0] as { elementKey?: string })?.elementKey
     applySeriesVisualState(option, distributionConfig, null, selectedKey)
-    expect(pointSeries.data?.[0].itemStyle).toMatchObject({ opacity: 1 })
-    expect(pointSeries.data?.[1].itemStyle).toMatchObject({ opacity: .341 })
-    expect(pointSeries.itemStyle).toMatchObject({ shadowBlur: 4 })
+    expect(pointSeries.data?.[0].itemStyle).toMatchObject({ opacity: .55, color: '#1677a6' })
+    expect(pointSeries.data?.[1].itemStyle).toMatchObject({ opacity: .55, color: softenColor('#1677a6', '#ffffff', .45) })
+    expect(pointSeries.itemStyle?.shadowBlur).toBeUndefined()
   })
 
   it('dims bar peers while keeping the selected bar fully visible', () => {
@@ -102,9 +113,10 @@ describe('native canvas adapters', () => {
     applySeriesVisualState(option, barConfig, null, 'a\u001fnumber:2023')
     const selectedSeries = option.series.find((series) => series.name === 'a' && series.type === 'bar')!
     const otherSeries = option.series.find((series) => series.name === 'b' && series.type === 'bar')!
-    expect(selectedSeries.data?.[1].itemStyle).toMatchObject({ color: '#168a72', opacity: 1 })
-    expect(selectedSeries.data?.[0].itemStyle).toMatchObject({ color: '#168a72', opacity: .62 })
-    expect(otherSeries.itemStyle?.opacity).toBe(.22)
+    expect(selectedSeries.data?.[1].itemStyle).toMatchObject({ color: '#168a72' })
+    expect(selectedSeries.data?.[0].itemStyle).toMatchObject({ color: softenColor('#168a72', '#ffffff', .45) })
+    expect(otherSeries.data?.[0].itemStyle).toMatchObject({ color: softenColor('#e56b45') })
+    expect(otherSeries.itemStyle?.opacity).not.toBe(.22)
   })
 
   it('renders background areas, guide lines and arrowheads as ECharts graphics', () => {

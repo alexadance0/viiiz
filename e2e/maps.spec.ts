@@ -1,3 +1,4 @@
+import { selectShape } from './helpers/clickShape'
 import { expect, test } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 
@@ -42,15 +43,7 @@ test('Rosstat names and codes distinguish territorial values from inclusive tota
   await expect(canvas).toHaveAttribute('data-render-status', 'settled')
   const high = canvas.locator('svg path[fill="#1923e3"]')
   await expect(high).toHaveCount(1)
-  const point = await high.evaluate((element) => {
-    const path = element as SVGGeometryElement, box = path.getBBox(), matrix = path.getScreenCTM()!
-    for (const x of [.5, .4, .6, .3, .7]) for (const y of [.5, .4, .6, .3, .7]) {
-      const local = new DOMPoint(box.x + box.width * x, box.y + box.height * y)
-      if (path.isPointInFill(local)) { const screen = local.matrixTransform(matrix); return { x: screen.x, y: screen.y } }
-    }
-    throw new Error('No interior click point')
-  })
-  await page.mouse.click(point.x, point.y)
+  await selectShape(page, high)
   await expect(page.locator('.element-editor strong')).toHaveText('Ханты-Мансийский автономный округ — Югра')
   await page.getByRole('checkbox', { name: 'Показывать значение', exact: true }).press('Space')
   await expect(canvas.locator('svg text[text-anchor="middle"]').filter({ hasText: /^150$/ })).toBeVisible()
@@ -79,15 +72,7 @@ for (const [name, territory, other] of [['Карта России', 'Сверд�
     await page.getByRole('button', { name: 'Настроить оформление →' }).click()
     const canvas = page.locator('.chart-canvas-shell[data-plot-kind="map"]')
     await expect(canvas).toHaveAttribute('data-render-status', 'settled')
-    const point = await canvas.locator('svg path[fill="#1923e3"]').first().evaluate((element) => {
-      const path = element as SVGGeometryElement, box = path.getBBox(), matrix = path.getScreenCTM()!
-      for (const step of [.5, .4, .6, .3, .7]) for (const row of [.5, .4, .6, .3, .7]) {
-        const local = new DOMPoint(box.x + box.width * step, box.y + box.height * row)
-        if (path.isPointInFill(local)) { const screen = local.matrixTransform(matrix); return { x: screen.x, y: screen.y } }
-      }
-      throw new Error('No interior click point')
-    })
-    await page.mouse.click(point.x, point.y)
+  await selectShape(page, canvas.locator('svg path[fill="#1923e3"]').first())
     const valueToggle = page.getByRole('checkbox', { name: 'Показывать значение', exact: true })
     await expect(valueToggle).not.toBeChecked()
     await valueToggle.press('Space')
@@ -109,8 +94,11 @@ for (const [name, count, file] of [['Карта России', 89, 'russia'], ['
     const errors: string[] = []
     page.on('pageerror', (error) => errors.push(error.message))
     await page.goto('/editor')
-    await page.getByRole('button', { name, exact: true }).click()
+    const table = await page.evaluate(async (preset) => (await import('/src/core/demoData.ts')).mapDemoTables[preset], file)
+    const csv = [table.columns.join(','), ...table.rows.map((row) => table.columns.map((column) => `"${String(row[column] ?? '').replaceAll('"', '""')}"`).join(','))].join('\n')
+    await page.locator('.upload-card input').setInputFiles({ name: `${file}.csv`, mimeType: 'text/csv', buffer: Buffer.from(csv) })
     await page.getByRole('button', { name: /Выбрать график/ }).click()
+    await page.getByRole('button', { name, exact: true }).click()
     await expect(page.getByRole('button', { name, exact: true })).toHaveAttribute('aria-pressed', 'true')
     await page.getByRole('button', { name: 'Настроить оформление →' }).click()
     const canvas = page.locator('.chart-canvas-shell[data-plot-kind="map"]')
@@ -157,7 +145,7 @@ test('map matches aliases, exposes unmatched rows, edits a territory and restore
   await expect(texas).toHaveCount(1)
   const box = await texas.boundingBox()
   if (!box) throw new Error('Texas is missing')
-  await page.mouse.click(box.x + box.width * .65, box.y + box.height * .5)
+  await selectShape(page, texas)
   await expect(page.locator('.element-editor strong')).toHaveText('Texas')
   await page.getByRole('checkbox', { name: 'Показывать значение', exact: true }).press('Space')
   await expect(canvas.locator('svg text[text-anchor="middle"]').filter({ hasText: /^100$/ })).toBeVisible()

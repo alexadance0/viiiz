@@ -1,29 +1,34 @@
 import { AnnotationHalo, syncAnnotationHaloScroll } from './AnnotationHalo'
 import { useEffect, useRef, useState } from 'react'
 import { ToggleButton, ToggleButtonGroup } from '@heroui/react'
-import { AlignCenter, AlignLeft, AlignRight, Copy, GripVertical, Trash2 } from 'lucide-react'
+import { AlignCenter, AlignLeft, AlignRight, Copy, Trash2 } from 'lucide-react'
 import type { ChartAnnotation, ChartConfig } from '../core/types'
 import { annotationTextHtml, highlightTextRange, sanitizeAnnotationHtml } from '../core/annotationHtml'
 import { TextFragmentToolbar } from './TextFragmentToolbar'
+import './AnnotationText.css'
+import { readAlignmentBoxes, snapAnnotationBox, type AlignmentProps } from './annotationAlignment'
 
-interface Props { annotation: ChartAnnotation; customFonts?: ChartConfig['customFonts']; canvasBackground?: string; onChange(value: ChartAnnotation): void; onDuplicate(): void; onDelete(): void; onClose(): void }
+interface Props extends AlignmentProps { annotation: ChartAnnotation; customFonts?: ChartConfig['customFonts']; canvasBackground?: string; onChange(value: ChartAnnotation): void; onDuplicate(): void; onDelete(): void; onClose(): void }
 
 const annotationStyle = (annotation: ChartAnnotation, _canvasBackground = '#ffffff'): React.CSSProperties => {
   const hasBackground = annotation.backgroundColor && annotation.backgroundColor !== 'transparent'
   const maskColor = hasBackground ? annotation.backgroundColor : 'transparent'
-  return { left: annotation.x, top: annotation.y, width: annotation.width, maxWidth: `calc(100% - ${Math.max(0, annotation.x)}px)`, height: annotation.height, boxSizing: 'border-box', fontFamily: annotation.fontFamily, fontSize: annotation.fontSize, color: annotation.fragments[0]?.color ?? '#292929', lineHeight: '1.35', textAlign: annotation.textAlign ?? 'left', background: maskColor, borderColor: annotation.borderColor }
+  return { left: annotation.x, top: annotation.y, width: annotation.width, maxWidth: `calc(100% - ${Math.max(0, annotation.x)}px)`, boxSizing: 'border-box', fontFamily: annotation.fontFamily, fontSize: annotation.fontSize, color: annotation.fragments[0]?.color ?? '#292929', lineHeight: '1.35', textAlign: annotation.textAlign ?? 'left', background: maskColor, borderColor: annotation.borderColor }
 }
 
 const annotationTextStyle = (annotation: ChartAnnotation): React.CSSProperties => ({ color: annotation.fragments[0]?.color ?? '#292929', ...(annotation.textStrokeColor ? { WebkitTextStrokeColor: annotation.textStrokeColor, WebkitTextStrokeWidth: `${annotation.textStrokeWidth ?? 6}px`, paintOrder: 'stroke fill' } : {}) })
 
-export function AnnotationDisplay({ annotation, canvasBackground, onSelect }: { annotation: ChartAnnotation; canvasBackground?: string; onSelect(): void }) {
+export function AnnotationDisplay({ annotation, customFonts, canvasBackground, onSelect }: { annotation: ChartAnnotation; customFonts?: ChartConfig['customFonts']; canvasBackground?: string; onSelect(): void }) {
   const html = sanitizeAnnotationHtml(annotation.html ?? annotationTextHtml(annotation.fragments.map((item) => item.text).join('')))
-  return <div data-annotation-id={annotation.id} className="canvas-annotation annotation-display" style={annotationStyle(annotation, canvasBackground)} onClick={(event) => { event.stopPropagation(); onSelect() }}><AnnotationHalo annotation={annotation}/><div className="annotation-content annotation-foreground" onScroll={syncAnnotationHaloScroll} style={annotationTextStyle(annotation)} dangerouslySetInnerHTML={{ __html: html }}/></div>
+  return <div data-annotation-id={annotation.id} className="canvas-annotation annotation-display" style={annotationStyle(annotation, canvasBackground)} onClick={(event) => { event.stopPropagation(); onSelect() }}><AnnotationHalo annotation={annotation} customFonts={customFonts}/><div className="annotation-content annotation-foreground" onScroll={syncAnnotationHaloScroll} style={annotationTextStyle(annotation)} dangerouslySetInnerHTML={{ __html: html }}/></div>
 }
 
-export function AnnotationOverlay({ annotation, customFonts, canvasBackground = '#ffffff', onChange, onDuplicate, onDelete, onClose }: Props) {
+export function AnnotationOverlay({ annotation, customFonts, canvasBackground = '#ffffff', alignmentBoxes = [], onGuidesChange, onChange, onDuplicate, onDelete, onClose }: Props) {
   const editor = useRef<HTMLDivElement>(null)
+  const dragCleanup = useRef<(() => void) | null>(null)
+  useEffect(() => () => dragCleanup.current?.(), [annotation.id])
   const [editing, setEditing] = useState(false)
+  const [moving, setMoving] = useState(false)
   useEffect(() => { setEditing(false) }, [annotation.id])
   const range = useRef<Range | null>(null)
   const [toolbarEdge, setToolbarEdge] = useState<'start' | 'end'>('start')
@@ -100,38 +105,57 @@ export function AnnotationOverlay({ annotation, customFonts, canvasBackground = 
     else apply({ textDecoration: computed?.textDecorationLine.includes('underline') ? 'none' : 'underline' })
   }
   const drag = (event: React.PointerEvent) => {
-    event.preventDefault()
+    if (event.button !== 0) return
+    event.preventDefault(); event.stopPropagation()
     const startX = event.clientX, startY = event.clientY, originalX = annotation.x, originalY = annotation.y
     const shell = editor.current?.closest('.chart-canvas-shell')
     const scale = shell ? shell.getBoundingClientRect().width / Math.max(1, shell.clientWidth) : 1
+    dragCleanup.current?.()
+    const targets = readAlignmentBoxes(shell, alignmentBoxes, `text:${annotation.id}`)
+    const height = editor.current?.parentElement?.offsetHeight ?? 50
     const move = (next: PointerEvent) => {
+      if (Math.hypot(next.clientX - startX, next.clientY - startY) < 3) return
+      setMoving(true)
       const maxX = Math.max(0, (shell?.clientWidth ?? Infinity) - annotation.width)
-      const maxY = Math.max(0, (shell?.clientHeight ?? Infinity) - (editor.current?.parentElement?.offsetHeight ?? 50))
-      onChange({ ...annotation, x: Math.min(maxX, Math.max(0, originalX + (next.clientX - startX) / scale)), y: Math.min(maxY, Math.max(0, originalY + (next.clientY - startY) / scale)) })
+      const maxY = Math.max(0, (shell?.clientHeight ?? Infinity) - height)
+      const box = { id: annotation.id, x: Math.min(maxX, Math.max(0, originalX + (next.clientX - startX) / scale)), y: Math.min(maxY, Math.max(0, originalY + (next.clientY - startY) / scale)), width: annotation.width, height }
+      const snapped = next.shiftKey ? { ...box, guides: [] } : snapAnnotationBox(box, targets, 6 / scale)
+      onGuidesChange?.(snapped.guides)
+      onChange({ ...annotation, x: Math.min(maxX, Math.max(0, snapped.x)), y: Math.min(maxY, Math.max(0, snapped.y)) })
     }
-    const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end) }
-    window.addEventListener('pointermove', move); window.addEventListener('pointerup', end)
+    const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', cancel); window.removeEventListener('keydown', escape, true); onGuidesChange?.([]); setMoving(false); dragCleanup.current = null }
+    const cancel = () => { onChange(annotation); end() }
+    const escape = (next: KeyboardEvent) => { if (next.key === 'Escape') { next.preventDefault(); next.stopPropagation(); cancel() } }
+    dragCleanup.current = end
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', cancel); window.addEventListener('keydown', escape, true)
   }
-  const resize = (event: React.PointerEvent, horizontal: 'left' | 'right', vertical: 'top' | 'bottom') => {
+  const resize = (event: React.PointerEvent, horizontal: 'left' | 'right') => {
     event.preventDefault(); event.stopPropagation()
     const shell = editor.current?.closest('.chart-canvas-shell')
     const scale = shell ? shell.getBoundingClientRect().width / Math.max(1, shell.clientWidth) : 1
-    const startX = event.clientX, startY = event.clientY
+    const startX = event.clientX
     const original = annotation
-    const originalHeight = annotation.height ?? Math.max(60, editor.current?.parentElement?.offsetHeight ?? 80)
+    dragCleanup.current?.()
+    const targets = readAlignmentBoxes(shell, alignmentBoxes, `text:${annotation.id}`)
     const move = (next: PointerEvent) => {
-      const dx = (next.clientX - startX) / scale, dy = (next.clientY - startY) / scale
-      let x = original.x, y = original.y, width = original.width, height = originalHeight
-      if (horizontal === 'left') { x = Math.min(original.x + original.width - 100, Math.max(0, original.x + dx)); width = original.width + original.x - x }
-      else width = Math.max(100, Math.min((shell?.clientWidth ?? Infinity) - original.x, original.width + dx))
-      if (vertical === 'top') { y = Math.min(original.y + originalHeight - 60, Math.max(0, original.y + dy)); height = originalHeight + original.y - y }
-      else height = Math.max(60, Math.min((shell?.clientHeight ?? Infinity) - original.y, originalHeight + dy))
-      onChange({ ...original, x, y, width, height })
+      const dx = (next.clientX - startX) / scale
+      let x = original.x, width = original.width
+      if (horizontal === 'left') { x = Math.min(original.x + original.width - 20, Math.max(0, original.x + dx)); width = original.width + original.x - x }
+      else width = Math.max(20, Math.min((shell?.clientWidth ?? Infinity) - original.x, original.width + dx))
+      const snapped = next.shiftKey ? { x, guides: [] } : snapAnnotationBox({ id: annotation.id, x, y: original.y, width, height: editor.current?.parentElement?.offsetHeight ?? 50 }, targets, 6 / scale, { x: [horizontal === 'left' ? 0 : 1], y: [], gaps: false })
+      const correction = snapped.x - x
+      if (horizontal === 'left') { x = Math.min(original.x + original.width - 20, Math.max(0, snapped.x)); width = original.x + original.width - x }
+      else width = Math.max(20, Math.min((shell?.clientWidth ?? Infinity) - x, width + correction))
+      onGuidesChange?.(snapped.guides)
+      onChange({ ...original, x, width, height: undefined })
     }
-    const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end) }
-    window.addEventListener('pointermove', move); window.addEventListener('pointerup', end)
+    const end = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', cancel); window.removeEventListener('keydown', escape, true); onGuidesChange?.([]); dragCleanup.current = null }
+    const cancel = () => { onChange(original); end() }
+    const escape = (next: KeyboardEvent) => { if (next.key === 'Escape') { next.preventDefault(); next.stopPropagation(); cancel() } }
+    dragCleanup.current = end
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', cancel); window.addEventListener('keydown', escape, true)
   }
-  return <div data-annotation-id={annotation.id} className="canvas-annotation selected" style={annotationStyle(annotation, canvasBackground)} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); if (editing) setEditing(false); else onClose() } }}>
+  return <div data-annotation-id={annotation.id} className={`canvas-annotation selected${editing ? ' editing' : ''}${moving ? ' moving' : ''}`} style={annotationStyle(annotation, canvasBackground)} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); if (editing) setEditing(false); else onClose() } }}>
     {editing && <TextFragmentToolbar anchorRef={editor} style={toolbarStyle} customFonts={customFonts} strokeColor={(annotation.textStrokeColor ?? annotation.backgroundColor) || canvasBackground} strokeWidth={annotation.textStrokeWidth ?? 6} enableStroke below={annotation.y < 75} edge={toolbarEdge} onBeforeAction={rememberSelection} onApply={apply} onStrokeWidthChange={(textStrokeWidth) => {
       editor.current?.querySelectorAll<HTMLElement>('[style*="text-stroke"]').forEach((element) => { element.style.webkitTextStrokeWidth = `${textStrokeWidth}px`; element.style.paintOrder = 'stroke fill' })
       onChange({ ...annotation, textStrokeWidth, html: editor.current ? sanitizeAnnotationHtml(editor.current.innerHTML) : annotation.html })
@@ -144,8 +168,24 @@ export function AnnotationOverlay({ annotation, customFonts, canvasBackground = 
       <button type="button" title="Дублировать аннотацию" onMouseDown={(event) => event.preventDefault()} onClick={onDuplicate}><Copy size={14} /></button>
       <button type="button" className="annotation-delete" title="Удалить аннотацию" onMouseDown={(event) => event.preventDefault()} onClick={onDelete}><Trash2 size={14} /></button>
     </TextFragmentToolbar>}
-    <div className="annotation-drag-handle" onPointerDown={drag}><span><GripVertical size={13} /></span><b>Переместить</b></div>
-    <AnnotationHalo annotation={annotation}/><div ref={editor} className="annotation-content annotation-foreground" onScroll={syncAnnotationHaloScroll} style={annotationTextStyle(annotation)} contentEditable={editing} suppressContentEditableWarning tabIndex={0} role="textbox" aria-label="Аннотация на холсте" title="Двойной клик — редактировать текст" onDoubleClick={() => { setEditing(true); requestAnimationFrame(() => editor.current?.focus()) }} onKeyDown={(event) => { if (event.key === 'Enter' && !editing) { event.preventDefault(); setEditing(true) } }} onMouseUp={rememberSelection} onKeyUp={rememberSelection} onPaste={pasteText} onInput={save}/>
-    <i className="annotation-resize nw" onPointerDown={(event) => resize(event, 'left', 'top')}/><i className="annotation-resize ne" onPointerDown={(event) => resize(event, 'right', 'top')}/><i className="annotation-resize sw" onPointerDown={(event) => resize(event, 'left', 'bottom')}/><i className="annotation-resize se" onPointerDown={(event) => resize(event, 'right', 'bottom')}/>
+    <button type="button" className="annotation-move-edge" aria-label="Переместить аннотацию" title="Перетащите текст или рамку. Shift при перетаскивании — без привязки. Стрелки клавиатуры — переместить, Shift — шаг 10 px" onPointerDown={drag} onKeyDown={(event) => {
+      const delta = event.shiftKey ? 10 : 1
+      const moves: Record<string, [number, number]> = { ArrowLeft: [-delta, 0], ArrowRight: [delta, 0], ArrowUp: [0, -delta], ArrowDown: [0, delta] }
+      const move = moves[event.key]
+      if (!move) return
+      event.preventDefault(); event.stopPropagation()
+      const shell = editor.current?.closest('.chart-canvas-shell')
+      onChange({ ...annotation, x: Math.max(0, Math.min((shell?.clientWidth ?? Infinity) - annotation.width, annotation.x + move[0])), y: Math.max(0, Math.min((shell?.clientHeight ?? Infinity) - (editor.current?.parentElement?.offsetHeight ?? 0), annotation.y + move[1])) })
+    }}/>
+    <AnnotationHalo annotation={annotation} customFonts={customFonts}/><div ref={editor} className="annotation-content annotation-foreground" onPointerDown={(event) => { if (!editing) drag(event) }} onScroll={syncAnnotationHaloScroll} style={annotationTextStyle(annotation)} contentEditable={editing} suppressContentEditableWarning tabIndex={0} role="textbox" aria-label="Аннотация на холсте" title="Перетащите — переместить. Shift — без привязки. Двойной клик — редактировать текст" onDoubleClick={() => { setEditing(true); requestAnimationFrame(() => editor.current?.focus()) }} onKeyDown={(event) => { if (event.key === 'Enter' && !editing) { event.preventDefault(); setEditing(true) } }} onMouseUp={rememberSelection} onKeyUp={rememberSelection} onPaste={pasteText} onInput={save}/>
+    {(['left', 'right'] as const).map((side) => <button key={side} type="button" className={`annotation-resize horizontal ${side}`} aria-label={`Ширина аннотации: ${side === 'left' ? 'левый' : 'правый'} край`} onPointerDown={(event) => resize(event, side)} onKeyDown={(event) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+      event.preventDefault()
+      const delta = event.key === 'ArrowRight' ? 10 : -10
+      const shell = editor.current?.closest('.chart-canvas-shell')
+      const maxWidth = side === 'left' ? annotation.x + annotation.width : (shell?.clientWidth ?? Infinity) - annotation.x
+      const width = Math.max(20, Math.min(maxWidth, annotation.width + (side === 'left' ? -delta : delta)))
+      onChange({ ...annotation, x: side === 'left' ? annotation.x + annotation.width - width : annotation.x, width, height: undefined })
+    }}/>)}
   </div>
 }

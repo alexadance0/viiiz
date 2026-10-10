@@ -32,7 +32,7 @@ export function compileStreamScene(table: DataTable, config: ChartConfig): Nativ
   const values = series.map((item) => item.points.map((point) => point.value ?? 0))
   const totals = scene.plot.categories.map((_, index) => values.reduce((sum, item) => sum + item[index], 0))
   const baseline = totals.map((total) => -total / 2)
-  if ((config.streamBaseline ?? 'wiggle') === 'wiggle') {
+  if ((config.streamBaseline ?? 'centered') === 'wiggle') {
     // Weighted slope offset, as in d3-shape's stackOffsetWiggle; one pass per column.
     baseline[0] = 0
     for (let column = 1; column < totals.length; column++) {
@@ -57,6 +57,7 @@ export function compileStreamScene(table: DataTable, config: ChartConfig): Nativ
   const [minimum, maximum] = orderedBounds(config.yAxisMin, config.yAxisMax)
   return {
     ...scene, document: chartDocumentFromLegacy(table, config), compatibilityConfig: { ...config, yAxisScaleType: 'linear' },
+    guides: scene.guides.map((guide) => guide.kind === 'direct-series' ? { ...guide, placement: 'inside', items: guide.items.map((item) => ({ ...item, leaderLine: false })) } : guide),
     plot: { ...scene.plot, series, valueDomain: { min: minimum ?? automatic.min, max: maximum ?? automatic.max, step: config.yAxisStep ?? automatic.step } },
   }
 }

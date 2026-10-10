@@ -2385,6 +2385,7 @@
 .source-step{--source-page-accent:var(--green)}
 .source-step .source-card{--source-accent:color-mix(in srgb,var(--source-page-accent) 78%,var(--ink))}
 .source-step .source-card.sheet-card{--source-accent:var(--source-page-accent)}
+.source-step.file-dragging .upload-card{outline:2px dashed var(--ink);outline-offset:-8px;background:var(--surface-subtle)}
 .source-step .upload-card,
 .source-step .upload-card:hover,
 .source-step .upload-card:focus-within{border-style:solid}
@@ -2651,3 +2652,23 @@
 /* Chart typography uses the same synthesis in preview and standalone SVG. */
 .chart-canvas-shell,.multiples-paper{font-synthesis:style}
 .canvas-rich-text-display p,.canvas-rich-text-content p{margin:0}
+
+.series-color-list{display:grid;gap:10px;margin-bottom:12px}.series-color-list>label{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:12px;min-width:0;overflow-wrap:anywhere}.series-color-list .hero-color-control{flex:0 0 auto;max-width:140px}
+
+.marker-settings{display:grid;gap:11px}
+
+/* Canvas interaction chrome follows the actual background, independently of the inspector. */
+.logical-canvas .canvas-rich-text-display:hover{outline-color:var(--canvas-ui-ink)}
+.logical-canvas .canvas-rich-text-content{border-color:var(--canvas-ui-ink);box-shadow:none}
+.logical-canvas .canvas-annotation.selected{outline-color:var(--canvas-ui-ink)}
+.logical-canvas .annotation-resize{background:var(--canvas-ui-ink);border-color:var(--canvas-ui-paper);box-shadow:0 0 0 1px var(--canvas-ui-ink)}
+.logical-canvas .decoration-handle{fill:var(--canvas-ui-paper);stroke:var(--canvas-ui-ink)}
+.logical-canvas .decoration-control-guide{stroke:var(--canvas-ui-ink);opacity:.6}
+
+.chart-canvas-shell.logical-canvas .canvas-annotation.selected,.chart-canvas-shell.logical-canvas .canvas-annotation.selected:is(.editing,:focus-within),.chart-canvas-shell.logical-canvas .annotation-display:hover{outline-color:var(--canvas-ui-ink)}
+.logical-canvas .canvas-rich-text-content,.logical-canvas .annotation-content{caret-color:var(--canvas-ui-ink)}
+.logical-canvas .annotation-anchor-outline,.logical-canvas .decoration-selection[stroke]:not([stroke="transparent"]){stroke:var(--canvas-ui-ink)}
+.logical-canvas .annotation-anchor-dot{fill:var(--canvas-ui-paper);stroke:var(--canvas-ui-ink)}
+.logical-canvas .direct-label-handle{border-color:var(--canvas-ui-ink)}
+.logical-canvas .direct-label-handle:focus-visible{outline-color:var(--canvas-ui-ink)}
+.annotation-placement-overlay line,.annotation-placement-overlay rect{stroke:var(--canvas-ui-ink)}

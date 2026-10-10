@@ -71,13 +71,13 @@ export function renderNativeSlopeScene(scene: ResolvedSlopeScene): Record<string
       return {
         value: point.value, name: scene.plot.positions[point.categoryIndex].coordinate,
         elementId: point.id, datumId: point.datumId, seriesId: point.seriesId, elementKey: point.legacyKey, sourceSeriesName: item.name, displayValue: point.displayValue, displayCategory: point.displayCategory, displayColor: item.color,
-        symbolSize: point.value == null ? 0 : item.marker.size,
-        itemStyle: { color: item.marker.fill, borderColor: item.marker.stroke, borderWidth: item.marker.strokeWidth },
-        label: { show: false },
+        symbol: point.marker.shape, symbolSize: point.value == null ? 0 : point.marker.size,
+        itemStyle: { color: point.marker.fill, borderColor: point.marker.stroke, borderWidth: point.marker.strokeWidth, opacity: point.marker.opacity ?? 1 },
+        label: { show: point.label.visible, formatter: point.label.text, position: point.label.position, ...textStyle(point.label.style) },
       }
     }),
   }))
-  const hits = scene.plot.series.map((item) => ({ name: `__hit__:${item.name}`, interactionLayer: 'hit', type: 'line', triggerEvent: true, silent: false, symbolSize: Math.max(14, item.marker.size), lineStyle: { color: 'rgba(0,0,0,0)', width: 14, opacity: 0 }, itemStyle: { opacity: 0 }, tooltip: { show: false }, z: 100, data: item.points.map((point) => ({ value: point.value, name: scene.plot.positions[point.categoryIndex].coordinate, elementId: point.id, datumId: point.datumId, seriesId: point.seriesId, elementKey: point.legacyKey, sourceSeriesName: item.name, displayValue: point.displayValue, displayCategory: point.displayCategory })) }))
+  const hits = scene.plot.series.map((item) => ({ name: `__hit__:${item.name}`, interactionLayer: 'hit', type: 'line', triggerEvent: true, silent: false, symbol: 'circle', symbolSize: Math.max(32, item.marker.size), lineStyle: { color: 'rgba(0,0,0,0)', width: 24, opacity: 0 }, itemStyle: { opacity: 0 }, tooltip: { show: false }, z: 100, data: item.points.map((point) => ({ value: point.value, name: scene.plot.positions[point.categoryIndex].coordinate, elementId: point.id, datumId: point.datumId, seriesId: point.seriesId, elementKey: point.legacyKey, sourceSeriesName: item.name, displayValue: point.displayValue, displayCategory: point.displayCategory, displayColor: item.color })) }))
   const category = scene.plot.categoryAxis, value = scene.plot.valueAxis
   const categorySide = category.placement.kind === 'side' ? category.placement.side : 'bottom'
   const valueSide = value.placement.kind === 'side' ? value.placement.side : 'left'

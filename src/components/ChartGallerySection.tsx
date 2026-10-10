@@ -3,13 +3,13 @@ import { Link } from 'react-router-dom'
 import './ChartGallerySection.css'
 
 type PreviewKind = 'bar' | 'line' | 'area' | 'scatter' | 'lollipop' | 'heatmap' | 'bubble' | 'slope' | 'boxplot'
-type Preview = { title: string; note: string; kind: PreviewKind; color: string; image: string }
+type Preview = { title: string; note: string; kind: PreviewKind; color: string; image: string; fullSize?: boolean }
 
 const columns: Preview[][] = [
   [
     { title: 'Столбчатый', note: 'Сравнение категорий', kind: 'bar', color: '#18aeda', image: '/chart-gallery/01.png' },
     { title: 'Линейный', note: 'Динамика во времени', kind: 'line', color: '#1677a6', image: '/chart-gallery/02.png' },
-    { title: 'Точечный', note: 'Связь показателей', kind: 'scatter', color: '#e033ab', image: '/chart-gallery/03.png' },
+    { title: 'ИИ и закон Мура', note: 'Точечный · логарифмическая шкала', kind: 'scatter', color: '#e033ab', image: '/chart-gallery/03.png', fullSize: true },
     { title: 'Lollipop', note: 'Компактное сравнение', kind: 'lollipop', color: '#4568e1', image: '/chart-gallery/04.png' },
     { title: 'Тепловая карта', note: 'Плотность значений', kind: 'heatmap', color: '#e4a52c', image: '/chart-gallery/05.png' },
   ],
@@ -18,7 +18,7 @@ const columns: Preview[][] = [
     { title: 'Пузырьковый', note: 'Три измерения', kind: 'bubble', color: '#18aeda', image: '/chart-gallery/07.png' },
     { title: 'Slope chart', note: 'Изменение между точками', kind: 'slope', color: '#4568e1', image: '/chart-gallery/08.png' },
     { title: 'Box plot', note: 'Распределение данных', kind: 'boxplot', color: '#e4a52c', image: '/chart-gallery/09.png' },
-    { title: 'С накоплением', note: 'Структура целого', kind: 'bar', color: '#1677a6', image: '/chart-gallery/10.png' },
+    { title: 'География выручки ASML', note: 'По ключевым рынкам · 2015–2025', kind: 'area', color: '#8e109e', image: '/chart-gallery/10.png', fullSize: true },
   ],
   [
     { title: 'Bubble chart', note: 'Масштаб и положение', kind: 'bubble', color: '#e4a52c', image: '/chart-gallery/11.png' },
@@ -33,13 +33,13 @@ export const galleryPreviews = columns.flat()
 
 export function ChartGallerySection() {
   return (
-    <section className="chart-gallery-section" id="chart-types" aria-labelledby="chart-gallery-title">
+    <section className="chart-gallery-section" id="chart-types" aria-label="Примеры графиков">
       <div className="chart-gallery-columns">
         {columns.map((items, columnIndex) => (
           <div className={`chart-marquee ${columnIndex === 1 ? 'is-reverse' : ''}`} key={columnIndex}>
             <div className="chart-marquee-track" style={{ '--gallery-duration': `${32 + columnIndex * 4}s` } as CSSProperties}>
               {[0, 1].map((copy) => (
-                <div className="chart-marquee-group" aria-hidden={copy === 1} key={copy}>
+                <div className="chart-marquee-group" aria-hidden={copy === 1} inert={copy === 1} key={copy}>
                   {items.map((item) => <ChartPreview {...item} key={`${copy}-${item.title}`} />)}
                 </div>
               ))}
@@ -58,14 +58,16 @@ export function ChartGallerySection() {
   )
 }
 
-export function ChartPreview({ title, note, kind, color, image }: Preview) {
+export function ChartPreview({ title, kind, color, image, fullSize }: Preview) {
+  const art = <>
+    <ChartArt kind={kind}/>
+    <img src={image} alt={fullSize ? title : ''} loading="lazy" decoding="async" onError={(event) => { event.currentTarget.hidden = true }}/>
+  </>
   return (
     <figure className="chart-gallery-card" style={{ '--chart-color': color } as CSSProperties}>
-      <div className="chart-gallery-art">
-        <ChartArt kind={kind}/>
-        <img src={image} alt="" onError={(event) => { event.currentTarget.hidden = true }}/>
-      </div>
-      <figcaption><strong>{title}</strong><span>{note}</span></figcaption>
+      {fullSize
+        ? <a className="chart-gallery-art is-photo" href={image} target="_blank" rel="noopener noreferrer" aria-label={`Открыть график «${title}» в полном размере`}>{art}</a>
+        : <div className="chart-gallery-art">{art}</div>}
     </figure>
   )
 }

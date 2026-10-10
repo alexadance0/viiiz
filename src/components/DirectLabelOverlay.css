@@ -1,0 +1,10 @@
+.direct-label-toolbar{display:flex;flex-direction:column;align-items:stretch;gap:8px;color:var(--ink,#202027);font-size:12px}
+.direct-label-toolbar button{min-height:32px;padding:7px 10px;border:1px solid var(--line,#d4d4d4);border-radius:0;background:var(--paper,#fff);color:inherit;font:inherit;cursor:pointer}
+.direct-label-toolbar button[aria-pressed=true]{background:var(--ink,#202027);color:var(--paper,#fff)}
+.direct-label-toolbar button:disabled{opacity:.45;cursor:default}
+.direct-label-toolbar span{overflow-wrap:anywhere;line-height:1.5}
+.direct-label-actions{display:flex;flex-direction:column;gap:8px}
+.direct-label-handles{position:absolute;inset:0;z-index:150;pointer-events:none}
+.direct-label-handle{position:absolute;padding:0;border:1px dashed var(--ink,#202027);border-radius:0;background:transparent;cursor:grab;pointer-events:auto;touch-action:none}
+.direct-label-handle.selected{border-style:solid}.direct-label-handle:active{cursor:grabbing}
+.direct-label-handle:focus-visible,.direct-label-toolbar button:focus-visible{outline:2px solid var(--ink,#202027);outline-offset:3px}

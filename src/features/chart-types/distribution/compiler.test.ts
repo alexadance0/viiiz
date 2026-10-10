@@ -4,6 +4,7 @@ import { createDefaultChartConfig } from '../../../entities/chart/model/defaultC
 import { nativeMarkSelections } from '../../../entities/chart/model/sceneVisitors'
 import type { ChartConfig, DataTable } from '../../../core/types'
 import { compileNativeDistributionScene, NATIVE_DISTRIBUTION_KINDS, validateNativeDistributionMapping } from './compiler'
+import { renderScene } from '../../chart-renderer/echarts/renderScene'
 
 const config = (kind: typeof NATIVE_DISTRIBUTION_KINDS[number], overrides: Partial<ChartConfig> = {}): ChartConfig => ({ ...createDefaultChartConfig(), kind, xField: 'group', yField: 'value', yFields: ['value'], aggregation: 'none', ...overrides })
 const table: DataTable = { name: 'distribution', columns: ['group', 'value', 'other', 'label'], rows: [
@@ -11,6 +12,20 @@ const table: DataTable = { name: 'distribution', columns: ['group', 'value', 'ot
 ] }
 
 describe('native Distribution compiler', () => {
+  it.each(['boxplot', 'violinplot', 'histogram', 'kde-plot'] as const)('edits an aggregate color and label without changing statistics: %s', (kind) => {
+    const initial = compileNativeDistributionScene(table, config(kind))
+    type Series = { type: string; data: Array<{ elementKey?: string; displayValue?: string }>; renderItem(params: { dataIndex: number }): unknown }
+    const option = renderScene(initial) as { series: Series[] }
+    const series = option.series.find((series) => series.type === 'custom' && series.data.some((point) => point?.elementKey))!
+    const index = series.data.findIndex((point) => point.elementKey && (kind !== 'histogram' || Number(point.displayValue) > 0))
+    const key = series.data[index].elementKey!
+    const edited = compileNativeDistributionScene(table, config(kind, { elementStyles: { [key]: { color: '#202027', showLabel: true, label: 'Подпись' } } }))
+    expect(edited.plot.groups.map((group) => group.summary)).toEqual(initial.plot.groups.map((group) => group.summary))
+    const editedSeries = (renderScene(edited) as { series: Series[] }).series.find((series) => series.data?.some((point) => point?.elementKey === key))!
+    const rendered = JSON.stringify(editedSeries.renderItem({ dataIndex: index }))
+    expect(rendered).toContain('Подпись')
+    expect(rendered).toContain('#202027')
+  })
   it('registers all eleven variants as native and guards the removed legacy builder', () => {
   })
 

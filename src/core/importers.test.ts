@@ -1,4 +1,4 @@
-import { zipSync, strToU8 } from 'fflate'
+import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
 import { parquetWriteBuffer } from 'hyparquet-writer'
 import { DOMParser } from '@xmldom/xmldom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -106,6 +106,22 @@ describe('other data sources', () => {
     const [sheet] = await importExcelSheets(xlsxFile(['Значение', 'Значение', '']))
     expect(sheet.table.columns).toEqual(['Значение', 'Значение_2', 'column_3'])
     expect(sheet.table.rows[0]).toMatchObject({ Значение: '2024-Q1', Значение_2: '1 234,5', column_3: 'p' })
+  })
+
+  it('imports empty string cells and formulas without cached values, while still trimming text', async () => {
+    vi.stubGlobal('DOMParser', DOMParser)
+    const entries = unzipSync(new Uint8Array(await xlsxFile().arrayBuffer()))
+    entries['xl/worksheets/sheet1.xml'] = xml(strFromU8(entries['xl/worksheets/sheet1.xml'])
+      .replace(/<c r="B3"[^>]*>.*?<\/c>/, '<c r="B3" t="str"><f>CONCAT(A3,C3)</f><v/></c>')
+      .replace(/<c r="B4"[^>]*>.*?<\/c>/, '<c r="B4" t="str"/>')
+      .replace('<t>2024-Q1</t>', '<t>  2024-Q1  </t>')
+      .replace('<t>e</t>', '<t>   </t>'))
+    const file = new File([zipSync(entries)], 'empty-cells.xlsx')
+    const [sheet] = await importExcelSheets(file)
+    expect(sheet.table.rows[0].Дата).toBe('2024-Q1')
+    expect(sheet.table.rows[1].Сумма).toBeNull()
+    expect(sheet.table.rows[2].Сумма).toBeNull()
+    expect(sheet.table.rows[1].Статус).toBeNull()
   })
 
   it('imports a Snappy-compressed Parquet file', async () => {

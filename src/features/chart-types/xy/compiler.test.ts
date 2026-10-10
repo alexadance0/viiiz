@@ -14,6 +14,14 @@ const table: DataTable = { name: 'xy', columns: ['x', 'y', 'size', 'other', 'lab
 ] }
 
 describe('native XY compiler', () => {
+  it('lets explicit point and series fills override the hollow default', () => {
+    const initial = compileNativeXYScene(table, config('scatter', { scatterHollow: true }))
+    expect(initial.plot.series[0].points[0].marker.fill).toBe('transparent')
+    const key = initial.plot.series[0].points[0].legacyKey
+    const scene = compileNativeXYScene(table, config('scatter', { scatterHollow: true, seriesStyles: { y: { markerFill: '#202027' } }, elementStyles: { [key]: { markerFill: '#ffffff' } } }))
+    expect(scene.plot.series[0].points[0].marker.fill).toBe('#ffffff')
+    expect(scene.plot.series[0].points[2].marker.fill).toBe('#202027')
+  })
   it('compiles continuous axes and unique row identities while retaining ambiguous legacy keys', () => {
     const scene = compileNativeXYScene(table, config('scatter', { scatterShowLabels: true }))
     expect(scene.plot).toMatchObject({ kind: 'xy', variant: 'scatter', xScale: { type: 'linear' }, yScale: { type: 'linear' } })

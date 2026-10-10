@@ -25,7 +25,7 @@ export function renderComparisonStemScene(scene: ResolvedComparisonStemScene): R
   const legendItems = legendGuide?.items.flatMap((item) => item.visible && item.target.kind === 'series' ? [{ ...item, rendererName: names.get(item.target.seriesId) ?? String(item.target.seriesId) }] : []) ?? []
   const legendLabels = new Map(legendItems.map((item) => [item.rendererName, item.label]))
   const series = scene.plot.series.map((source) => {
-    const data = source.points.map((point) => ({ value: point.categoryIndex, ...pointInfo(point, source.name, point.marker.fill), itemStyle: { color: point.marker.fill, borderColor: point.marker.stroke, borderWidth: point.marker.strokeWidth, opacity: 1 } }))
+    const data = source.points.map((point) => ({ value: point.categoryIndex, ...pointInfo(point, source.name, point.marker.fill), itemStyle: { color: point.marker.fill, borderColor: point.marker.stroke, borderWidth: point.marker.strokeWidth, opacity: point.marker.opacity ?? 1 } }))
     return {
     id: source.id, name: source.name, type: 'custom', coordinateSystem: 'none', triggerEvent: true, silent: false, z: 10, itemStyle: { opacity: 1 }, data,
     renderItem: (params: { dataIndex: number }) => {
@@ -95,6 +95,14 @@ export function renderComparisonStemScene(scene: ResolvedComparisonStemScene): R
     xAxis: horizontal ? renderNativeCartesianAxis(scene, 'value') : renderNativeCartesianAxis(scene, 'category'),
     yAxis: horizontal ? renderNativeCartesianAxis(scene, 'category') : renderNativeCartesianAxis(scene, 'value'),
     series: [...series, ...directSeries],
+    nativeSelectionHits: scene.plot.series.flatMap((source) => source.points.flatMap((point) => {
+      const placement = scene.comparisonGeometry.points[point.id]
+      if (!placement || point.value == null || scene.plot.variant === 'arrow' && source.role !== 'end') return []
+      const size = Math.max(24, point.marker.size)
+      const connector = scene.plot.variant === 'arrow' ? scene.comparisonGeometry.connectors[scene.plot.connectors[point.categoryIndex]?.id] : undefined
+      const startX = connector?.x1 ?? placement.x, startY = connector?.y1 ?? placement.y
+      return [{ rect: { x: Math.min(startX, placement.x) - size / 2, y: Math.min(startY, placement.y) - size / 2, width: Math.abs(startX - placement.x) + size, height: Math.abs(startY - placement.y) + size }, info: pointInfo(point, source.name, point.marker.fill) }]
+    })),
     graphic: [...(scene.plot.categoryAxis.calendarTicks ? calendarCategoryGraphics(scene) : categoryGrid), ...connectors, ...verticalTitleGraphic, ...footer],
   }
 }

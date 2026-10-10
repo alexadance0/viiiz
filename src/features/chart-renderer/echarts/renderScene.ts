@@ -1,4 +1,6 @@
+import { styleChartTooltip } from './chartTooltip'
 import { renderStreamScene } from './renderStreamScene'
+import { prepareDirectLabelLayout } from '../../chart-layout/directLabelLayout'
 import { resolveNativeMapScene } from '../../chart-types/map/layout'
 import { renderMapScene } from './renderMapScene'
 import type { NativeMapChartScene } from '../../../entities/chart/model/ChartScene'
@@ -37,12 +39,14 @@ import { resolveNativeTreemapScene } from '../../chart-types/treemap/layout'
 import { renderTreemapScene } from './renderTreemapScene'
 
 export function resolveNativeScene(scene: ChartScene | ResolvedScene): ResolvedScene {
+  scene = prepareDirectLabelLayout(scene)
   return 'geometry' in scene ? scene : scene.plot.kind === 'map' ? resolveNativeMapScene(scene as NativeMapChartScene) : scene.plot.kind === 'sankey' ? resolveNativeSankeyScene(scene as NativeSankeyChartScene) : scene.plot.kind === 'waffle' ? resolveNativeWaffleScene(scene as NativeWaffleChartScene) : scene.plot.kind === 'pie' ? resolveNativePieScene(scene as NativePieChartScene) : scene.plot.kind === 'slope' ? resolveNativeSlopeScene(scene as NativeSlopeChartScene) : scene.plot.kind === 'xy' ? resolveNativeXYScene(scene as NativeXYChartScene) : scene.plot.kind === 'distribution' ? resolveNativeDistributionScene(scene as NativeDistributionChartScene) : scene.plot.kind === 'comparison-stem' ? resolveNativeComparisonStemScene(scene as NativeComparisonStemChartScene) : scene.plot.kind === 'waterfall' ? resolveNativeWaterfallScene(scene as NativeWaterfallChartScene) : scene.plot.kind === 'butterfly' ? resolveNativeButterflyScene(scene as NativeButterflyChartScene) : scene.plot.kind === 'heatmap' ? resolveNativeHeatmapScene(scene as NativeHeatmapChartScene) : scene.plot.kind === 'treemap' ? resolveNativeTreemapScene(scene as NativeTreemapChartScene) : resolveNativeCartesianScene(scene)
 }
 
 export function renderScene(scene: ChartScene | ResolvedScene): Record<string, unknown> {
   const resolved = resolveNativeScene(scene)
   const option = renderResolvedScene(resolved)
+  styleChartTooltip(option)
   if (resolved.compatibilityConfig.legendLabelColorByCategory) {
     const legend = option.legend as { data?: Array<{ itemStyle?: { color?: string }; textStyle?: Record<string, unknown> }> } | undefined
     if (legend?.data) legend.data = legend.data.map((item) => ({ ...item, textStyle: { ...item.textStyle, color: item.itemStyle?.color } }))

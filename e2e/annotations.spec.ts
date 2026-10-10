@@ -19,6 +19,123 @@ async function exportSvg(page: Page) {
   return svg
 }
 
+function expectArrowShaft(exported: number[], attachment: number[]) {
+  exported.slice(0, 6).forEach((value, index) => expect(value).toBeCloseTo(attachment[index], 0))
+  // The visible shaft stops at the head's base; the attachment remains at the tip.
+  const tipX = attachment[6], tipY = attachment[7]
+  const angle = Math.atan2(tipY - attachment[5], tipX - attachment[4])
+  const inset = 8 * Math.cos(Math.PI / 6)
+  expect(exported[6]).toBeCloseTo(tipX - inset * Math.cos(angle), 0)
+  expect(exported[7]).toBeCloseTo(tipY - inset * Math.sin(angle), 0)
+}
+
+test('inserts currency and unit symbols into editable affixes on both axes and value labels', async ({ page }) => {
+  await openEditor(page)
+  await page.getByRole('tab', { name: 'Оси и шкалы', exact: true }).click()
+  await page.locator('.number-format-settings > summary').click()
+  const groups = page.locator('.number-affix-group')
+  const y = groups.nth(0)
+  await y.getByRole('combobox', { name: 'Добавить символ: префикс', exact: true }).selectOption('€')
+  await expect(y.getByRole('textbox', { name: 'Префикс', exact: true })).toHaveValue('€')
+  await y.getByRole('textbox', { name: 'Префикс', exact: true }).fill('≈ ')
+  await y.getByRole('combobox', { name: 'Добавить символ: префикс', exact: true }).selectOption('€')
+  await expect(y.getByRole('textbox', { name: 'Префикс', exact: true })).toHaveValue('≈ €')
+  await groups.nth(1).getByRole('combobox', { name: 'Добавить символ: суффикс', exact: true }).selectOption('°')
+  await expect(groups.nth(1).getByRole('textbox', { name: 'Суффикс', exact: true })).toHaveValue('°')
+  await groups.nth(2).getByRole('checkbox', { name: 'Как на оси Y' }).focus()
+  await page.keyboard.press('Space')
+  await groups.nth(2).getByRole('combobox', { name: 'Добавить символ: суффикс', exact: true }).selectOption('%')
+  await expect(page.locator('.number-format-preview')).toContainText('%')
+  await page.screenshot({ path: '/tmp/viiiz-affix-symbols.png', fullPage: true })
+  const svg = await exportSvg(page)
+  expect(svg).toContain('≈ €')
+})
+
+test('quiet text controls move directly, resize from slim edges and keep editing accessible', async ({ page }) => {
+  await openEditor(page)
+  await page.getByRole('button', { name: 'Текст', exact: true }).click()
+  await page.getByRole('button', { name: 'Добавить в центр', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Текст аннотации', exact: true }).fill('Пояснение к графику')
+  const annotation = page.locator('.canvas-annotation.selected')
+  await expect(annotation.locator('.annotation-drag-handle')).toHaveCount(0)
+  const outsideHandles = await annotation.evaluate((element) => {
+    const frame = element.getBoundingClientRect()
+    return [...element.querySelectorAll<HTMLElement>('.annotation-resize')].map((handle) => {
+      const box = handle.getBoundingClientRect(), mark = getComputedStyle(handle, '::after')
+      return { outside: box.right < frame.left || box.left > frame.right, width: Number.parseFloat(mark.width), height: Number.parseFloat(mark.height) }
+    })
+  })
+  expect(outsideHandles).toHaveLength(2)
+  outsideHandles.forEach((handle) => { expect(handle.outside).toBe(true); expect(handle.width).toBeGreaterThanOrEqual(3); expect(handle.height).toBeGreaterThanOrEqual(18) })
+  const move = page.getByRole('button', { name: 'Переместить аннотацию', exact: true })
+  const position = () => annotation.evaluate((element) => [Number.parseFloat((element as HTMLElement).style.left), Number.parseFloat((element as HTMLElement).style.top)])
+  const original = await position()
+  await move.focus()
+  await move.press('Shift+ArrowDown')
+  await expect.poll(position).toEqual([original[0], original[1] + 10])
+  const content = annotation.locator('.annotation-content')
+  const box = (await content.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2 + 20, box.y + box.height / 2 + 15, { steps: 4 })
+  await page.mouse.up()
+  await expect.poll(async () => (await position())[0]).toBeGreaterThan(original[0])
+  await content.dblclick()
+  await expect(annotation).toHaveClass(/editing/)
+  await content.fill('Редактируем без перемещения')
+  await expect(page.getByRole('textbox', { name: 'Текст аннотации', exact: true })).toHaveText('Редактируем без перемещения')
+  await page.screenshot({ path: '/tmp/viiiz-quiet-text-controls.png', fullPage: true })
+})
+
+test('text frames auto-size vertically and attached arrows follow wrapping and line breaks', async ({ page }) => {
+  await openEditor(page)
+  await page.getByRole('button', { name: 'Текст', exact: true }).click()
+  await page.getByRole('button', { name: 'Добавить в центр', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Название в списке' }).fill('Заметка')
+  const editor = page.getByRole('textbox', { name: 'Текст аннотации', exact: true })
+  const annotation = page.locator('.canvas-annotation')
+  const dimensions = () => annotation.evaluate((element) => ({ width: Number.parseFloat((element as HTMLElement).style.width), height: (element as HTMLElement).offsetHeight, x: Number.parseFloat((element as HTMLElement).style.left), y: Number.parseFloat((element as HTMLElement).style.top) }))
+  await editor.fill('Рост')
+  const single = await dimensions()
+  expect(single.height).toBeLessThan(30)
+  await expect(annotation.locator('.annotation-content')).toHaveCSS('padding', '2px')
+  await editor.fill('Первая строка\nВторая строка\nТретья строка')
+  await expect.poll(async () => (await dimensions()).height).toBeGreaterThan(single.height * 2)
+  await editor.fill('Рост')
+  await expect.poll(async () => (await dimensions()).height).toBe(single.height)
+  await editor.fill('Длинное пояснение к графику, которое переносится при изменении ширины рамки')
+  const wide = await dimensions()
+  const handle = (await page.getByRole('button', { name: 'Ширина аннотации: правый край' }).boundingBox())!
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(handle.x + handle.width / 2 - 60, handle.y + handle.height / 2 + 25, { steps: 4 })
+  await page.mouse.up()
+  const narrow = await dimensions()
+  expect(narrow.width).toBeLessThan(wide.width)
+  expect(narrow.height).toBeGreaterThan(wide.height)
+  expect(narrow.y).toBe(wide.y)
+  await page.getByRole('button', { name: 'Добавить стрелку к тексту', exact: true }).click()
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Выбрать точку у текста', exact: true }).click()
+  await page.locator('.annotation-placement-overlay').getByRole('button', { name: 'Заметка · Снизу', exact: true }).click()
+  const path = page.locator('.decoration-overlay path.decoration-selection')
+  const start = async () => (await path.getAttribute('d'))!.match(/-?\d+(?:\.\d+)?/g)!.map(Number).slice(0, 2)
+  await expect.poll(async () => (await start())[0]).toBeCloseTo(narrow.x + narrow.width / 2, 1)
+  await expect.poll(async () => (await start())[1]).toBe(narrow.y + narrow.height + 1)
+  await page.locator('.annotation-object-select').first().click()
+  await editor.fill('Строка 1\nСтрока 2\nСтрока 3\nСтрока 4\nСтрока 5')
+  const multiline = await dimensions()
+  await page.locator('.annotation-object-select').last().click()
+  await expect.poll(async () => (await start())[0]).toBeCloseTo(multiline.x + multiline.width / 2, 1)
+  await expect.poll(async () => (await start())[1]).toBe(multiline.y + multiline.height + 1)
+  await page.locator('.annotation-object-select').first().click()
+  await page.screenshot({ path: '/tmp/viiiz-annotation-auto-height.png', fullPage: true })
+  const svg = await exportSvg(page)
+  const positions = await page.evaluate((source) => [...new DOMParser().parseFromString(source, 'image/svg+xml').querySelectorAll('g[data-annotation-id] [data-text-layer=foreground] text')].map((element) => ({ x: Number(element.getAttribute('x')), text: element.textContent })), svg)
+  expect(positions.map(({ text }) => text)).toEqual(['Строка 1', 'Строка 2', 'Строка 3', 'Строка 4', 'Строка 5'])
+  positions.forEach(({ x }) => expect(x).toBe(multiline.x + 3))
+})
+
 test('text can be placed, edited from both surfaces, locked, hidden and restored for export', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
@@ -69,15 +186,33 @@ test('draws and configures areas and arrows, cancels placement and retains objec
   await page.mouse.move(overlay.x + 220, overlay.y + 190)
   await page.mouse.up()
   await expect(page.locator('.annotation-objects li')).toHaveCount(1)
+  await expect(page.getByRole('spinbutton', { name: 'Граница, px', exact: true })).toHaveValue('0')
+  await expect(page.locator('.decoration-overlay rect.decoration-selection')).toHaveAttribute('fill', 'transparent')
+  const area = page.locator('.decoration-overlay rect.decoration-selection')
+  const beforeMove = await area.evaluate((element) => ['x', 'y', 'width', 'height'].map((attribute) => Number(element.getAttribute(attribute))))
+  const areaBox = await area.boundingBox()
+  if (!areaBox) throw new Error('No selected area')
+  await page.mouse.move(areaBox.x + areaBox.width / 2, areaBox.y + areaBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(areaBox.x + areaBox.width / 2 + 24, areaBox.y + areaBox.height / 2 + 18, { steps: 4 })
+  await page.mouse.up()
+  await expect.poll(async () => Number(await area.getAttribute('x'))).toBeGreaterThan(beforeMove[0])
+  await expect.poll(async () => Number(await area.getAttribute('y'))).toBeGreaterThan(beforeMove[1])
+  expect([Number(await area.getAttribute('width')), Number(await area.getAttribute('height'))]).toEqual(beforeMove.slice(2))
   await page.getByRole('textbox', { name: 'Название в списке' }).fill('Период роста')
   await page.getByRole('spinbutton', { name: 'Прозрачность, %' }).fill('70')
   await page.getByRole('spinbutton', { name: 'Прозрачность, %' }).press('Tab')
+  await page.screenshot({ path: '/tmp/viiiz-quiet-area-controls.png', fullPage: true })
   await page.getByRole('button', { name: 'Стрелка', exact: true }).click()
   await page.getByRole('button', { name: 'Добавить в центр', exact: true }).click()
   await expect(page.locator('.annotation-objects li')).toHaveCount(2)
+  await expect(page.getByRole('spinbutton', { name: 'Прозрачность, %' })).toHaveValue('0')
+  await page.getByRole('spinbutton', { name: 'Толщина, px', exact: true }).fill('12')
+  await page.getByRole('spinbutton', { name: 'Толщина, px', exact: true }).press('Tab')
   await page.getByRole('combobox', { name: 'Форма', exact: true }).selectOption('curved-line')
   await page.getByRole('combobox', { name: 'Стиль линии', exact: true }).selectOption('dashed')
   await page.getByRole('combobox', { name: 'Наконечники', exact: true }).selectOption('both')
+  await expect(page.locator('.decoration-overlay path.decoration-selection')).toHaveAttribute('stroke', 'transparent')
   await page.getByRole('button', { name: 'Дублировать объект', exact: true }).click()
   await expect(page.locator('.annotation-objects li')).toHaveCount(3)
   await page.getByRole('button', { name: 'Удалить объект', exact: true }).click()
@@ -142,7 +277,7 @@ for (const line of [false, true]) test(`attached curves follow text and data on 
   await page.getByRole('spinbutton', { name: 'X, px', exact: true }).fill('100')
   await page.getByRole('spinbutton', { name: 'X, px', exact: true }).press('Tab')
   await page.locator('.annotation-object-select').last().click()
-  await expect.poll(async () => (await coordinates())[0]).toBe(346)
+  await expect.poll(async () => (await coordinates())[0]).toBe(341)
   expect((await coordinates()).slice(-2)).toEqual(end)
   await page.getByRole('tab', { name: 'Оси и шкалы', exact: true }).click()
   await page.locator('.axis-scale-settings > summary').click()
@@ -161,7 +296,7 @@ for (const line of [false, true]) test(`attached curves follow text and data on 
   const exported = await page.evaluate((source) => [...new DOMParser().parseFromString(source, 'image/svg+xml').querySelectorAll('path')].find((node) => node.getAttribute('stroke') === '#4f4b59' && node.getAttribute('d')?.includes('C'))?.getAttribute('d'), svg)
   expect(exported).toBeTruthy()
   const exportedCoordinates = exported!.match(/-?\d+(?:\.\d+)?/g)!.map(Number)
-  exportedCoordinates.forEach((value, index) => expect(value).toBeCloseTo(unlinked[index], 0))
+  expectArrowShaft(exportedCoordinates, unlinked)
   expect(errors).toEqual([])
 })
 
@@ -177,27 +312,35 @@ test('exports mixed formatting without breaking words at style boundaries', asyn
   const canvas = page.locator('.canvas-annotation.selected')
   await expect(canvas.locator('.annotation-halo')).toHaveAttribute('aria-hidden', 'true')
   await expect(canvas.locator('.annotation-foreground span').first()).toHaveCSS('-webkit-text-stroke-width', '0px')
-  await expect(canvas.locator('.annotation-halo span').first()).toHaveCSS('-webkit-text-stroke-width', '6px')
+  await expect(canvas.locator('.annotation-halo text').first()).toHaveAttribute('stroke-width', '6')
+  await expect(canvas.locator('.annotation-halo text').first()).toHaveAttribute('stroke-linejoin', 'round')
   const alignedLayers = await canvas.evaluate((element) => {
     const positions = (selector: string) => {
       const walker = document.createTreeWalker(element.querySelector(selector)!, NodeFilter.SHOW_TEXT)
       const rectangles: number[][] = []
       while (walker.nextNode()) {
+        if (!walker.currentNode.textContent?.trim()) continue
         const range = document.createRange(); range.selectNodeContents(walker.currentNode)
         rectangles.push(...[...range.getClientRects()].map((rect) => [rect.x, rect.y, rect.width, rect.height]))
       }
       return rectangles
     }
-    return { foreground: positions('.annotation-foreground'), halo: positions('.annotation-halo') }
+    return { foreground: positions('.annotation-foreground'), halo: positions('.annotation-halo [data-text-layer="outline"]') }
   })
-  expect(alignedLayers.halo).toEqual(alignedLayers.foreground)
+  expect(alignedLayers.halo).toHaveLength(alignedLayers.foreground.length - 1)
+  alignedLayers.halo.forEach((rect, index) => {
+    expect(rect[0]).toBeCloseTo(alignedLayers.foreground[index][0], 1)
+    expect(rect[2]).toBeCloseTo(alignedLayers.foreground[index][2], 1)
+    // SVG glyph boxes and HTML inline boxes have slightly different vertical metrics.
+    expect(Math.abs(rect[1] - alignedLayers.foreground[index][1])).toBeLessThan(1)
+  })
   await page.screenshot({ path: '/tmp/viiiz-mixed-annotation-editor.png', fullPage: true })
   const svg = await exportSvg(page)
   const layers = await page.evaluate((source) => {
     const group = new DOMParser().parseFromString(source, 'image/svg+xml').querySelector('g[data-annotation-id]')!
     return { order: [...group.children].map((layer) => layer.getAttribute('data-text-layer')), outlines: group.querySelectorAll('[data-text-layer=outline] text[stroke-width]').length, foregroundStroke: group.querySelectorAll('[data-text-layer=foreground] [stroke-width]').length }
   }, svg)
-  expect(layers.order).toEqual(['background', 'outline', 'foreground'])
+  expect(layers.order).toEqual(['background', 'outline', 'highlight', 'foreground'])
   expect(layers.outlines).toBeGreaterThan(0)
   expect(layers.foregroundStroke).toBe(0)
   await writeFile('/tmp/viiiz-rich-annotation.svg', svg)
@@ -258,7 +401,7 @@ test('creates a connector from text, repicks its anchors on canvas and cancels w
   await page.getByRole('spinbutton', { name: 'Ширина, px', exact: true }).fill('300')
   await page.getByRole('spinbutton', { name: 'Ширина, px', exact: true }).press('Tab')
   await page.locator('.annotation-object-select').last().click()
-  await expect.poll(async () => (await path.getAttribute('d'))!.match(/-?\d+(?:\.\d+)?/g)!.map(Number)[0]).toBe(686)
+  await expect.poll(async () => (await path.getAttribute('d'))!.match(/-?\d+(?:\.\d+)?/g)!.map(Number)[0]).toBe(681)
   await page.getByRole('button', { name: 'Выбрать точку у текста', exact: true }).click()
   await page.getByRole('tab', { name: 'Текст', exact: true }).click()
   await expect(page.locator('.annotation-placement-overlay')).toHaveCount(0)
@@ -327,7 +470,7 @@ test('drags curve controls and snaps either endpoint to text or data with cancel
   await expect(page.locator('.annotation-anchor-value')).toContainText(['2020', 'Пик'])
 
   await page.locator('.annotation-object-select').first().click()
-  const grip = (await page.locator('.annotation-drag-handle').boundingBox())!
+  const grip = (await page.locator('.canvas-annotation.selected .annotation-content').boundingBox())!
   await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
   await page.mouse.down(); await page.mouse.move(grip.x + grip.width / 2 + 30, grip.y + grip.height / 2 + 20); await page.mouse.up()
   await page.locator('.annotation-object-select').last().click()
@@ -352,5 +495,5 @@ test('drags curve controls and snaps either endpoint to text or data with cancel
   const svg = await exportSvg(page)
   const exported = await page.evaluate((source) => [...new DOMParser().parseFromString(source, 'image/svg+xml').querySelectorAll('path')].find((node) => node.getAttribute('d')?.includes('C') && node.getAttribute('stroke-width') === '1.5')?.getAttribute('d'), svg)
   expect(exported).toBeTruthy()
-  exported!.match(/-?\d+(?:\.\d+)?/g)!.map(Number).forEach((value, index) => expect(value).toBeCloseTo(final[index], 0))
+  expectArrowShaft(exported!.match(/-?\d+(?:\.\d+)?/g)!.map(Number), final)
 })

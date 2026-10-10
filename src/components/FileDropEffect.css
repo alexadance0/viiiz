@@ -1,0 +1,4 @@
+.upload-card{position:relative;isolation:isolate;overflow:hidden}
+.file-drop-effect{position:absolute;inset:0;z-index:0;isolation:isolate;pointer-events:none;overflow:hidden}
+.upload-card > :not(.file-drop-effect){position:relative;z-index:1}
+.source-step.file-dragging .upload-card{outline-color:var(--green,#36a476);background:color-mix(in srgb,var(--green,#36a476) 5%,var(--paper,#fff))}
