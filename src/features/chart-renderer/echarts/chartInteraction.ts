@@ -13,7 +13,7 @@ export function clickSelection(element: ChartElementSelection, selectedSeries: s
     : { kind: 'element' as const, selection: { ...element, seriesName: name } }
 }
 
-export type PointHit = { x: number; y: number; selection: ChartElementSelection }
+export type PointHit = { x: number; y: number; markerSize?: number; selection: ChartElementSelection }
 
 export function nearestPoint(points: PointHit[], x: number, y: number, seriesName?: string | null, radius = 18) {
   let nearest: PointHit | undefined, distance = radius

@@ -86,12 +86,12 @@ describe('native canvas adapters', () => {
     expect(option.series.find((series) => series.name === 'a')?.areaStyle).toBeUndefined()
   })
 
-  it('reveals a selected line point without replacing its authored marker colors', () => {
+  it('keeps the authored marker unchanged when its point is selected', () => {
     const lineConfig: ChartConfig = { ...config, palette: ['#168a72'] }
     const option = getChartPlugin('line').buildOption(table, lineConfig) as Record<string, unknown> & { series: Array<{ name?: string; data?: Array<{ elementKey?: string; symbolSize?: number; itemStyle?: { color?: string; borderColor?: string } }> }> }
     applySeriesVisualState(option, lineConfig, null, 'a\u001fnumber:2023')
     const point = option.series.find((series) => series.name === 'a')?.data?.[1]
-    expect(point?.symbolSize).toBe(10)
+    expect(point?.symbolSize).toBe(0)
     expect(point?.itemStyle).toMatchObject({ color: '#ffffff', borderColor: '#168a72' })
   })
 

@@ -29,6 +29,8 @@ describe('shared chart hover', () => {
     const result = item.renderItem()
     expect(result.children[0].style).toEqual({ fill: '#8067a5', opacity: .45 })
     expect(result.children[1].style).toEqual(snapshot.children[1].style)
+    expect(result).toMatchObject({ emphasisDisabled: true })
+    result.children.forEach((child) => expect(child).toMatchObject({ emphasisDisabled: true }))
     expect(geometry).toEqual(snapshot)
   })
   it('softens peer colors while preserving authored opacity and stroke width', () => {

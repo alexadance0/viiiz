@@ -317,10 +317,6 @@ export function applySeriesVisualState(option: Record<string, unknown>, config: 
       // Data paint must override muted series defaults for the selected mark.
       point.itemStyle = paint(original ?? { color }, pointStrength)
       point.emphasis = { ...(point.emphasis as object), itemStyle: nativeHoverStyle(point.itemStyle as Record<string, unknown>, original?.color ?? color) }
-      if (point.elementKey === selectedElementKey && item.type === 'line' && Number(point.symbolSize ?? 0) === 0) {
-        point.symbol = point.symbol === 'none' ? 'circle' : point.symbol ?? 'circle'
-        point.symbolSize = 10
-      }
     })
   })
   const graphics = option.graphic as Array<{ sourceSeriesName?: string; z?: number; comparisonConnectorSeriesNames?: string[]; children?: Array<{ style?: Record<string, unknown> }> }> | undefined
@@ -335,6 +331,11 @@ function applyEditorVisualState(option: Record<string, unknown>, config: ChartCo
   const selectionStyle = { backgroundColor: 'rgba(0,0,0,0)', borderColor: contrastText(config.canvasBackground ?? '#ffffff', 4.5), borderWidth: 1, borderRadius: 5, padding: [2, 4] }
   const labelSelectionStyle = { ...selectionStyle, padding: 0 }
   applySeriesVisualState(option, config, selectedSeriesName, selectedElementKey, hoveredSeriesName, hoveredElementKey)
+  if (option.tooltip) {
+    const tooltip = option.tooltip as { show?: boolean }
+    const elementSelected = selectedElementKey && !selectedElementKey.startsWith('category-label:') && (!selectedElementTarget || selectedElementTarget === 'element')
+    option.tooltip = { ...tooltip, show: elementSelected ? false : tooltip.show ?? true }
+  }
   for (const axisKey of ['xAxis', 'yAxis'] as const) {
     const axis = option[axisKey] as { nameTextStyle?: object; axisLabel?: object } | undefined
     if (!axis) continue
@@ -357,19 +358,6 @@ function applyEditorVisualState(option: Record<string, unknown>, config: ChartCo
       if (item.label?.show) item.label = { ...item.label, ...labelSelectionStyle }
       item.data?.forEach((point) => { if (point?.label && (point.label as { show?: boolean }).show) point.label = { ...(point.label as object), ...labelSelectionStyle } })
     })
-  }
-  if (selectedElementKey) {
-    const series = option.series as Array<{ name?: string; interactionLayer?: 'hit'; type?: string; data?: unknown[] }> | undefined
-    const visitSelected = (item: { name?: string; interactionLayer?: 'hit'; type?: string }, points: unknown[]) => points.forEach((point) => {
-      if (!point || typeof point !== 'object') return
-      const dataPoint = point as Record<string, unknown>
-      if (dataPoint.elementKey === selectedElementKey && item.interactionLayer !== 'hit') {
-        if (selectedElementTarget === 'value-label') dataPoint.label = { ...((dataPoint.label ?? {}) as object), show: true }
-        else if (item.type === 'line' && (!dataPoint.symbolSize || Number(dataPoint.symbolSize) < 8)) dataPoint.symbolSize = 8
-      }
-      visitSelected(item, (dataPoint.children as unknown[] | undefined) ?? [])
-    })
-    series?.forEach((item) => visitSelected(item, item.data ?? []))
   }
 }
 
@@ -471,6 +459,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
     const editableAxisLabels = useRef(new Map<string, { sourceKey: string; displayText: string }>())
     const clickedSeries = useRef<string | null>(null)
     const pointHits = useRef<PointHit[]>([])
+    const [pointIndicator, setPointIndicator] = useState<{ x: number; y: number; radius: number } | null>(null)
     const selectElement = useMemo(() => (element: ChartElementSelection) => {
       const result = clickSelection(element, clickedSeries.current)
       if (!result) return
@@ -626,7 +615,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           const patch: Record<string, unknown> = { graphic: graphics }
           if (visualChanged) {
             patch.series = cloneChartOption(cached.baseSeries)
-            for (const key of ['xAxis', 'yAxis', 'legend'] as const) patch[key] = cloneChartOption(clean[key])
+            for (const key of ['xAxis', 'yAxis', 'legend', 'tooltip'] as const) patch[key] = cloneChartOption(clean[key])
             for (const key of ['xAxis', 'yAxis'] as const) {
               const axis = patch[key] as { nameTextStyle?: Record<string, unknown> } | undefined
               if (axis) axis.nameTextStyle = { backgroundColor: 'transparent', borderWidth: 0, padding: 0, ...axis.nameTextStyle }
@@ -640,6 +629,8 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           option.graphic = graphics
           restoreDirectLabelPositions(instance)
           instance.setOption(patch, { replaceMerge: visualChanged ? ['series', 'graphic'] : ['graphic'] })
+          if (visualChanged) instance.dispatchAction({ type: 'downplay' })
+          if (selectedElementKey) instance.dispatchAction({ type: 'hideTip' })
           renderCache.current = { ...cached, config: inputConfig, section: selectedSettingsSection, series: selectedSeriesName, element: selectedElementKey, target: selectedElementTarget, hover: hoveredSeriesName, hoverKey: hoveredElementKey }
           instance.getZr().flush()
           requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -878,6 +869,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       if (transitionMode === 'fade' && plotBounds && container.current) fadePreviousPlot(container.current, plotBounds, 200)
       restoreDirectLabelPositions(instance)
       instance.setOption(option, { notMerge: false, replaceMerge: ['series', 'legend', 'xAxis', 'yAxis', 'graphic'] })
+      if (selectedElementKey) instance.dispatchAction({ type: 'hideTip' })
       renderedKind.current = config.kind
       setRenderedChartKind(config.kind)
       setRenderedPlotKind(plotKind)
@@ -927,7 +919,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         points.set(info.elementKey, { key: info.elementKey, label: `${info.sourceSeriesName} · ${info.displayCategory}`, x: horizontal && plotKind !== 'distribution' ? rect.x + (negative ? 0 : rect.width) : rect.x + rect.width / 2, y: horizontal || plotKind === 'distribution' ? rect.y + rect.height / 2 : rect.y + (negative ? rect.height : 0) })
       })
       pointHits.current = []
-      const series = (option.series ?? []) as Array<{ type?: string; segmentOf?: string; data?: Array<{ elementKey?: string; value?: number | number[] | null; sourceSeriesName?: string; displayCategory?: string; displayValue?: string; displayLabel?: string; displayColor?: string; selectionTarget?: string }>; interactionLayer?: string }>
+      const series = (option.series ?? []) as Array<{ type?: string; segmentOf?: string; data?: Array<{ elementKey?: string; value?: number | number[] | null; symbolSize?: number | number[]; sourceSeriesName?: string; displayCategory?: string; displayValue?: string; displayLabel?: string; displayColor?: string; selectionTarget?: string }>; interactionLayer?: string }>
       series.forEach((item, seriesIndex) => {
         if (item.type !== 'line' && item.type !== 'scatter' && item.type !== 'bar') return
         const data = (instance as unknown as { getModel(): { getSeriesByIndex(index: number): { getData(): { getLayout(key: string): ArrayLike<number> | undefined; getItemLayout(index: number): number[] | { x: number; y: number; width: number; height: number } | undefined } } } }).getModel().getSeriesByIndex(seriesIndex).getData()
@@ -939,7 +931,7 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           const pixel = Array.isArray(layout) ? layout : layout ? usesHorizontalAxes(config) ? [layout.x + layout.width, layout.y + layout.height / 2] : [layout.x + layout.width / 2, layout.y + layout.height] : instance.convertToPixel({ seriesIndex }, value) as number[]
           if (Array.isArray(pixel) && pixel.every(Number.isFinite)) {
             if (!points.has(datum.elementKey)) points.set(datum.elementKey, { key: datum.elementKey, x: pixel[0], y: pixel[1], label: `${datum.sourceSeriesName ?? ''} · ${datum.displayCategory ?? index}` })
-            if (item.type === 'line' || item.type === 'scatter') pointHits.current.push({ x: pixel[0], y: pixel[1], selection: { key: datum.elementKey, seriesName: datum.sourceSeriesName ?? '', category: datum.displayCategory ?? String(index), value: datum.displayValue ?? '', label: datum.displayLabel, color: datum.displayColor } })
+            if (item.type === 'line' || item.type === 'scatter') pointHits.current.push({ x: pixel[0], y: pixel[1], markerSize: Array.isArray(datum.symbolSize) ? Math.max(...datum.symbolSize) : datum.symbolSize, selection: { key: datum.elementKey, seriesName: datum.sourceSeriesName ?? '', category: datum.displayCategory ?? String(index), value: datum.displayValue ?? '', label: datum.displayLabel, color: datum.displayColor } })
           }
         })
       })
@@ -1252,6 +1244,11 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
       }
     }, [activeCategoryLabel?.axis, activeCategoryLabel?.category, config, onAnnotationSelect, onClearSettingsFocus, onSelect, onSeriesSelect, onSettingsFocus, onTreemapMove, readyKind, renderedPlotKind, selectedElementKey, selectedSeriesName, selectedSettingsSection, selectedTreemapSeriesName, table, selectElement])
 
+    useEffect(() => {
+      const point = selectedElementTarget && selectedElementTarget !== 'element' ? undefined : pointHits.current.find((point) => point.selection.key === selectedElementKey)
+      setPointIndicator(point ? { x: point.x, y: point.y, radius: Math.max(10, (point.markerSize ?? 0) / 2 + 5) } : null)
+    }, [selectedElementKey, selectedElementTarget, renderLifecycle.settledRevision])
+
     useImperativeHandle(ref, () => ({
       async getSvg() {
         if (!exportOption.current || renderLifecycle.status !== 'settled') throw new Error('График ещё не готов к экспорту. Дождитесь завершения отрисовки.')
@@ -1328,6 +1325,11 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
         return { id: `decoration:${item.id}`, x: x + Math.min(0, width), y: y + Math.min(0, height), width: Math.abs(width), height: Math.abs(height) }
       }),
     ]
+    const pointFrame = pointIndicator ? (() => {
+      const { x, y, radius: r } = pointIndicator
+      const corner = 5
+      return `M${x-r} ${y-r+corner}v-${corner}h${corner}M${x+r-corner} ${y-r}h${corner}v${corner}M${x+r} ${y+r-corner}v${corner}h-${corner}M${x-r+corner} ${y+r}h-${corner}v-${corner}`
+    })() : null
     return (
       <div className={`chart-canvas-viewport ${config.autoFitCanvas === false ? 'native-size' : ''}`} ref={viewport}>
         <div
@@ -1345,6 +1347,10 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(
           style={{ width: canvasWidth, height: canvasHeight, transform: canvasTransform, '--canvas-ui-ink': canvasUiInk, '--canvas-ui-paper': config.canvasBackground ?? '#ffffff' } as React.CSSProperties}
         >
           <div className="chart-canvas" ref={container}/>
+          {pointFrame && <svg className="chart-point-selection" viewBox={`0 0 ${canvasWidth} ${canvasHeight}`} aria-hidden="true">
+            <path d={pointFrame} fill="none" stroke={config.canvasBackground ?? '#ffffff'} strokeWidth="4" />
+            <path d={pointFrame} fill="none" stroke={canvasUiInk} strokeWidth="1.5" />
+          </svg>}
           {onDirectLabelPositionsChange && <DirectLabelOverlay labels={directLabels} config={config} width={canvasWidth} height={canvasHeight} onChange={onDirectLabelPositionsChange} toolbarHost={directLabelControlsHost} onRefresh={() => { chart.current?.getZr().flush(); setDirectLabels((labels) => [...labels]) }}/>}
           <AnnotationGuides guides={alignmentGuides} width={canvasWidth} height={canvasHeight} scale={config.autoFitCanvas === false ? previewZoom : canvasScale * previewZoom}/>
           {annotationTool && onAnnotationPlace && <AnnotationPlacementOverlay key={annotationTool} tool={annotationTool} width={canvasWidth} height={canvasHeight} onPlace={onAnnotationPlace} onCancel={() => onAnnotationCancel?.()}/>}

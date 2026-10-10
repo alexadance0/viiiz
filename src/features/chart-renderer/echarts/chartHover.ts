@@ -17,7 +17,7 @@ export function applyCustomHover(series: CustomSeries, name: string, activeName:
   const render = series.renderItem as (...args: unknown[]) => HoverElement | null
   const decorate = (element: HoverElement, inherited: ElementInfo): HoverElement => {
     const info = { ...inherited, ...element.info }
-    if (element.type === 'group') return { ...element, children: element.children?.map((child) => decorate(child, info)) }
+    if (element.type === 'group') return { ...element, emphasisDisabled: true, children: element.children?.map((child) => decorate(child, info)) }
     if (!element.style) return element
     const original = element.style, owner = info.sourceSeriesName ?? name
     const active = Boolean(activeName && owner === activeName && (selectedKey ? info.elementKey === selectedKey : series.hoverScope === 'series' || !hoveredKey || !info.elementKey || info.elementKey === hoveredKey))
@@ -25,14 +25,14 @@ export function applyCustomHover(series: CustomSeries, name: string, activeName:
     if (element.type === 'text') {
       if (strength && info.labelHalo && info.displayColor) {
         const color = visibleFillColor(softenColor(info.displayColor, background, strength), info.fillOpacity ?? 1, background)
-        return { ...element, style: { ...original, fill: color, stroke: color } }
+        return { ...element, emphasisDisabled: true, style: { ...original, fill: color, stroke: color } }
       }
-      return element
+      return { ...element, emphasisDisabled: true }
     }
     const style: Record<string, unknown> = { ...(strength ? softenedStyle(original, background, strength) : original), opacity: Number(original.opacity ?? baseOpacity) }
     // Hover keeps the original paint: no outlines, lift colors, resizing or extra opacity.
     const emphasis = { ...element.emphasis, style: { ...style, stroke: style.stroke ?? null, lineWidth: style.lineWidth ?? 0, shadowBlur: 0 } }
-    return { ...element, style, emphasis, clipPath: element.clipPath ?? false }
+    return { ...element, style, emphasisDisabled: true, emphasis, clipPath: element.clipPath ?? false }
   }
   series.renderItem = (...args: unknown[]) => {
     const element = render(...args)

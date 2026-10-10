@@ -12,3 +12,4 @@
 @media(prefers-reduced-motion:reduce){.chart-transition-snapshot{display:none;transition:none}}
 .treemap-drag-preview{position:absolute;z-index:30;left:0;top:0;max-width:220px;padding:7px 10px;border-radius:0;background:var(--accent);color:var(--paper);box-shadow:0 3px 8px color-mix(in srgb,var(--ink) 24%,transparent);font:700 12px/1.25 Wix Madefor Display,sans-serif;pointer-events:none;user-select:none;opacity:.92}
 .treemap-drop-indicator{position:absolute;z-index:29;border-radius:0;background:var(--accent);box-shadow:0 0 0 1px color-mix(in srgb,var(--paper) 90%,transparent);pointer-events:none}
+.chart-point-selection{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:4}
